@@ -168,19 +168,19 @@
     <string name="edit_artist">Edit artist</string>
     <string name="artist_name">Artist name</string>
     <string name="error_artist_name_empty">Artist name cannot be empty.</string>
-    <string name="duplicates">Duplicates</string>
-    <string name="skip_duplicates">Skip duplicates</string>
-    <string name="add_anyway">Add anyway</string>
-    <string name="duplicates_description_single">The song is already in your playlist</string>
+    <string name="duplicates">Doublons</string>
+    <string name="skip_duplicates">Ignorer les doublons</string>
+    <string name="add_anyway">Ajouter quand même</string>
+    <string name="duplicates_description_single">Le titre est déjà dans votre playlist</string>
     <string name="duplicates_description_multiple">%d songs are already in your playlist</string>
     <!-- Noun -->
     <plurals name="n_song">
-        <item quantity="one">%d song</item>
-        <item quantity="other">%d songs</item>
+        <item quantity="one">%d titre</item>
+        <item quantity="other">%d titres</item>
     </plurals>
     <plurals name="n_artist">
-        <item quantity="one">%d artist</item>
-        <item quantity="other">%d artists</item>
+        <item quantity="one">%d artiste</item>
+        <item quantity="other">%d artistes</item>
     </plurals>
     <plurals name="n_album">
         <item quantity="one">%d album</item>
@@ -191,16 +191,16 @@
         <item quantity="other">%d playlists</item>
     </plurals>
     <plurals name="n_week">
-        <item quantity="one">%d week</item>
-        <item quantity="other">%d weeks</item>
+        <item quantity="one">%d semaine</item>
+        <item quantity="other">%d semaines</item>
     </plurals>
     <plurals name="n_month">
-        <item quantity="one">%d month</item>
-        <item quantity="other">%d months</item>
+        <item quantity="one">%d mois</item>
+        <item quantity="other">%d mois</item>
     </plurals>
     <plurals name="n_year">
-        <item quantity="one">%d year</item>
-        <item quantity="other">%d years</item>
+        <item quantity="one">%d an</item>
+        <item quantity="other">%d ans</item>
     </plurals>
     <!-- Snackbar -->
     <string name="added_to_playlist">Added to %s</string>
@@ -212,9 +212,9 @@
     <string name="playlist_synced">Playlist synced</string>
     <string name="undo">Undo</string>
     <!-- Player -->
-    <string name="lyrics_not_found">Lyrics not found</string>
+    <string name="lyrics_not_found">Paroles introuvables</string>
     <string name="sleep_timer">Sleep timer</string>
-    <string name="end_of_song">End of song</string>
+    <string name="end_of_song">Fin du titre</string>
     <plurals name="minute">
         <item quantity="one">1 minute</item>
         <item quantity="other">%d minutes</item>
@@ -234,7 +234,7 @@
     <string name="repeat_mode_one">Repeat current song</string>
     <string name="repeat_mode_all">Repeat queue</string>
     <!-- Queue Title -->
-    <string name="queue_all_songs">All songs</string>
+    <string name="queue_all_songs">Tous les titres</string>
     <string name="queue_searched_songs">Searched songs</string>
     <string name="queue_continue_playing">Continue Playing</string>
     <string name="queue_autoplaying_similar">Autoplaying similar music</string>
