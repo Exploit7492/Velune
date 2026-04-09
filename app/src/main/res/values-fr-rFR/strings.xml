@@ -6,9 +6,9 @@
 <!-- Translators: Do not modify this file for translations, use InnerTune's Weblate instead. -->
 <resources>
     <!-- Bottom navigation -->
-    <string name="home">Home</string>
-    <string name="songs">Songs</string>
-    <string name="artists">Artists</string>
+    <string name="home">Accueil</string>
+    <string name="songs">Titres</string>
+    <string name="artists">Artistes</string>
     <string name="albums">Albums</string>
     <string name="playlists">Playlists</string>
     <!-- Top bar -->
@@ -17,16 +17,16 @@
         <item quantity="other">%d selected</item>
     </plurals>
     <!-- Home -->
-    <string name="history">History</string>
-    <string name="stats">Stats</string>
-    <string name="mood_and_genres">Mood and Genres</string>
-    <string name="account">Account</string>
+    <string name="history">Historique</string>
+    <string name="stats">Statistiques</string>
+    <string name="mood_and_genres">Ambiance et Genres</string>
+    <string name="account">Compte</string>
     <string name="quick_picks">Quick picks</string>
     <string name="quick_picks_empty">Listen to songs to generate your quick picks</string>
     <string name="forgotten_favorites">Forgotten favorites</string>
     <string name="keep_listening">Keep listening</string>
-    <string name="your_youtube_playlists">Your YouTube playlists</string>
-    <string name="similar_to">Similar to</string>
+    <string name="your_youtube_playlists">Vos playlists YouTube</string>
+    <string name="similar_to">Similaire à</string>
     <string name="new_release_albums">New release albums</string>
     <string name="select_playlist_to_sync">Select Playlist To Sync</string>
     <string name="integration">Integration</string>
@@ -34,8 +34,8 @@
     <string name="internal_subcategory_settings">Internal &amp; subcategory settings</string>
     <string name="search_try_different">Try a different search term</string>
     <!-- History -->
-    <string name="today">Today</string>
-    <string name="yesterday">Yesterday</string>
+    <string name="today">Aujourd\'hui</string>
+    <string name="yesterday">Hier</string>
     <string name="this_week">This week</string>
     <string name="last_week">Last week</string>
     <!-- Stats -->
@@ -46,25 +46,25 @@
     <string name="search">Search</string>
     <string name="search_yt_music">Search YouTube Music…</string>
     <string name="search_library">Search library…</string>
-    <string name="filter_library">Library</string>
+    <string name="filter_library">Bibliothèque</string>
     <string name="filter_liked">Liked</string>
     <string name="filter_downloaded">Downloaded</string>
     <string name="filter_downloaded_full">Downloaded (Full)</string>
-    <string name="filter_all">All</string>
-    <string name="filter_songs">Songs</string>
-    <string name="filter_videos">Videos</string>
+    <string name="filter_all">Tout</string>
+    <string name="filter_songs">Titres</string>
+    <string name="filter_videos">Vidéos</string>
     <string name="filter_albums">Albums</string>
-    <string name="filter_artists">Artists</string>
+    <string name="filter_artists">Artistes</string>
     <string name="filter_playlists">Playlists</string>
     <string name="filter_community_playlists">Community playlists</string>
     <string name="filter_featured_playlists">Featured playlists</string>
     <string name="filter_bookmarked">Bookmarked</string>
-    <string name="no_results_found">No results found</string>
-    <string name="top_results">Top Results</string>
+    <string name="no_results_found">Aucun résultat trouvé</string>
+    <string name="top_results">Meilleurs Résultats</string>
     <!-- Library -->
-    <string name="library_song_empty">Library songs will show up here</string>
-    <string name="library_artist_empty">Library artists will show up here</string>
-    <string name="library_album_empty">Library albums will show up here</string>
+    <string name="library_song_empty">Les titres de la bibliothèque s\'afficheront ici</string>
+    <string name="library_artist_empty">Les artistes de la bibliothèque s\'afficheront ici</string>
+    <string name="library_album_empty">Les albums de la bibliothèque s\'afficheront ici</string>
     <string name="library_playlist_empty">Your playlists will show up here</string>
     <!-- Artist screen -->
     <string name="from_your_library">From your library</string>
@@ -100,14 +100,14 @@
     <string name="import_playlist">Import playlist</string>
     <string name="import_failed">Import failed</string>
     <string name="update_button">Update</string>
-    <string name="add_to_playlist">Add to playlist</string>
-    <string name="view_artist">View artist</string>
-    <string name="view_album">View album</string>
+    <string name="add_to_playlist">Ajouter à la playlist</string>
+    <string name="view_artist">Voir l\'artiste</string>
+    <string name="view_album">Voir l\'album</string>
     <string name="view_all">View all</string>
     <string name="more">more</string>
     <string name="refetch">Refetch</string>
-    <string name="share">Share</string>
-    <string name="delete">Delete</string>
+    <string name="share">Partager</string>
+    <string name="delete">Supprimer</string>
     <string name="together_participants">Participants</string>
     <string name="together_connected_count">%1$d connected</string>
     <string name="together_role_host">Host</string>
@@ -126,7 +126,7 @@
     <string name="remove_from_queue">Remove from queue</string>
     <string name="search_online">Search online</string>
     <string name="action_sync">Sync</string>
-    <string name="advanced">Advanced</string>
+    <string name="advanced">Avancé</string>
     <string name="tempo_and_pitch">Tempo and Pitch</string>
     <string name="tempo">Tempo</string>
     <string name="pitch">Pitch</string>
@@ -134,11 +134,11 @@
     <string name="pitch_mode_multiplier_short">x</string>
     <!-- Sort menu -->
     <string name="sort_by_create_date">Date added</string>
-    <string name="sort_by_name">Name</string>
-    <string name="sort_by_artist">Artist</string>
-    <string name="sort_by_year">Year</string>
+    <string name="sort_by_name">Nom</string>
+    <string name="sort_by_artist">Artiste</string>
+    <string name="sort_by_year">Année</string>
     <string name="sort_by_song_count">Song count</string>
-    <string name="sort_by_length">Length</string>
+    <string name="sort_by_length">Durée</string>
     <string name="sort_by_play_time">Play time</string>
     <string name="sort_by_custom">Custom order</string>
     <!-- Dialog -->
@@ -146,7 +146,7 @@
     <string name="mime_type">MIME type</string>
     <string name="codecs">Codecs</string>
     <string name="bitrate">Bitrate</string>
-    <string name="sample_rate">Sample rate</string>
+    <string name="sample_rate">Fréquence d\'échantillonnage</string>
     <string name="loudness">Loudness</string>
     <string name="volume">Volume</string>
     <string name="file_size">File size</string>
