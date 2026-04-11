@@ -21,10 +21,10 @@
     <string name="stats">Statistiques</string>
     <string name="mood_and_genres">Ambiance et Genres</string>
     <string name="account">Compte</string>
-    <string name="quick_picks">Quick picks</string>
-    <string name="quick_picks_empty">Listen to songs to generate your quick picks</string>
+    <string name="quick_picks">Sélection rapide</string>
+    <string name="quick_picks_empty">Écoutez des titres pour générer votre sélection rapide</string>
     <string name="forgotten_favorites">Forgotten favorites</string>
-    <string name="keep_listening">Keep listening</string>
+    <string name="keep_listening">Continuez à écouter</string>
     <string name="your_youtube_playlists">Vos playlists YouTube</string>
     <string name="similar_to">Similaire à</string>
     <string name="new_release_albums">New release albums</string>
@@ -36,12 +36,12 @@
     <!-- History -->
     <string name="today">Aujourd\'hui</string>
     <string name="yesterday">Hier</string>
-    <string name="this_week">This week</string>
-    <string name="last_week">Last week</string>
+    <string name="this_week">Cette semaine</string>
+    <string name="last_week">La semaine dernière</string>
     <!-- Stats -->
-    <string name="most_played_songs">Most played songs</string>
-    <string name="most_played_artists">Most played artists</string>
-    <string name="most_played_albums">Most played albums</string>
+    <string name="most_played_songs">Titres les plus écoutés</string>
+    <string name="most_played_artists">Artistes les plus écoutés</string>
+    <string name="most_played_albums">Albums les plus écoutés</string>
     <!-- Search -->
     <string name="search">Search</string>
     <string name="search_yt_music">Rechercher sur YouTube Music…</string>
@@ -75,7 +75,7 @@
     <string name="downloaded_songs">Downloaded songs</string>
     <string name="playlist_is_empty">La playlist est vide</string>
     <string name="remove_download_playlist_confirm">Do you really want to remove all \"%s\" playlist songs from the Downloaded Songs storage?</string>
-    <string name="delete_playlist_confirm">Do you really want to delete the playlist \"%s\"?</string>
+    <string name="delete_playlist_confirm">Voulez-vous vraiment supprimer la playlist « %s » ?</string>
     <string name="change_playlist_cover">Changer la pochette de la playlist</string>
     <string name="remove_playlist_cover">Remove Cover</string>
     <!-- Button -->
