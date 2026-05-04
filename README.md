@@ -118,20 +118,16 @@ Experience lyrics like never before:
 
 ## 📸 Preview
 
-<div align="center">
 
 <img src="screenshots/Home.png" width="140"/>
 <img src="screenshots/Now Playing.png" width="140"/>
 <img src="screenshots/History.png" width="140"/>
 <img src="screenshots/Stats.png" width="140"/>
-
 <br/>
-
 <img src="screenshots/Library.png" width="140"/>
 <img src="screenshots/Settings.png" width="140"/>
 <img src="screenshots/About.png" width="140"/>
 
-</div>
 
 
 
