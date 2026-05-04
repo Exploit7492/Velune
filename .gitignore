@@ -23,7 +23,7 @@ gen/
 out/
 .gradle/
 
-# Local configuration file (never push this)
+# Local configuration file
 local.properties
 
 # Android Studio IDE files

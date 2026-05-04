@@ -42,7 +42,7 @@ fun FluidSlidingNavigationBar(
             .clip(RoundedCornerShape(28.dp))
             .fillMaxWidth()
             .height(80.dp)
-            .background(barColor) // <--- Applies the chosen color!
+            .background(barColor)
     ) {
         val tabWidth = maxWidth / items.size
 
@@ -57,8 +57,6 @@ fun FluidSlidingNavigationBar(
             ),
             label = "PillSlider"
         )
-
-        // 1. The Sliding Pill
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffset, y = 14.dp)
@@ -69,8 +67,6 @@ fun FluidSlidingNavigationBar(
                     shape = CircleShape
                 )
         )
-
-        // 2. The Foreground Icons & Text
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.Top

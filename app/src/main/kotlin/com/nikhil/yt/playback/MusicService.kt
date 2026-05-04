@@ -270,7 +270,7 @@ class MusicService :
     private val preferredStreamClient by enumPreference(
         this,
         PlayerStreamClientKey,
-        PlayerStreamClient.ANDROID_VR
+        PlayerStreamClient.IOS
     )
     private val playbackUrlCache = ConcurrentHashMap<String, Pair<String, Long>>()
     private val streamRecoveryState = ConcurrentHashMap<String, Pair<Int, Long>>()

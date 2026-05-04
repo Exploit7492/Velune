@@ -10,11 +10,9 @@ package com.nikhil.yt.ui.player
 
 import com.nikhil.yt.ui.component.VeluneLoader
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -27,7 +25,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,7 +35,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -65,7 +60,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +88,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 import androidx.compose.foundation.clickable
+import com.nikhil.yt.playback.PlayerConnection
 
 @Composable
 fun MiniPlayer(
@@ -134,6 +129,7 @@ private fun NewMiniPlayer(
     val swipeSensitivity by rememberPreference(SwipeSensitivityKey, 0.73f)
     val swipeThumbnail by rememberPreference(com.nikhil.yt.constants.SwipeThumbnailKey, true)
 
+
     SwipeableMiniPlayerBox(
         modifier = modifier,
         swipeSensitivity = swipeSensitivity,
@@ -147,19 +143,19 @@ private fun NewMiniPlayer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp) // Circular height
+                .height(64.dp)
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .clip(RoundedCornerShape(32.dp)) // Clip first for perfect rounded corners
+                .clip(RoundedCornerShape(32.dp))
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceContainer // Same as navigation bar color
+                    color = MaterialTheme.colorScheme.surfaceContainer
                 )
                 .border(
-                    width = 0.5.dp,
+                    width = 1.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                     shape = RoundedCornerShape(32.dp)
                 )
         ) {
-            NewMiniPlayerContent(
+            FloatingMiniPlayerContent(
                 pureBlack = pureBlack,
                 position = position,
                 duration = duration,
@@ -183,11 +179,7 @@ private fun LegacyMiniPlayer(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val canSkipNext by playerConnection.canSkipNext.collectAsState()
     val canSkipPrevious by playerConnection.canSkipPrevious.collectAsState()
-
-    // Track loading state when buffering
     val isLoading = playbackState == STATE_BUFFERING
-
-    val currentView = LocalView.current
     val layoutDirection = LocalLayoutDirection.current
     val coroutineScope = rememberCoroutineScope()
     val swipeSensitivity by rememberPreference(SwipeSensitivityKey, 0.73f)
@@ -216,7 +208,7 @@ private fun LegacyMiniPlayer(
                 if (pureBlack)
                     Color.Black
                 else
-                    MaterialTheme.colorScheme.surfaceContainer // Fixed background independent of player background
+                    MaterialTheme.colorScheme.surfaceContainer
             )
             .let { baseModifier ->
                 if (swipeThumbnail) {
@@ -360,7 +352,6 @@ private fun LegacyMiniPlayer(
             }
         }
 
-        // Visual indicator
         if (offsetXAnimatable.value.absoluteValue > 50f) {
             Box(
                 modifier = Modifier
@@ -400,7 +391,6 @@ private fun LegacyMiniMediaInfo(
                 .size(48.dp)
                 .clip(RoundedCornerShape(ThumbnailCornerRadius))
         ) {
-            // Blurred background for thumbnail
             AsyncImage(
                 model = mediaMetadata.thumbnailUrl,
                 contentDescription = null,
@@ -417,7 +407,6 @@ private fun LegacyMiniMediaInfo(
                     )
             )
 
-            // Main thumbnail
             AsyncImage(
                 model = mediaMetadata.thumbnailUrl,
                 contentDescription = null,
@@ -488,3 +477,154 @@ private fun LegacyMiniMediaInfo(
         }
     }
 }
+
+@Composable
+private fun FloatingMiniPlayerContent(
+    pureBlack: Boolean,
+    position: Long,
+    duration: Long,
+    playerConnection: PlayerConnection
+) {
+    val isPlaying by playerConnection.isPlaying.collectAsState()
+    val playbackState by playerConnection.playbackState.collectAsState()
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val isLoading = playbackState == androidx.media3.common.Player.STATE_BUFFERING
+    val currentSong by playerConnection.currentSong.collectAsState(initial = null)
+    val isLiked = currentSong?.song?.liked == true
+    val database = LocalDatabase.current
+    val firstArtist = mediaMetadata?.artists?.firstOrNull()
+    val libraryArtist by remember(firstArtist?.id) {
+        firstArtist?.id?.let { database.artist(it) } ?: kotlinx.coroutines.flow.flowOf(null)
+    }.collectAsState(initial = null)
+    val isSubscribed = libraryArtist?.artist?.bookmarkedAt != null
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(52.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                progress = { (position.toFloat() / duration.coerceAtLeast(1L)).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                strokeWidth = 2.dp
+            )
+
+            coil3.compose.AsyncImage(
+                model = mediaMetadata?.thumbnailUrl,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable { playerConnection.player.togglePlayPause() }
+            )
+
+            if (!isPlaying || isLoading) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        .clickable { playerConnection.player.togglePlayPause() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        com.nikhil.yt.ui.component.VeluneLoader(size = 20.dp)
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.play),
+                            contentDescription = "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = mediaMetadata?.title ?: "Unknown Song",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.basicMarquee()
+            )
+            Text(
+                text = mediaMetadata?.artists?.joinToString { it.name } ?: "Unknown Artist",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.basicMarquee()
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(end = 4.dp)
+        ) {
+            val buttonModifier = Modifier
+                .size(36.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                .clip(CircleShape)
+
+            Box(
+                modifier = buttonModifier.clickable {
+                    firstArtist?.let { artistInfo ->
+                        artistInfo.id?.let { artistId ->
+                            database.transaction {
+                                val artist = libraryArtist?.artist
+                                if (artist != null) {
+                                    update(artist.toggleLike())
+                                } else {
+                                    insert(
+                                        ArtistEntity(
+                                            id = artistId,
+                                            name = artistInfo.name,
+                                            channelId = null,
+                                            thumbnailUrl = null,
+                                        ).toggleLike()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(if (isSubscribed) R.drawable.subscribed else R.drawable.person),
+                    contentDescription = "Artist",
+                    tint = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Box(
+                modifier = buttonModifier.clickable { playerConnection.toggleLike() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(if (isLiked) R.drawable.favorite else R.drawable.favorite_border),
+                    contentDescription = "Like",
+                    tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+

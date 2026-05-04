@@ -80,7 +80,7 @@
                                             <option name="values">
                                               <map>
                                                 <entry key="color" value="000000" />
-                                                <entry key="imagePath" value="C:\Users\Pooja Vishwakarma\Downloads\velune_icon_preview.png" />
+                                                <entry key="imagePath" value="C:\Users\Pooja Vishwakarma\Documents\velune\fastlane\metadata\android\en-US\images\icon.png" />
                                               </map>
                                             </option>
                                           </PersistentState>
@@ -162,7 +162,6 @@
                                     <map>
                                       <entry key="backgroundAssetType" value="COLOR" />
                                       <entry key="backgroundColor" value="000000" />
-                                      <entry key="foregroundAssetType" value="TEXT" />
                                     </map>
                                   </option>
                                 </PersistentState>

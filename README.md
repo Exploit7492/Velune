@@ -35,14 +35,60 @@
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-MVVM-52525B?style=for-the-badge)
 
+
+## 📥 Download Now
+
+
+<div align="center">
+
+<h2>Stable Release</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th align="center">Obtainium</th>
+      <th align="center">IzzyOnDroid</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">
+        <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/nikhilvishwakarma00/Velune">
+          <img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="50" alt="Get Velune on Obtainium">
+        </a>
+      </td>
+      <td align="center">
+        <a href="https://apt.izzysoft.de/fdroid/index/apk/com.nikhil.yt">
+          <img src="assets/IzzyOnDroidButtonBorder.svg" height="50" alt="Get Velune on IzzyOnDroid">
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <th align="center" colspan="2">GitHub</th>
+    </tr>
+    <tr>
+      <td align="center" colspan="2">
+        <a href="https://github.com/nikhilvishwakarma00/Velune/releases/latest">
+          <img src="assets/badge_github.png" height="50" alt="Get Velune on GitHub">
+        </a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 </div>
 
-### 👉 [Download Latest APK](https://github.com/nikhilvishwakarma00/Velune/releases/latest)
 
-</div>
+## 🚀 Why Velune?
 
----
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroidButtonGreyBorder_nofont.png" height="80" alt="Get it at IzzyOnDroid">](https://apt.izzysoft.de/packages/com.nikhil.yt)
+Velune is not just another music player — it's a **complete reimagination of YouTube Music**.
+
+* ⚡ **Faster** than the official app
+* 🎵 Built for audiophiles & power users
+* 📦 True offline-first experience
+* 🎨 Stunning **Material You** interface
+
+> 💡 This is YouTube Music — *but unlocked*
 
 ## 🚀 Why Velune?
 
@@ -86,6 +132,8 @@ Experience lyrics like never before:
 <img src="screenshots/About.png" width="140"/>
 
 </div>
+
+
 
 ---
 
@@ -178,7 +226,7 @@ Open in Android Studio → Sync → Run ▶ \
 Have a feature request, found a bug,
 or just want to share your favorite music setups? Join the official Velune community!
 
-* *Discord:* [Join the Velune Server](https://discord.gg/cJNHTdoP6H)
+* *Discord:* [Join the Velune Server](https://discord.gg/cJNHTdpP6H)
 * *GitHub Discussions:* [Open a Discussion](https://github.com/nikhilvishwakarma00/Velune/discussions)
 
 

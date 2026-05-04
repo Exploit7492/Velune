@@ -8,6 +8,7 @@
 
 package com.nikhil.yt.ui.component
 
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,6 +81,8 @@ suspend fun fetchReleaseNotesText(): List<String> {
             val textContent = htmlContent
                 .replace(Regex("<br.*?>|</p>"), "\n")
                 .replace(Regex("<.*?>"), "")
+
+            Log.d("ChangelogParser","Cleared text is:$textContent")
 
             textContent.split("\n")
                 .map { it.trim() }

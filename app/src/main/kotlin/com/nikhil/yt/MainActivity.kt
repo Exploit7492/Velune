@@ -39,6 +39,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -93,6 +94,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -301,7 +303,7 @@ class MainActivity : ComponentActivity() {
             bindService(
                 Intent(this, MusicService::class.java),
                 serviceConnection,
-                Context.BIND_AUTO_CREATE
+                BIND_AUTO_CREATE
             )
         playPendingDeepLinkSongIfReady()
     }
@@ -319,7 +321,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isAppInForeground(): Boolean {
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         val appProcesses = activityManager.runningAppProcesses ?: return false
         val packageName = packageName
         return appProcesses.any { processInfo ->
@@ -483,7 +485,7 @@ class MainActivity : ComponentActivity() {
             // bottom sheet to not appear and overlay interactions to be blocked).
             val bottomSheetPageState = remember { com.nikhil.yt.ui.component.BottomSheetPageState() }
             val menuState = remember { com.nikhil.yt.ui.component.MenuState() }
-            val uriHandler = LocalUriHandler.current
+            LocalUriHandler.current
 
 
             // Update popup disabled - IzzyOnDroid handles updates
@@ -610,16 +612,15 @@ class MainActivity : ComponentActivity() {
                     val density = LocalDensity.current
                     val windowsInsets = WindowInsets.systemBars
                     val bottomInset = with(density) { windowsInsets.getBottom(density).toDp() }
-                    val bottomInsetDp = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+                    WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
                     val useRail = currentWindowAdaptiveInfo().windowSizeClass
                         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
 
                     val navController = rememberNavController()
                     val homeViewModel: HomeViewModel = hiltViewModel()
-                    val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val (previousTab) = rememberSaveable { mutableStateOf("home") }
+                    val (_) = rememberSaveable { mutableStateOf("home") }
                     val currentRoute = navBackStackEntry?.destination?.route
                     val isYearInMusicScreen = currentRoute == "year_in_music"
 
@@ -937,7 +938,7 @@ class MainActivity : ComponentActivity() {
                     var showStarDialog by remember { mutableStateOf(false) }
 
                     LaunchedEffect(Unit) {
-                        kotlinx.coroutines.delay(3000)
+                        delay(3000)
 
                         withContext(Dispatchers.IO) {
                             val current = dataStore[LaunchCountKey] ?: 0
@@ -1003,7 +1004,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    val currentTitleRes = remember(navBackStackEntry) {
+                    remember(navBackStackEntry) {
                         when (navBackStackEntry?.destination?.route) {
                             Screens.Home.route -> R.string.home
                             Screens.Search.route -> R.string.search
@@ -1020,8 +1021,8 @@ class MainActivity : ComponentActivity() {
                         LocalDownloadUtil provides downloadUtil,
                         LocalShimmerTheme provides ShimmerTheme,
                         LocalSyncUtils provides syncUtils,
-                        com.nikhil.yt.ui.component.LocalBottomSheetPageState provides bottomSheetPageState,
-                        com.nikhil.yt.ui.component.LocalMenuState provides menuState,
+                        LocalBottomSheetPageState provides bottomSheetPageState,
+                        LocalMenuState provides menuState,
                     ) {
                         Row {
                             AnimatedVisibility(useRail && shouldShowNavigationBar) {
@@ -1387,9 +1388,8 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     },
                                         ) {
-                                            val barColor =
-                                                if (pureBlack) Color.Black
-                                                else MaterialTheme.colorScheme.surfaceContainer
+                                            if (pureBlack) Color.Black
+                                            else MaterialTheme.colorScheme.surfaceContainer
 
                                             FluidSlidingNavigationBar(
                                                 modifier = Modifier
@@ -1399,6 +1399,12 @@ class MainActivity : ComponentActivity() {
                                                         end = 12.dp,
                                                         bottom = bottomInset + floatingBarsBottomPadding,
                                                     )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                                        shape = RoundedCornerShape(24.dp)
+                                                    )
+                                                    .clip(RoundedCornerShape(24.dp))
                                                     .fillMaxWidth()
                                                     .height(navVisibleHeight),
                                                 items = navigationItems,

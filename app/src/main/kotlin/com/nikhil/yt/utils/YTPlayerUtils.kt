@@ -207,16 +207,16 @@ object YTPlayerUtils {
 
         val orderedFallbackClients =
             (
-                if (isLoggedIn) {
-                    STREAM_FALLBACK_CLIENTS.filter { it.loginSupported } + STREAM_FALLBACK_CLIENTS.filterNot { it.loginSupported }
-                } else {
-                    STREAM_FALLBACK_CLIENTS.toList()
-                }
-                ).distinct()
+                    if (isLoggedIn) {
+                        STREAM_FALLBACK_CLIENTS.filter { it.loginSupported } + STREAM_FALLBACK_CLIENTS.filterNot { it.loginSupported }
+                    } else {
+                        STREAM_FALLBACK_CLIENTS.toList()
+                    }
+                    ).distinct()
 
         val preferredYouTubeClient =
             when (preferredStreamClient) {
-                PlayerStreamClient.ANDROID_VR -> ANDROID_VR_NO_AUTH
+                PlayerStreamClient.ANDROID_VR -> IOS // Aliased to IOS to bypass bot detection currently blocking VR clients
                 PlayerStreamClient.WEB_REMIX -> WEB_REMIX
                 PlayerStreamClient.IOS -> IOS
                 PlayerStreamClient.TVHTML5 -> TVHTML5_SIMPLY_EMBEDDED_PLAYER
@@ -617,9 +617,9 @@ object YTPlayerUtils {
     private fun isBotDetectionError(reason: String): Boolean {
         val lower = reason.lowercase(Locale.US)
         return "sign in" in lower ||
-            "bot" in lower ||
-            "confirm" in lower && "not a" in lower ||
-            "verify" in lower && "human" in lower
+                "bot" in lower ||
+                "confirm" in lower && "not a" in lower ||
+                "verify" in lower && "human" in lower
     }
 
     fun isBotDetectionException(error: PlaybackException): Boolean {

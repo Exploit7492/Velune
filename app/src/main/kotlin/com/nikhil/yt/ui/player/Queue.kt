@@ -182,6 +182,9 @@ fun Queue(
     val selectedItems = remember { mutableStateListOf<Timeline.Window>() }
     var selection by remember { mutableStateOf(false) }
 
+    val removedFormat = stringResource(R.string.removed_song_from_playlist)
+    val undoText = stringResource(R.string.undo)
+
     if (selection) {
         BackHandler {
             selection = false
@@ -238,7 +241,7 @@ fun Queue(
         modifier = modifier,
         collapsedContent = {
             when (playerDesignStyle) {
-                PlayerDesignStyle.V2 -> {
+                PlayerDesignStyle.V2, PlayerDesignStyle.V5 -> {
                     QueueCollapsedContentV2(
                         showCodecOnPlayer = showCodecOnPlayer,
                         currentFormat = currentFormat,
@@ -315,42 +318,6 @@ fun Queue(
                     )
                 }
 
-                PlayerDesignStyle.V5 -> {
-                    QueueCollapsedContentV3(
-                        showCodecOnPlayer = showCodecOnPlayer,
-                        currentFormat = currentFormat,
-                        textBackgroundColor = TextBackgroundColor,
-                        sleepTimerEnabled = sleepTimerEnabled,
-                        sleepTimerTimeLeft = sleepTimerTimeLeft,
-                        onExpandQueue = { state.expandSoft() },
-                        onSleepTimerClick = {
-                            if (sleepTimerEnabled) {
-                                playerConnection.service.sleepTimer.clear()
-                            } else {
-                                showSleepTimerDialog = true
-                            }
-                        },
-                        onShowLyrics = onShowLyrics,
-                        onMenuClick = {
-                            menuState.show {
-                                PlayerMenu(
-                                    mediaMetadata = mediaMetadata,
-                                    navController = navController,
-                                    playerBottomSheetState = playerBottomSheetState,
-                                    onShowDetailsDialog = {
-                                        mediaMetadata?.id?.let {
-                                            bottomSheetPageState.show {
-                                                ShowMediaInfo(it)
-                                            }
-                                        }
-                                    },
-                                    onDismiss = menuState::dismiss
-                                )
-                            }
-                        }
-                    )
-                }
-                
                 PlayerDesignStyle.V4 -> {
                     QueueCollapsedContentV4(
                         showCodecOnPlayer = showCodecOnPlayer,
@@ -391,28 +358,7 @@ fun Queue(
                         onShowLyrics = onShowLyrics
                     )
                 }
-
-                PlayerDesignStyle.V6 -> {
-                    QueueCollapsedContentV4(
-                        showCodecOnPlayer = showCodecOnPlayer,
-                        currentFormat = currentFormat,
-                        textBackgroundColor = TextBackgroundColor,
-                        textButtonColor = textButtonColor,
-                        iconButtonColor = iconButtonColor,
-                        sleepTimerEnabled = sleepTimerEnabled,
-                        sleepTimerTimeLeft = sleepTimerTimeLeft,
-                        mediaMetadata = mediaMetadata,
-                        onExpandQueue = { state.expandSoft() },
-                        onSleepTimerClick = {
-                            if (sleepTimerEnabled) {
-                                playerConnection.service.sleepTimer.clear()
-                            } else {
-                                showSleepTimerDialog = true
-                            }
-                        },
-                        onShowLyrics = onShowLyrics
-                    )
-                }
+                else -> {}
             }
 
             if (showSleepTimerDialog) {
@@ -682,11 +628,8 @@ fun Queue(
                                 dismissJob?.cancel()
                                 dismissJob = coroutineScope.launch {
                                     val snackbarResult = snackbarHostState.showSnackbar(
-                                        message = context.getString(
-                                            R.string.removed_song_from_playlist,
-                                            currentItem.mediaItem.metadata?.title,
-                                        ),
-                                        actionLabel = context.getString(R.string.undo),
+                                        message = removedFormat.format(currentItem.mediaItem.metadata?.title),
+                                        actionLabel = undoText,
                                         duration = SnackbarDuration.Short,
                                     )
                                     if (snackbarResult == SnackbarResult.ActionPerformed) {

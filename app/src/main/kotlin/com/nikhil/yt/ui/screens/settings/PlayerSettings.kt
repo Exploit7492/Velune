@@ -87,7 +87,7 @@ fun PlayerSettings(
     )
     val (playerStreamClient, onPlayerStreamClientChange) = rememberEnumPreference(
         PlayerStreamClientKey,
-        defaultValue = PlayerStreamClient.ANDROID_VR
+        defaultValue = PlayerStreamClient.IOS
     )
     val (networkMetered, onNetworkMeteredChange) = rememberPreference(
         NetworkMeteredKey,
@@ -182,7 +182,7 @@ fun PlayerSettings(
             onDismiss = { showPlayerStreamClientDialog = false },
             modifier = Modifier.padding(horizontal = 8.dp),
         ) {
-            items(listOf(PlayerStreamClient.ANDROID_VR, PlayerStreamClient.WEB_REMIX)) { value ->
+            items(PlayerStreamClient.entries) { value ->
                 Row(
                     modifier =
                     Modifier
@@ -202,6 +202,9 @@ fun PlayerSettings(
                             text =
                             when (value) {
                                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
+                                PlayerStreamClient.IOS -> "iOS"
+                                PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
+                                PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
                                 else -> stringResource(R.string.player_stream_client_web_remix)
                             },
                             style = MaterialTheme.typography.bodyLarge,
@@ -211,6 +214,9 @@ fun PlayerSettings(
                             text =
                             when (value) {
                                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr_desc)
+                                PlayerStreamClient.IOS -> "Use the iOS client. Often bypasses bot detection."
+                                PlayerStreamClient.TVHTML5 -> "Use the TV client. Helpful if other clients fail."
+                                PlayerStreamClient.ANDROID_MUSIC -> "Use the Android Music client."
                                 else -> stringResource(R.string.player_stream_client_web_remix_desc)
                             },
                             style = MaterialTheme.typography.bodyMedium,
@@ -259,6 +265,9 @@ fun PlayerSettings(
             description =
             when (playerStreamClient) {
                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
+                PlayerStreamClient.IOS -> "iOS"
+                PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
+                PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
                 else -> stringResource(R.string.player_stream_client_web_remix)
             },
             icon = { Icon(painterResource(R.drawable.integration), null) },

@@ -78,9 +78,11 @@ fun TagsManagementDialog(
                 tagToEdit = null
             },
             onSave = { name, color ->
-                if (tagToEdit != null) {
+                val tagSnapshot = tagToEdit
+
+                if (tagSnapshot != null) {
                     database.transaction {
-                        update(tagToEdit!!.copy(name = name, color = color))
+                        update(tagSnapshot.copy(name = name, color = color))
                     }
                 } else {
                     database.transaction {
@@ -92,6 +94,7 @@ fun TagsManagementDialog(
             }
         )
     }
+
 
     showColorPicker?.let { tag ->
         ColorPickerDialog(
