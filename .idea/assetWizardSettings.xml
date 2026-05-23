@@ -80,7 +80,8 @@
                                             <option name="values">
                                               <map>
                                                 <entry key="color" value="000000" />
-                                                <entry key="imagePath" value="C:\Users\Pooja Vishwakarma\Documents\velune\fastlane\metadata\android\en-US\images\icon.png" />
+                                                <entry key="imagePath" value="C:\Users\Pooja Vishwakarma\Downloads\WhatsApp Image 2026-05-14 at 10.06.19 PM.jpeg" />
+                                                <entry key="trimmed" value="true" />
                                               </map>
                                             </option>
                                           </PersistentState>
@@ -351,8 +352,8 @@
                         <option name="values">
                           <map>
                             <entry key="assetSourceType" value="FILE" />
-                            <entry key="outputName" value="ic_discord" />
-                            <entry key="sourceFile" value="C:\Users\Pooja Vishwakarma\Downloads\ic_discord.svg" />
+                            <entry key="outputName" value="ic_velune_concept" />
+                            <entry key="sourceFile" value="C:\Users\Pooja Vishwakarma\Documents\velune\assets\ic_velune_concept.svg" />
                           </map>
                         </option>
                       </PersistentState>

@@ -49,15 +49,13 @@ class InnerTube {
         gl = Locale.getDefault().country,
         hl = Locale.getDefault().toLanguageTag()
     )
-    var visitorData: String? = null
-    var dataSyncId: String? = null
-    var poToken: String? = null
-    var cookie: String? = null
-        set(value) {
-            field = value
-            cookieMap = if (value == null) emptyMap() else parseCookieString(value)
-        }
-    private var cookieMap = emptyMap<String, String>()
+
+    var authState: PlaybackAuthState = PlaybackAuthState.EMPTY
+
+    // We map the old variables to the new state so you don't have to rewrite the rest of the file!
+    val visitorData: String? get() = authState.visitorData
+    val dataSyncId: String? get() = authState.dataSyncId
+    val cookie: String? get() = authState.cookie
 
     var proxy: Proxy? = null
         set(value) {
@@ -67,6 +65,7 @@ class InnerTube {
         }
 
     var useLoginForBrowse: Boolean = false
+
 
     @OptIn(ExperimentalSerializationApi::class)
     private fun createClient() = HttpClient(OkHttp) {
@@ -110,14 +109,19 @@ class InnerTube {
             append("X-YouTube-Client-Version", client.clientVersion)
             append("X-Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
             append("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
-            visitorData?.let { append("X-Goog-Visitor-Id", it) }
-            if (setLogin) {
-                cookie?.let { cookie ->
-                    append("cookie", cookie)
-                    if (client.loginSupported) {
-                        if ("SAPISID" !in cookieMap) return@let
+
+            authState.visitorData?.let { append("X-Goog-Visitor-Id", it) }
+
+            if (setLogin && authState.hasLoginCookie) {
+                val cookieStr = authState.cookie!!
+                append("cookie", cookieStr)
+
+                if (client.loginSupported) {
+                    val sapisidMap = parseCookieString(cookieStr)
+                    val sapisid = sapisidMap["SAPISID"]
+                    if (sapisid != null) {
                         val currentTime = System.currentTimeMillis() / 1000
-                        val sapisidHash = sha1("$currentTime ${cookieMap["SAPISID"]} ${YouTubeClient.ORIGIN_YOUTUBE_MUSIC}")
+                        val sapisidHash = sha1("$currentTime $sapisid ${YouTubeClient.ORIGIN_YOUTUBE_MUSIC}")
                         append("Authorization", "SAPISIDHASH ${currentTime}_${sapisidHash}")
                     }
                 }
@@ -126,6 +130,7 @@ class InnerTube {
         userAgent(client.userAgent)
         parameter("prettyPrint", false)
     }
+
 
     /**
      * Simple retry wrapper for transient IO errors (socket aborts, timeouts).

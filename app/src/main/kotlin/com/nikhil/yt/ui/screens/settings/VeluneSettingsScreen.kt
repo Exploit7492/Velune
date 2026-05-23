@@ -5,6 +5,7 @@
 
 package com.nikhil.yt.ui.screens.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -85,14 +86,15 @@ fun VeluneSettingsScreen(
                         modifier = Modifier
                             .size(60.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF3E3524)),
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "V",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Normal,
-                            color = Color(0xFFFFD580)
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_velune_concept),
+                            contentDescription = "Velune Logo",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
                         )
                     }
                     Spacer(Modifier.width(16.dp))

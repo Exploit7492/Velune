@@ -4,8 +4,6 @@
  * Licensed Under GPL-3.0
  */
 
-
-
 package com.nikhil.yt.playback
 
 import android.content.Context
@@ -13,6 +11,8 @@ import android.media.MediaCodecList
 import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
+import javax.inject.Inject
+import javax.inject.Singleton
 import androidx.media3.common.C
 import androidx.media3.database.DatabaseProvider
 import androidx.media3.datasource.ResolvingDataSource
@@ -24,7 +24,6 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadNotificationHelper
 import com.nikhil.yt.innertube.YouTube
-import com.nikhil.yt.innertube.models.YouTubeClient
 import com.nikhil.yt.constants.AudioQuality
 import com.nikhil.yt.constants.AudioQualityKey
 import com.nikhil.yt.constants.PlayerStreamClient
@@ -45,9 +44,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.OkHttpClient
 import java.time.LocalDateTime
-import java.util.concurrent.Executor
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 @Singleton
 class DownloadUtil
@@ -63,9 +61,17 @@ constructor(
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val preferredStreamClient by enumPreference(context, PlayerStreamClientKey, PlayerStreamClient.ANDROID_VR)
     private val songUrlCache = HashMap<String, Pair<String, Long>>()
+
+    // Anti-Bot & Throttling Fields
+    private val downloadExecutor = Executors.newFixedThreadPool(3)
+    @Volatile private var currentMaxParallelDownloads = 3
+    @Volatile private var cooldownUntilMs = 0L
+    private val consecutiveThrottleSignals = AtomicInteger(0)
+
     private val avoidStreamCodecs: Set<String> by lazy {
         if (deviceSupportsMimeType("audio/opus")) emptySet() else setOf("opus")
     }
+
     private val mediaOkHttpClient: OkHttpClient by lazy {
         OkHttpClient
             .Builder()
@@ -77,17 +83,17 @@ constructor(
                 val host = request.url.host
                 val isYouTubeMediaHost =
                     host.endsWith("googlevideo.com") ||
-                        host.endsWith("googleusercontent.com") ||
-                        host.endsWith("youtube.com") ||
-                        host.endsWith("youtube-nocookie.com") ||
-                        host.endsWith("ytimg.com")
+                            host.endsWith("googleusercontent.com") ||
+                            host.endsWith("youtube.com") ||
+                            host.endsWith("youtube-nocookie.com") ||
+                            host.endsWith("ytimg.com")
 
                 if (!isYouTubeMediaHost) return@addInterceptor chain.proceed(request)
 
-                val clientParam = request.url.queryParameter("c")?.trim().orEmpty()
-
-                val userAgent = StreamClientUtils.resolveUserAgent(clientParam)
-                val originReferer = StreamClientUtils.resolveOriginReferer(clientParam)
+                // Force ANDROID_VR User-Agent to match download stream creation
+                val exactClientName = "ANDROID_VR"
+                val userAgent = StreamClientUtils.resolveUserAgent(exactClientName)
+                val originReferer = StreamClientUtils.resolveOriginReferer(exactClientName)
 
                 val builder = request.newBuilder().header("User-Agent", userAgent)
                 originReferer.origin?.let { builder.header("Origin", it) }
@@ -109,9 +115,7 @@ constructor(
                         .Factory()
                         .setCache(playerCache)
                         .setUpstreamDataSourceFactory(
-                            OkHttpDataSource.Factory(
-                                mediaOkHttpClient,
-                            ),
+                            OkHttpDataSource.Factory(mediaOkHttpClient),
                         )
                         .setCacheWriteDataSinkFactory(null)
                         .setFlags(FLAG_IGNORE_CACHE_ON_ERROR),
@@ -119,36 +123,31 @@ constructor(
                 .setFlags(FLAG_IGNORE_CACHE_ON_ERROR),
         ) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
-            if (playerCache.cacheSpace > 500 * 1024 * 1024L) {
-                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                    playerCache.keys.shuffled().take(10).forEach { key ->
-                        playerCache.getCachedSpans(key).sumOf { it.length }
-                    }
-                }
-            }
-            if (
-                dataSpec.length >= 0 &&
-                (
-                    downloadCache.isCached(mediaId, dataSpec.position, dataSpec.length) ||
-                        playerCache.isCached(mediaId, dataSpec.position, dataSpec.length)
-                    )
-            ) {
+
+            if (dataSpec.length >= 0 && downloadCache.isCached(mediaId, dataSpec.position, dataSpec.length)) {
                 return@Factory dataSpec
             }
-            songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
-                return@Factory dataSpec.withUri(it.first.toUri())
+
+            val cachedUrl = songUrlCache[mediaId]
+            if (cachedUrl != null && cachedUrl.second > System.currentTimeMillis()) {
+                return@Factory dataSpec.withUri(cachedUrl.first.toUri())
             }
+
             val playbackData = runBlocking(Dispatchers.IO) {
+                val remainingMs = cooldownUntilMs - System.currentTimeMillis()
+                if (remainingMs > 0) delay(remainingMs)
+
                 val networkMeteredPref = context.dataStore.get(NetworkMeteredKey, true)
                 YTPlayerUtils.playerResponseForPlayback(
                     mediaId,
                     audioQuality = audioQuality,
-                    preferredStreamClient = preferredStreamClient,
+                    preferredStreamClient = PlayerStreamClient.ANDROID_VR,
                     connectivityManager = connectivityManager,
                     networkMetered = networkMeteredPref,
                     avoidCodecs = avoidStreamCodecs,
                 )
             }.getOrThrow()
+
             val format = playbackData.format
 
             database.query {
@@ -185,10 +184,15 @@ constructor(
                 upsert(updatedSong)
             }
 
-            val streamUrl = playbackData.streamUrl
+            val totalLength = format.contentLength ?: C.LENGTH_UNSET.toLong()
+            val streamUrlWithRange = if (totalLength > 0) {
+                "${playbackData.streamUrl}&range=0-$totalLength"
+            } else {
+                playbackData.streamUrl
+            }
 
-            songUrlCache[mediaId] = streamUrl to (System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L))
-            dataSpec.withUri(streamUrl.toUri())
+            songUrlCache[mediaId] = streamUrlWithRange to (System.currentTimeMillis() + (60 * 60 * 1000L))
+            dataSpec.withUri(streamUrlWithRange.toUri())
         }
 
     val downloadNotificationHelper =
@@ -200,9 +204,9 @@ constructor(
             databaseProvider,
             downloadCache,
             dataSourceFactory,
-            Executor(Runnable::run)
+            downloadExecutor
         ).apply {
-            maxParallelDownloads = 3
+            maxParallelDownloads = currentMaxParallelDownloads
             addListener(
                 object : DownloadManager.Listener {
                     override fun onDownloadChanged(
@@ -210,6 +214,12 @@ constructor(
                         download: Download,
                         finalException: Exception?,
                     ) {
+                        if (download.state == Download.STATE_FAILED) {
+                            registerThrottleSignal(finalException)
+                        } else if (download.state == Download.STATE_COMPLETED) {
+                            clearThrottleSignal()
+                        }
+
                         downloads.update { map ->
                             map.toMutableMap().apply {
                                 set(download.request.id, download)
@@ -240,5 +250,71 @@ constructor(
                 !info.isEncoder && info.supportedTypes.any { it.equals(mimeType, ignoreCase = true) }
             }
         }.getOrDefault(false)
+    }
+
+    private fun registerThrottleSignal(exception: Throwable?) {
+        val nextStrikeCount =
+            if (exception == null || isProbablyThrottleSignal(exception)) {
+                consecutiveThrottleSignals.incrementAndGet()
+            } else {
+                consecutiveThrottleSignals.updateAndGet { strikes -> maxOf(1, strikes) }
+            }
+
+        val reducedParallelDownloads =
+            when {
+                nextStrikeCount >= 4 -> MIN_PARALLEL_DOWNLOADS
+                nextStrikeCount >= 2 -> DEFAULT_MAX_PARALLEL_DOWNLOADS - 1
+                else -> currentMaxParallelDownloads
+            }.coerceIn(MIN_PARALLEL_DOWNLOADS, DEFAULT_MAX_PARALLEL_DOWNLOADS)
+
+        val cooldownMs =
+            when {
+                nextStrikeCount >= 4 -> LONG_COOLDOWN_MS
+                nextStrikeCount >= 2 -> SHORT_COOLDOWN_MS
+                else -> 0L
+            }
+
+        if (reducedParallelDownloads != currentMaxParallelDownloads) {
+            currentMaxParallelDownloads = reducedParallelDownloads
+            downloadManager.maxParallelDownloads = reducedParallelDownloads
+        }
+
+        if (cooldownMs > 0) {
+            cooldownUntilMs = maxOf(cooldownUntilMs, System.currentTimeMillis() + cooldownMs)
+        }
+    }
+
+    private fun clearThrottleSignal() {
+        val remainingStrikes = consecutiveThrottleSignals.updateAndGet { strikes ->
+            if (strikes > 0) strikes - 1 else 0
+        }
+
+        if (remainingStrikes == 0 && currentMaxParallelDownloads != DEFAULT_MAX_PARALLEL_DOWNLOADS) {
+            currentMaxParallelDownloads = DEFAULT_MAX_PARALLEL_DOWNLOADS
+            downloadManager.maxParallelDownloads = DEFAULT_MAX_PARALLEL_DOWNLOADS
+        }
+    }
+
+    private fun isProbablyThrottleSignal(exception: Throwable): Boolean {
+        val message = buildString {
+            append(exception.message.orEmpty())
+            exception.cause?.message?.let {
+                if (isNotBlank()) append(' ')
+                append(it)
+            }
+        }.lowercase()
+
+        return listOf(
+            "429", "403", "quota", "rate", "too many",
+            "temporarily unavailable", "timed out", "timeout",
+            "unavailable", "reset by peer"
+        ).any(message::contains)
+    }
+
+    companion object {
+        private const val DEFAULT_MAX_PARALLEL_DOWNLOADS = 3
+        private const val MIN_PARALLEL_DOWNLOADS = 1
+        private const val SHORT_COOLDOWN_MS = 2_500L
+        private const val LONG_COOLDOWN_MS = 8_000L
     }
 }

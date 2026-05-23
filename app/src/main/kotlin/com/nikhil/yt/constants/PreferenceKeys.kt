@@ -103,6 +103,7 @@ enum class PlayerStreamClient {
     ANDROID_VR,
     WEB_REMIX,
     IOS,
+    MOBILE,
     TVHTML5,
     ANDROID_MUSIC,
 }

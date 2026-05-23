@@ -185,6 +185,7 @@ import com.nikhil.yt.utils.get
 import com.nikhil.yt.utils.getAsync
 import com.nikhil.yt.utils.getPresenceIntervalMillis
 import com.nikhil.yt.utils.reportException
+import com.nikhil.yt.ui.widget.updateVeluneWidgetState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -476,7 +477,7 @@ class MusicService :
                     )
 
                 NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.small_icon)
+                    .setSmallIcon(R.drawable.ic_velune_concept)
                     .setContentTitle(getString(R.string.music_player))
                     .setContentText(getString(R.string.app_name))
                     .setContentIntent(contentIntent)
@@ -581,7 +582,7 @@ class MusicService :
                 CHANNEL_ID,
                 R.string.music_player
             ).apply {
-                setSmallIcon(R.drawable.small_icon)
+                setSmallIcon(R.drawable.ic_velune_concept)
             }
         )
         
@@ -742,13 +743,12 @@ class MusicService :
                                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                                 .build(),
                             false,
-                        ).setSeekBackIncrementMs(5000)
-                        .setSeekForwardIncrementMs(5000)
+                        ).setSeekBackIncrementMs(10000)
+                        .setSeekForwardIncrementMs(10000)
                         .build()
                 },
             ).also { it.start(scope) }
 
-        // Initialize lyrics pre-load manager
         lyricsPreloadManager = LyricsPreloadManager(
             context = this,
             database = database,
@@ -777,7 +777,6 @@ class MusicService :
             
             normalizeFactor.value =
                 if (normalizeAudio) {
-                    // Use loudnessDb if available, otherwise fall back to perceptualLoudnessDb
                     val loudness = format?.loudnessDb ?: format?.perceptualLoudnessDb
                     
                     if (loudness != null) {
@@ -852,7 +851,6 @@ class MusicService :
                 trimPlayerCacheToBytes(limitBytes)
             }
 
-        // Last.fm ScrobbleManager setup
         dataStore.data
             .map { it[EnableLastFMScrobblingKey] ?: false }
             .debounce(300)
@@ -943,8 +941,6 @@ class MusicService :
             }
         }
 
-        // Save queue periodically to prevent queue loss from crash or force kill
-        // Save queue periodically to prevent queue loss from crash or force kill
         scope.launch {
             while (isActive) {
                 val interval = if (player.isPlaying) 10.seconds else 30.seconds
@@ -955,6 +951,7 @@ class MusicService :
                 }
             }
         }
+
     }
 
     private fun ensureScopesActive() {
@@ -972,9 +969,7 @@ class MusicService :
     private fun ensurePresenceManager() {
         if (DiscordPresenceManager.isRunning() && lastPresenceToken != null) return
 
-        // Launch in scope to avoid blocking
         scope.launch {
-            // Don't start if Discord RPC is disabled in settings
             if (!dataStore.get(EnableDiscordRPCKey, true)) {
                 if (DiscordPresenceManager.isRunning()) {
                     Timber.tag("MusicService").d("Discord RPC disabled → stopping presence manager")
@@ -1490,9 +1485,7 @@ class MusicService :
             } else {
                 val items = initialStatus.items
                 val index = initialStatus.mediaItemIndex
-                
-                // Chunk Loading: Only load a window around the current item initially
-                // to prevent blocking the Main Thread for seconds with large queues.
+
                 val windowStart = (index - 20).coerceAtLeast(0)
                 val windowEnd = (index + 50).coerceAtMost(items.size)
                 
@@ -1509,21 +1502,18 @@ class MusicService :
                 if (player.shuffleModeEnabled) {
                     applyCurrentFirstShuffleOrder()
                 }
-                
-                // Defer loading the rest of the queue
+
                 if (items.size > initialChunk.size) {
                     scope.launch(SilentHandler) {
                         try {
-                            delay(2000) // Allow UI to settle
+                            delay(2000)
                             if (!isActive) return@launch
-                            
-                            // Add preceding items
+
                             if (windowStart > 0) {
                                 val startChunk = items.subList(0, windowStart)
                                 player.addMediaItems(0, startChunk)
                             }
-                            
-                            // Add succeeding items
+
                             if (windowEnd < items.size) {
                                 val endChunk = items.subList(windowEnd, items.size)
                                 player.addMediaItems(endChunk)
@@ -3136,9 +3126,7 @@ class MusicService :
                  update(song)
                  syncUtils.likeSong(song)
 
-                 // Check if auto-download on like is enabled and the song is now liked
                  if (dataStore.get(AutoDownloadOnLikeKey, false) && song.liked) {
-                     // Trigger download for the liked song
                      val downloadRequest = androidx.media3.exoplayer.offline.DownloadRequest
                          .Builder(song.id, song.id.toUri())
                          .setCustomCacheKey(song.id)
@@ -3380,9 +3368,7 @@ class MusicService :
 
     crossfadeAudio?.onMediaItemTransition(mediaItem, reason)
 
-    // Pre-load lyrics for upcoming songs in queue
     val currentIndex = player.currentMediaItemIndex
-    // Convert media items to MediaMetadata for lyrics pre-loading
     val queue = player.mediaItems.mapNotNull { it.metadata }
     if (queue.isNotEmpty()) {
         lyricsPreloadManager?.onSongChanged(currentIndex, queue)
@@ -3444,7 +3430,6 @@ class MusicService :
         }
     }
 
-    // Auto-load more from queue if available
     if (!suppressAutoPlayback &&
         !timelineEmpty &&
         dataStore.get(AutoLoadMoreKey, true) &&
@@ -3544,8 +3529,7 @@ class MusicService :
         crossfadeAudio?.stop(resetMainFade = true)
         scrobbleManager?.onSongStop()
     }
-    
-    // Auto-start recommendations when playback ends
+
     if (!suppressAutoPlayback &&
         playbackState == Player.STATE_ENDED &&
         dataStore.get(AutoLoadMoreKey, true) &&
@@ -3609,7 +3593,6 @@ class MusicService :
         try {
             val token = withContext(Dispatchers.IO) { dataStore.get(DiscordTokenKey, "") }
             if (token.isNotBlank() && DiscordPresenceManager.isRunning()) {
-                // Obtain the freshest Song from DB using current media item id to avoid stale currentSong.value
                 val mediaId = player.currentMediaItem?.mediaId
                 val song = if (mediaId != null) withContext(Dispatchers.IO) { database.song(mediaId).first() } else null
                 val finalSong = song ?: player.currentMetadata?.let { createTransientSongFromMedia(it) }
@@ -3734,7 +3717,6 @@ class MusicService :
 
        if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
             currentMediaMetadata.value = player.currentMetadata
-            // immediate update when media item transitions to avoid stale presence
             scope.launch {
                 try {
                     val token = dataStore.get(DiscordTokenKey, "")
@@ -3767,8 +3749,7 @@ class MusicService :
                                         }
                                     }
                                 }
-                                
-                                // Last.fm now playing - handled by ScrobbleManager
+
                             } catch (_: Exception) {}
                         }
                     }
@@ -3778,16 +3759,26 @@ class MusicService :
             }
         }
 
-        // Also handle immediate update for play state and media item transition events explicitly
         if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
                 currentMediaMetadata.value = player.currentMetadata
             }
-            // Capture player state on Main thread
             val currentMediaId = player.currentMediaItem?.mediaId
             val currentMetadata = player.currentMetadata
             val currentPosition = player.currentPosition
             val isPlaying = player.isPlaying
+
+            updateVeluneWidgetState(
+                context = this@MusicService,
+                title = currentMetadata?.title ?: "Not Playing",
+                artist = currentMetadata?.artists?.joinToString(", ") { it.name } ?: "Velune",
+                isPlaying = isPlaying,
+                thumbnailUrl = currentMetadata?.thumbnailUrl
+            )
+
+
+
+
 
             scope.launch {
                 try {
@@ -3797,8 +3788,6 @@ class MusicService :
                         val finalSong = song ?: currentMetadata?.let { createTransientSongFromMedia(it) }
 
                         if (canUpdatePresence()) {
-                            // Run update on IO if possible, assuming updateNow is thread-safe or handles its own threading correctly
-                            // If updateNow touches Views, this might break. Assuming it's network/logic.
                             val success = withContext(Dispatchers.IO) {
                                 DiscordPresenceManager.updateNow(
                                     context = this@MusicService,
@@ -3826,8 +3815,7 @@ class MusicService :
                                         }
                                     }
                                 }
-                                
-                                // Last.fm now playing - handled by ScrobbleManager
+
                             } catch (_: Exception) {}
                         }
                     }
@@ -3839,7 +3827,6 @@ class MusicService :
 
    if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED)) {
         ensurePresenceManager()
-        // Scrobble: Track play/pause state
         scrobbleManager?.onPlayerStateChanged(player.isPlaying, player.currentMetadata, duration = player.duration)
     } else if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
         ensurePresenceManager()
@@ -3869,8 +3856,7 @@ class MusicService :
         if (shuffleModeEnabled) {
             applyCurrentFirstShuffleOrder()
         }
-        
-        // Save state when shuffle mode changes - must be on Main thread to access player
+
         scope.launch {
             if (dataStore.get(PersistentQueueKey, true)) {
                 saveQueueToDisk()
@@ -3900,8 +3886,7 @@ class MusicService :
                 settings[RepeatModeKey] = repeatMode
             }
         }
-        
-        // Save state when repeat mode changes - must be on Main thread to access player
+
         scope.launch {
             if (dataStore.get(PersistentQueueKey, true)) {
                 saveQueueToDisk()
@@ -4177,7 +4162,7 @@ class MusicService :
                             codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
                             bitrate = format.bitrate,
                             sampleRate = format.audioSampleRate,
-                            contentLength = format.contentLength ?: C.LENGTH_UNSET,
+                            contentLength = format.contentLength ?: C.LENGTH_UNSET.toLong(),
                             loudnessDb = loudnessDb,
                             perceptualLoudnessDb = perceptualLoudnessDb,
                             playbackUrl = nonNullPlayback.playbackTracking?.videostatsPlaybackUrl?.baseUrl
@@ -4402,7 +4387,6 @@ class MusicService :
         return cookie.isNotBlank() && cookie.contains("SAPISID")
     }
 
-    // Create a transient Song object from current Player MediaMetadata when the DB doesn't have it.
     private fun createTransientSongFromMedia(media: com.nikhil.yt.models.MediaMetadata): Song {
         val songEntity = SongEntity(
             id = media.id,
@@ -4504,7 +4488,6 @@ class MusicService :
         val playbackState = player.playbackState
 
         withContext(Dispatchers.IO) {
-            // Save current queue with proper type information
             val persistQueue = currentQueue.toPersistQueue(
                 title = queueTitle,
                 items = mediaItemsSnapshot,
@@ -4519,8 +4502,7 @@ class MusicService :
                     mediaItemIndex = 0,
                     position = 0,
                 )
-                
-            // Save player state
+
             val persistPlayerState = PersistPlayerState(
                 playWhenReady = playWhenReady,
                 repeatMode = repeatMode,
@@ -4627,7 +4609,6 @@ class MusicService :
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        // When the user clears the app from Recents, ensure we clear Discord rich presence
         try {
             scope.launch {
                 try { discordRpc?.stopActivity() } catch (_: Exception) {}
@@ -4686,9 +4667,45 @@ class MusicService :
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureStartedAsForeground()
+
+        when (intent?.action) {
+            "com.nikhil.yt.ACTION_PREV" -> {
+                if (player.hasPreviousMediaItem()) {
+                    player.seekToPrevious()
+                    player.prepare()
+                    player.playWhenReady = true
+                }
+            }
+            "com.nikhil.yt.ACTION_NEXT" -> {
+                if (player.hasNextMediaItem()) {
+                    player.seekToNext()
+                    player.prepare()
+                    player.playWhenReady = true
+                }
+            }
+            "com.nikhil.yt.ACTION_PLAY_PAUSE" -> {
+                if (player.isPlaying) {
+                    player.pause()
+                } else {
+                    player.play()
+                }
+            }
+            "com.nikhil.yt.ACTION_REWIND" -> {
+                // Jumps back exactly 10,000 milliseconds (10 seconds)
+                val newPos = (player.currentPosition - 10000).coerceAtLeast(0)
+                player.seekTo(newPos)
+            }
+            "com.nikhil.yt.ACTION_FORWARD" -> {
+                // Jumps forward 10 seconds, but won't go past the end of the song
+                val newPos = (player.currentPosition + 10000).coerceAtMost(player.duration)
+                player.seekTo(newPos)
+            }
+        }
+
         super.onStartCommand(intent, flags, startId)
         return START_NOT_STICKY
     }
+
 
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         if (startInForegroundRequired) ensureStartedAsForeground()

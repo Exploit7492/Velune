@@ -102,6 +102,7 @@ import com.nikhil.yt.constants.SliderStyleKey
 import com.nikhil.yt.constants.UseNewMiniPlayerDesignKey
 import com.nikhil.yt.extensions.metadata
 import com.nikhil.yt.extensions.togglePlayPause
+import com.nikhil.yt.innertube.toHighResThumbnail
 import com.nikhil.yt.models.MediaMetadata
 import com.nikhil.yt.ui.component.BottomSheet
 import com.nikhil.yt.ui.component.BottomSheetState
@@ -873,7 +874,7 @@ private fun MetroPlayerContent(
             contentAlignment = Alignment.Center
         ) {
             coil3.compose.AsyncImage(
-                model = mediaMetadata.thumbnailUrl,
+                model = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
                 contentDescription = "Album Art",
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier

@@ -6,8 +6,9 @@
 
 
 
-package com.nikhil.yt.innertube
+package com.nikhil.yt.innertube.pages
 
+import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.YouTubeClient
 import com.nikhil.yt.innertube.models.response.PlayerResponse
 import io.ktor.http.URLBuilder

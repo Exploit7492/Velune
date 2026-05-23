@@ -115,6 +115,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.nikhil.yt.innertube.toHighResThumbnail
 import com.nikhil.yt.viewmodels.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -173,7 +174,7 @@ fun QuickPicksSection(
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(song.song.thumbnailUrl)
+                    .data(song.song.thumbnailUrl?.toHighResThumbnail())
                     .crossfade(true)
                     .build(),
                 contentDescription = null,

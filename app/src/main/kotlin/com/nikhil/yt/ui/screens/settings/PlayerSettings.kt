@@ -87,7 +87,7 @@ fun PlayerSettings(
     )
     val (playerStreamClient, onPlayerStreamClientChange) = rememberEnumPreference(
         PlayerStreamClientKey,
-        defaultValue = PlayerStreamClient.IOS
+        defaultValue = PlayerStreamClient.MOBILE
     )
     val (networkMetered, onNetworkMeteredChange) = rememberPreference(
         NetworkMeteredKey,
@@ -203,6 +203,7 @@ fun PlayerSettings(
                             when (value) {
                                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
                                 PlayerStreamClient.IOS -> "iOS"
+                                PlayerStreamClient.MOBILE -> "Android"
                                 PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
                                 PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
                                 else -> stringResource(R.string.player_stream_client_web_remix)
@@ -215,6 +216,7 @@ fun PlayerSettings(
                             when (value) {
                                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr_desc)
                                 PlayerStreamClient.IOS -> "Use the iOS client. Often bypasses bot detection."
+                                PlayerStreamClient.MOBILE -> "Use the Android client .Most efficient,"
                                 PlayerStreamClient.TVHTML5 -> "Use the TV client. Helpful if other clients fail."
                                 PlayerStreamClient.ANDROID_MUSIC -> "Use the Android Music client."
                                 else -> stringResource(R.string.player_stream_client_web_remix_desc)
@@ -266,6 +268,7 @@ fun PlayerSettings(
             when (playerStreamClient) {
                 PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
                 PlayerStreamClient.IOS -> "iOS"
+                PlayerStreamClient.MOBILE -> "Android"
                 PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
                 PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
                 else -> stringResource(R.string.player_stream_client_web_remix)

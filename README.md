@@ -4,6 +4,7 @@
  <img src="https://raw.githubusercontent.com/nikhilvishwakarma00/Velune/main/fastlane/metadata/android/en-US/images/icon.png" width="110" />
 
 </div>
+
 # 🌌 Velune
 <div align="center">
 
@@ -37,6 +38,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-MVVM-52525B?style=for-the-badge)
 
 </div>
+
 ## 📥 Download Now
 
 
@@ -90,6 +92,7 @@ Velune is not just another music player — it's a **complete reimagination of Y
 * 🎨 Stunning **Material You** interface
 
 > 💡 This is YouTube Music — *but unlocked*
+
 ---
 
 ## 🎯 Highlight Feature
@@ -108,17 +111,20 @@ Experience lyrics like never before:
 ## 📸 Preview
 
 <div align="center">
- 
+
 <img src="screenshots/Home.png" width="140"/>
 <img src="screenshots/Now Playing.png" width="140"/>
 <img src="screenshots/History.png" width="140"/>
 <img src="screenshots/Stats.png" width="140"/>
+
 <br/>
+
 <img src="screenshots/Library.png" width="140"/>
 <img src="screenshots/Settings.png" width="140"/>
 <img src="screenshots/About.png" width="140"/>
 
 </div>
+
 
 
 ---
@@ -219,6 +225,7 @@ or just want to share your favorite music setups? Join the official Velune commu
 
 --------------------------------------------------------------------------------------------------------------
 
+
 🙌 Credits\
 Huge respect to these projects:
 
@@ -243,4 +250,19 @@ Licensed under GPL-3.0
 💙 Built with passion by Nikhil\
 ⭐ Star the repo if Velune impressed you\
 🚀 Help it reach more people
+
+## 🔗 Star History
+
+<div align="center">
+  <a href="https://star-history.com/nikhilvishwakarma00/velune&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nikhilvishwakarma00/velune&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nikhilvishwakarma00/velune&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=nikhilvishwakarma00/velune&type=Date" />
+    </picture>
+  </a>
+
+  <br/>
+  <br/><br/>
+</div>
  

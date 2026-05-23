@@ -12,7 +12,7 @@ import android.net.ConnectivityManager
 import androidx.media3.common.PlaybackException
 import com.nikhil.yt.constants.AudioQuality
 import com.nikhil.yt.constants.PlayerStreamClient
-import com.nikhil.yt.innertube.NewPipeUtils
+import com.nikhil.yt.innertube.pages.NewPipeUtils
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.YouTubeClient
 import com.nikhil.yt.innertube.models.YouTubeClient.Companion.IOS
@@ -70,12 +70,12 @@ object YTPlayerUtils {
      * Clients used for fallback streams in case the streams of the main client do not work.
      */
     private val STREAM_FALLBACK_CLIENTS: Array<YouTubeClient> = arrayOf(
-        TVHTML5_SIMPLY_EMBEDDED_PLAYER,
-        IOS_MUSIC,
-        IOS,
         MOBILE,
         ANDROID_MUSIC,
         ANDROID_VR_NO_AUTH,
+        IOS,
+        IOS_MUSIC,
+        TVHTML5_SIMPLY_EMBEDDED_PLAYER,
         ANDROID_VR_1_61_48,
         ANDROID_VR_1_43_32,
         ANDROID_CREATOR,
@@ -102,29 +102,29 @@ object YTPlayerUtils {
     }
 
     fun markStreamClientFailed(videoId: String, clientKey: String?, httpStatusCode: Int?) {
-        if (httpStatusCode != 403) return
+        if (httpStatusCode != 403 && httpStatusCode != 429) return
         val normalizedClientKey = normalizeStreamClientKey(clientKey)
         if (normalizedClientKey.isEmpty()) return
-        failedStreamClientsUntil[buildFailedClientKey(videoId, normalizedClientKey)] =
+        failedStreamClientsUntil[normalizedClientKey] =
             System.currentTimeMillis() + FAILED_CLIENT_BACKOFF_MS
-    }
-
-    fun markPreferredClientFailed(videoId: String, client: PlayerStreamClient, httpStatusCode: Int?) {
-        markStreamClientFailed(videoId, client.name, httpStatusCode)
     }
 
     private fun isStreamClientTemporarilyBlocked(videoId: String, clientKey: String?): Boolean {
         val normalizedClientKey = normalizeStreamClientKey(clientKey)
         if (normalizedClientKey.isEmpty()) return false
-        val key = buildFailedClientKey(videoId, normalizedClientKey)
-        val until = failedStreamClientsUntil[key] ?: return false
+
+        val until = failedStreamClientsUntil[normalizedClientKey] ?: return false
         if (until <= System.currentTimeMillis()) {
-            failedStreamClientsUntil.remove(key)
+            failedStreamClientsUntil.remove(normalizedClientKey)
             return false
         }
         return true
     }
 
+
+    fun markPreferredClientFailed(videoId: String, client: PlayerStreamClient, httpStatusCode: Int?) {
+        markStreamClientFailed(videoId, client.name, httpStatusCode)
+    }
     private fun normalizeStreamClientKey(clientKey: String?): String {
         return clientKey?.trim()?.takeIf { it.isNotBlank() }?.uppercase(Locale.US).orEmpty()
     }
@@ -219,6 +219,7 @@ object YTPlayerUtils {
                 PlayerStreamClient.ANDROID_VR -> IOS // Aliased to IOS to bypass bot detection currently blocking VR clients
                 PlayerStreamClient.WEB_REMIX -> WEB_REMIX
                 PlayerStreamClient.IOS -> IOS
+                PlayerStreamClient.MOBILE -> ANDROID_MUSIC
                 PlayerStreamClient.TVHTML5 -> TVHTML5_SIMPLY_EMBEDDED_PLAYER
                 PlayerStreamClient.ANDROID_MUSIC -> ANDROID_MUSIC
             }
@@ -227,11 +228,11 @@ object YTPlayerUtils {
             preferredYouTubeClient.takeIf { preferredStreamClient == PlayerStreamClient.ANDROID_VR } ?: MAIN_CLIENT
 
         Timber.tag(logTag).i("Fetching metadata response using client: ${metadataClient.clientName}")
-        val metadataPlayerResponse =
-            YouTube.player(videoId, playlistId, metadataClient, signatureTimestamp).getOrThrow()
-        val audioConfig = metadataPlayerResponse.playerConfig?.audioConfig
-        val videoDetails = metadataPlayerResponse.videoDetails
-        val playbackTracking = metadataPlayerResponse.playbackTracking
+        val metadataPlayerResponse = runCatching {
+            YouTube.player(videoId, playlistId, metadataClient, signatureTimestamp).getOrThrow()}.getOrNull()
+        val audioConfig = metadataPlayerResponse?.playerConfig?.audioConfig
+        val videoDetails = metadataPlayerResponse?.videoDetails
+        val playbackTracking = metadataPlayerResponse?.playbackTracking
         val expectedDurationMs = videoDetails?.lengthSeconds?.toLongOrNull()?.takeIf { it > 0 }?.times(1000L)
 
         val streamClients =
@@ -282,6 +283,9 @@ object YTPlayerUtils {
                 )
                 if (isBotDetection) {
                     botDetectedClients.add(client.clientName)
+
+                    failedStreamClientsUntil[normalizeStreamClientKey(client.clientName)] =
+                        System.currentTimeMillis() + FAILED_CLIENT_BACKOFF_MS
                 }
                 continue
             }

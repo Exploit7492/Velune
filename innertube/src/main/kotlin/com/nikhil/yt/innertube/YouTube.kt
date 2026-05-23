@@ -80,10 +80,7 @@ import java.net.Proxy
 import java.util.Locale
 import kotlin.random.Random
 
-/**
- * Parse useful data with [InnerTube] sending requests.
- * Modified from [ViMusic](https://github.com/vfsfitvnm/ViMusic)
- */
+
 object YouTube {
     private val innerTube = InnerTube()
 
@@ -92,72 +89,56 @@ object YouTube {
         set(value) {
             innerTube.locale = value
         }
+
+    var authState: PlaybackAuthState
+        get() = innerTube.authState
+        set(value) {
+            innerTube.authState = value
+        }
+
     var visitorData: String?
-        get() = innerTube.visitorData
-        set(value) {
-            innerTube.visitorData = value
-        }
+        get() = authState.visitorData
+        set(value) { authState = authState.copy(visitorData = value) }
+
     var dataSyncId: String?
-        get() = innerTube.dataSyncId
-        set(value) {
-            innerTube.dataSyncId = value
-        }
+        get() = authState.dataSyncId
+        set(value) { authState = authState.copy(dataSyncId = value) }
+
     var cookie: String?
-        get() = innerTube.cookie
-        set(value) {
-            innerTube.cookie = value
-        }
+        get() = authState.cookie
+        set(value) { authState = authState.copy(cookie = value) }
+
     var poToken: String?
-        get() = innerTube.poToken
-        set(value) {
-            innerTube.poToken = value
-        }
-    var poTokenGvs: String? = null
-    var poTokenPlayer: String? = null
+        get() = authState.poToken
+        set(value) { authState = authState.copy(poToken = value) }
+
+    var poTokenGvs: String?
+        get() = authState.poTokenGvs
+        set(value) { authState = authState.copy(poTokenGvs = value) }
+
+    var poTokenPlayer: String?
+        get() = authState.poTokenPlayer
+        set(value) { authState = authState.copy(poTokenPlayer = value) }
+
     var proxy: Proxy?
         get() = innerTube.proxy
         set(value) {
             innerTube.proxy = value
         }
+
     var streamBypassProxy: Boolean = false
     val streamProxy: Proxy?
         get() = if (streamBypassProxy) null else proxy
+
     var useLoginForBrowse: Boolean
         get() = innerTube.useLoginForBrowse
         set(value) {
             innerTube.useLoginForBrowse = value
         }
 
-    private fun needsServiceIntegrity(client: YouTubeClient): Boolean {
-        val name = client.clientName.uppercase(Locale.US)
-        return name == "WEB" ||
-            name == "WEB_REMIX" ||
-            name == "WEB_CREATOR" ||
-            name == "MWEB" ||
-            name == "WEB_EMBEDDED_PLAYER" ||
-            name == "TVHTML5" ||
-            name == "TVHTML5_SIMPLY_EMBEDDED_PLAYER" ||
-            name == "TVHTML5_SIMPLY"
-    }
-
-    private fun resolvePlayerPoToken(client: YouTubeClient, videoId: String, explicitPoToken: String?): String? {
-        val explicit = explicitPoToken?.takeIf { it.isNotBlank() }
-        if (explicit != null) return explicit
-        if (!needsServiceIntegrity(client)) return null
-
-        val userExtracted = poTokenPlayer?.takeIf { it.isNotBlank() }
-        if (userExtracted != null) return userExtracted
-
-        return null
-    }
-
-    internal fun resolveGvsPoToken(): String? {
-        return poTokenGvs?.takeIf { it.isNotBlank() }
-            ?: poToken?.takeIf { it.isNotBlank() }
-    }
-
     internal fun appendGvsPoToken(url: String, client: YouTubeClient? = null): String {
-        val token = resolveGvsPoToken() ?: return url
+        val token = authState.resolveGvsPoToken(client) ?: return url
+
         if (url.contains("pot=")) return url
 
         val separator = if (url.contains("?")) "&" else "?"
@@ -180,34 +161,89 @@ object YouTube {
 
     suspend fun searchSummary(query: String): Result<SearchSummaryPage> = runCatching {
         val response = innerTube.search(WEB_REMIX, query).body<SearchResponse>()
-        SearchSummaryPage(
-            summaries = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.mapNotNull { it ->
-                if (it.musicCardShelfRenderer != null)
-                    SearchSummary(
-                        title = it.musicCardShelfRenderer.header?.musicCardShelfHeaderBasicRenderer?.title?.runs?.firstOrNull()?.text ?: "Top result",
-                        items = listOfNotNull(SearchSummaryPage.fromMusicCardShelfRenderer(it.musicCardShelfRenderer))
-                            .plus(
-                                it.musicCardShelfRenderer.contents
-                                    ?.mapNotNull { it.musicResponsiveListItemRenderer }
-                                    ?.mapNotNull(SearchSummaryPage.Companion::fromMusicResponsiveListItemRenderer)
-                                    .orEmpty()
+
+        var parsedSummaries = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
+            ?.tabRenderer?.content?.sectionListRenderer?.contents?.mapNotNull { section ->
+                try {
+                    when {
+                        section.musicCardShelfRenderer != null -> {
+                            val renderer = section.musicCardShelfRenderer
+                            val topItem = SearchSummaryPage.fromMusicCardShelfRenderer(renderer)
+                            val subItems = renderer.contents?.mapNotNull { content ->
+                                try {
+                                    content.musicResponsiveListItemRenderer?.let {
+                                        SearchSummaryPage.fromMusicResponsiveListItemRenderer(it)
+                                    }
+                                } catch (e: Exception) { null }
+                            }.orEmpty()
+
+                            SearchSummary(
+                                title = renderer.header?.musicCardShelfHeaderBasicRenderer?.title?.runs?.firstOrNull()?.text ?: "Top result",
+                                items = (listOfNotNull(topItem) + subItems).distinctBy { it.id }
                             )
-                            .distinctBy { it.id }
-                            .ifEmpty { null } ?: return@mapNotNull null
-                    )
-                else
-                    SearchSummary(
-                        title = it.musicShelfRenderer?.title?.runs?.firstOrNull()?.text ?: "Other",
-                        items = it.musicShelfRenderer?.contents?.getItems()
-                            ?.mapNotNull {
-                                SearchSummaryPage.fromMusicResponsiveListItemRenderer(it)
-                            }
-                            ?.distinctBy { it.id }
-                            ?.ifEmpty { null } ?: return@mapNotNull null
-                    )
-            }!!
-        )
+                        }
+
+                        section.musicShelfRenderer != null -> {
+                            val renderer = section.musicShelfRenderer
+                            val parsedItems = renderer.contents?.mapNotNull { content ->
+                                val mrlir = content.musicResponsiveListItemRenderer ?: return@mapNotNull null
+                                var item = try { SearchSummaryPage.fromMusicResponsiveListItemRenderer(mrlir) } catch(e: Exception) { null }
+                                if (item == null) {
+                                    item = try { SearchPage.toYTItem(mrlir) } catch(e: Exception) { null }
+                                }
+                                item
+                            }.orEmpty()
+
+                            SearchSummary(
+                                title = renderer.title?.runs?.firstOrNull()?.text ?: "Other",
+                                items = parsedItems.distinctBy { it.id }
+                            )
+                        }
+
+                        section.musicCarouselShelfRenderer != null -> {
+                            val renderer = section.musicCarouselShelfRenderer
+                            val parsedItems = renderer.contents.mapNotNull { content ->
+                                try {
+                                    content.musicTwoRowItemRenderer?.let { convertMusicTwoRowItem(it) }
+                                } catch (e: Exception) { null }
+                            }.orEmpty()
+
+                            SearchSummary(
+                                title = renderer.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs?.firstOrNull()?.text ?: "More",
+                                items = parsedItems.distinctBy { it.id }
+                            )
+                        }
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }?.filter { it.items.isNotEmpty() }.orEmpty()
+
+        if (parsedSummaries.size <= 1) {
+
+            val songsFallback = runCatching {
+                search(query, SearchFilter.FILTER_SONG).getOrNull()?.items ?: emptyList()
+            }.getOrDefault(emptyList())
+
+            if (songsFallback.isNotEmpty()) {
+                parsedSummaries = parsedSummaries + SearchSummary(title = "Songs", items = songsFallback.take(12))
+            }
+
+            val albumsFallback = runCatching {
+                search(query, SearchFilter.FILTER_ALBUM).getOrNull()?.items ?: emptyList()
+            }.getOrDefault(emptyList())
+
+            if (albumsFallback.isNotEmpty()) {
+                parsedSummaries = parsedSummaries + SearchSummary(title = "Albums", items = albumsFallback.take(12))
+            }
+        }
+
+        SearchSummaryPage(summaries = parsedSummaries)
     }
+
+
+
 
     suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = runCatching {
         val response = innerTube.search(WEB_REMIX, query, filter.value).body<SearchResponse>()
@@ -439,6 +475,27 @@ object YouTube {
         }
     }
 
+    suspend fun player(
+        videoId: String,
+        playlistId: String? = null,
+        client: YouTubeClient,
+        signatureTimestamp: Int? = null,
+        poToken: String? = null
+    ): Result<PlayerResponse> = runCatching {
+
+        var resolvedPoToken = authState.resolvePlayerPoToken(client, explicitPoToken = poToken)
+
+        if (resolvedPoToken == null && PlaybackAuthState.needsServiceIntegrity(client)) {
+              resolvedPoToken = com.nikhil.yt.innertube.utils.PoTokenGenerator.generateContentToken(
+                identifier = authState.visitorData ?: "dummy_visitor_data_for_token",
+                videoId = videoId
+            )
+            authState = authState.copy(poTokenPlayer = resolvedPoToken)
+        }
+
+        innerTube.player(client, videoId, playlistId, signatureTimestamp, resolvedPoToken).body<PlayerResponse>()
+    }
+
     suspend fun playlist(playlistId: String): Result<PlaylistPage> = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
@@ -450,8 +507,12 @@ object YouTube {
         if (header == null) throw IllegalStateException("PLAYLIST_PRIVATE")
 
         val title = header.title.runs?.firstOrNull()?.text ?: throw IllegalStateException("PLAYLIST_PRIVATE")
-        val thumbnail = header.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.lastOrNull()?.url
+
+        val rawThumbnail = header.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.lastOrNull()?.url?.toHighResThumbnail()
             ?: throw IllegalStateException("PLAYLIST_PRIVATE")
+
+        val thumbnail = rawThumbnail.toHighResThumbnail()
+
 
         val editable = base?.musicEditablePlaylistDetailHeaderRenderer != null
 
@@ -484,6 +545,7 @@ object YouTube {
                 ?.continuations?.getContinuation()
         )
     }
+
 
     suspend fun playlistContinuation(continuation: String): Result<PlaylistContinuationPage> = runCatching {
         val response = innerTube.browse(
@@ -814,7 +876,7 @@ object YouTube {
                 
                     val items = renderer.contents.mapNotNull { item ->
                         when {
-                            item.musicResponsiveListItemRenderer != null -> 
+                            item.musicResponsiveListItemRenderer != null ->
                                 convertToChartItem(item.musicResponsiveListItemRenderer)
                             item.musicTwoRowItemRenderer != null -> 
                                 convertMusicTwoRowItem(item.musicTwoRowItemRenderer)
@@ -1037,17 +1099,9 @@ object YouTube {
         innerTube.deletePlaylist(WEB_REMIX, playlistId)
     }
 
-    suspend fun player(videoId: String, playlistId: String? = null, client: YouTubeClient, signatureTimestamp: Int? = null, poToken: String? = null): Result<PlayerResponse> = runCatching {
-        val resolvedPoToken = resolvePlayerPoToken(client, videoId, poToken)
-        innerTube.player(client, videoId, playlistId, signatureTimestamp, resolvedPoToken).body<PlayerResponse>()
-    }
-
     suspend fun registerPlayback(playlistId: String? = null, playbackTracking: String) = runCatching {
         val cpn = (1..16).map {
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"[Random.Default.nextInt(
-                0,
-                64
-            )]
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"[kotlin.random.Random.Default.nextInt(0, 64)]
         }.joinToString("")
 
         val playbackUrl = playbackTracking.replace(
@@ -1059,9 +1113,10 @@ object YouTube {
             url = playbackUrl,
             playlistId = playlistId,
             cpn = cpn,
-            poToken = resolveGvsPoToken()
+            poToken = authState.resolveGvsPoToken()
         )
     }
+
 
     suspend fun next(endpoint: WatchEndpoint, continuation: String? = null): Result<NextResult> = runCatching {
         val response = innerTube.next(
@@ -1216,4 +1271,15 @@ object YouTube {
     const val MAX_GET_QUEUE_SIZE = 1000
 
     private val VISITOR_DATA_REGEX = Regex("^Cg[t|s]")
+}
+
+fun String.toHighResThumbnail(): String {
+    if (this.contains("=")) {
+        return this.substringBefore("=") + "=w540-h540-l90-rj"
+    }
+    if (this.contains("hqdefault.jpg")) {
+        return this.replace("hqdefault.jpg", "maxresdefault.jpg")
+    }
+
+    return this
 }

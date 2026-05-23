@@ -312,15 +312,20 @@ fun AboutItemCard(
     }
 }
 fun launchUpiPayment(context: android.content.Context, upiId: String, payeeName: String) {
-    val uriString = "upi://pay?pa=$upiId&pn=${android.net.Uri.encode(payeeName)}&cu=INR"
+    val note = "Support for Velune"
+    val uriString = "upi://pay?pa=$upiId&pn=${android.net.Uri.encode(payeeName)}&tn=${android.net.Uri.encode(note)}&cu=INR"
     val uri = android.net.Uri.parse(uriString)
     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+
+    val chooser = android.content.Intent.createChooser(intent, "Pay with...")
+
     try {
-        context.startActivity(intent)
+        context.startActivity(chooser)
     } catch (e: android.content.ActivityNotFoundException) {
         android.widget.Toast.makeText(context, "No UPI app found on this device.", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
+
 @Composable
 fun SupportDeveloperCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current

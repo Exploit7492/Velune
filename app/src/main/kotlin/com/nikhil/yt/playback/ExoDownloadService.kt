@@ -46,6 +46,7 @@ class ExoDownloadService : DownloadService(
         return super.onStartCommand(intent, flags, startId)
     }
 
+
     override fun getDownloadManager() = downloadUtil.downloadManager
 
     override fun getScheduler(): Scheduler = PlatformScheduler(this, JOB_ID)

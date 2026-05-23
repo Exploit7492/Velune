@@ -123,6 +123,7 @@ import kotlin.math.abs
 import android.content.Context
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import androidx.compose.ui.viewinterop.AndroidView
+import com.nikhil.yt.innertube.toHighResThumbnail
 
 object CanvasArtworkPlaybackCache {
     private const val defaultMaxSize = 256
@@ -589,13 +590,13 @@ fun Thumbnail(
                                                     playerConnection.player.seekTo(
                                                         (currentPosition - skipAmount).coerceAtLeast(0)
                                                     )
-                                                    seekDirection =
-                                                        context.getString(R.string.seek_backward_dynamic, skipAmount / 1000)
+                                                    seekDirection = "-${skipAmount / 1000}s"
+
                                                 } else {
                                                     playerConnection.player.seekTo(
                                                         (currentPosition + skipAmount).coerceAtMost(duration)
                                                     )
-                                                    seekDirection = context.getString(R.string.seek_forward_dynamic, skipAmount / 1000)
+                                                    seekDirection = "+${skipAmount / 1000}s"
                                                 }
                                                 // If a user double-tap skip lands on a new media item, restart presence manager to pick up artwork quickly
                                                 if (com.nikhil.yt.ui.screens.settings.DiscordPresenceManager.isRunning()) {
@@ -633,7 +634,7 @@ fun Thumbnail(
                                         val fallbackCanvasUrl = canvasArtwork?.videoUrl
                                         
                                         AsyncImage(
-                                            model = item.mediaMetadata.artworkUri?.toString(),
+                                            model = item.mediaMetadata.artworkUri?.toString()?.toHighResThumbnail(),
                                             contentDescription = null,
                                             contentScale = ContentScale.FillBounds,
                                             modifier = Modifier
@@ -646,7 +647,7 @@ fun Thumbnail(
                                         )
 
                                         AsyncImage(
-                                            model = item.mediaMetadata.artworkUri?.toString(),
+                                            model = item.mediaMetadata.artworkUri?.toString()?.toHighResThumbnail(),
                                             contentDescription = null,
                                             contentScale = if (cropThumbnailToSquare) ContentScale.Crop else ContentScale.Fit,
                                             modifier = Modifier

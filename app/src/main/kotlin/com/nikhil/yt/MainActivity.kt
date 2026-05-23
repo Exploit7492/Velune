@@ -38,6 +38,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -1137,12 +1138,12 @@ class MainActivity : ComponentActivity() {
                                                 title = {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         // app icon
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.about_appbar),
-                                                            contentDescription = null,
+                                                        Image(
+                                                            painter = painterResource(id = R.drawable.ic_velune_concept),
+                                                            contentDescription = "Velune Logo",
                                                             modifier = Modifier
                                                                 .size(35.dp)
-                                                                .padding(end = 3.dp)
+                                                                .padding(end = 6.dp)
                                                         )
 
                                                         Text(
