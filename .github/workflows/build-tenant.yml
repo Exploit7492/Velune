@@ -85,12 +85,20 @@ jobs:
             -PpawnsApiKey=$PAWNS_API_KEY
 
       - name: Sign APK (if keystore provided)
-        if: env.CONFIG_FILE != '' && secrets.KEYSTORE_BASE64 != ''
+        if: env.CONFIG_FILE != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No keystore provided, skipping signing"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
           jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-            -keystore keystore.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
-            app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }}
+            -keystore keystore.jks -storepass "$KEYSTORE_PASSWORD" \
+            app/build/outputs/apk/release/app-release-unsigned.apk "$KEY_ALIAS"
           zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release.apk
           rm keystore.jks
 
