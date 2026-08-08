@@ -25,24 +25,34 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── Create Gradle wrapper if missing ──────────────────────────────────
+      # ─── Cache apt packages (jq, curl, imagemagick) ──────────────────────
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/.github/workflows/*.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      # ─── Create Gradle wrapper if missing ─────────────────────────────────
       - name: Setup Gradle wrapper
         run: |
           mkdir -p gradle/wrapper
           if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
-            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+            cat > gradle/wrapper/gradle-wrapper.properties << 'EOW'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.9-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          EOF
+          EOW
           fi
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar
           fi
           chmod +x gradlew
 
+      # ─── Cache Gradle dependencies ────────────────────────────────────────
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
@@ -53,6 +63,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      # ─── Cache Android SDK ────────────────────────────────────────────────
       - name: Cache Android SDK
         uses: actions/cache@v4
         with:
