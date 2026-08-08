@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Upstream InnerTune strings --><!-- Do not add new features here --><!-- Try to re-use strings here, but be careful on its usage e.g. verb vs noun --><!-- "InnerTune" is replaced with "Velune" --><!-- Translators: Do not modify this file for translations, use InnerTune's Weblate instead. --><resources>
+    <string name="config_github_url"></string>
+    <string name="config_discord_url"></string>
+    <string name="config_whatsapp_url"></string>
+    <string name="config_instagram_url"></string>
+    <string name="config_facebook_url"></string>
+    <string name="config_app_name">YT-Pro</string>
+    <string name="app_name">YT-Pro</string>
     <string name="music_channel_id">music_channel</string>
     <string name="music_channel_name">Music Playback</string>
     <!-- Bottom navigation -->

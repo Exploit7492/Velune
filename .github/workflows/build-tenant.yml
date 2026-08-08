@@ -27,7 +27,28 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install dependencies
+      # ─── Caching ──────────────────────────────────────────────────────────────
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/platforms
+            /usr/local/lib/android/sdk/build-tools
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/build.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Install dependencies (jq, curl, imagemagick)
         run: |
           sudo apt-get update
           sudo apt-get install -y jq curl imagemagick
@@ -39,7 +60,6 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             CONFIG="${{ github.event.inputs.config_file }}"
           else
-            # Use the first JSON file in configs/ that was changed
             CONFIG=$(git diff --name-only HEAD^ HEAD | grep '^configs/.*\.json$' | head -1)
           fi
           echo "config=$CONFIG" >> $GITHUB_OUTPUT
