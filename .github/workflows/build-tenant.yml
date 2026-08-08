@@ -1,0 +1,91 @@
+name: Build Tenant APK
+
+on:
+  push:
+    paths:
+      - 'configs/*.json'
+  workflow_dispatch:
+    inputs:
+      config_file:
+        description: 'Path to tenant config (e.g., configs/acme123.json)'
+        required: true
+        default: 'configs/example.json'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl imagemagick
+          chmod +x gradlew
+
+      - name: Determine config file
+        id: config
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            CONFIG="${{ github.event.inputs.config_file }}"
+          else
+            # Use the first JSON file in configs/ that was changed
+            CONFIG=$(git diff --name-only HEAD^ HEAD | grep '^configs/.*\.json$' | head -1)
+          fi
+          echo "config=$CONFIG" >> $GITHUB_OUTPUT
+          echo "CONFIG_FILE=$CONFIG" >> $GITHUB_ENV
+
+      - name: Run branding script
+        if: env.CONFIG_FILE != ''
+        run: ./scripts/brand.sh "$CONFIG_FILE"
+
+      - name: Read package name and API key
+        if: env.CONFIG_FILE != ''
+        run: |
+          source scripts/brand.env
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> $GITHUB_ENV
+
+      - name: Build APK with custom package name
+        if: env.CONFIG_FILE != ''
+        run: |
+          ./gradlew assembleRelease \
+            -PappPackage=$PACKAGE_NAME \
+            -PpawnsApiKey=$PAWNS_API_KEY
+
+      - name: Sign APK (if keystore provided)
+        if: env.CONFIG_FILE != '' && secrets.KEYSTORE_BASE64 != ''
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+            -keystore keystore.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+            app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.KEY_ALIAS }}
+          zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release.apk
+          rm keystore.jks
+
+      - name: Upload APK as artifact
+        if: env.CONFIG_FILE != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TENANT_ID }}-release
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Create GitHub Release
+        if: env.CONFIG_FILE != ''
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TENANT_ID }}-v${{ github.run_number }}
+          name: "${{ env.TENANT_ID }} - Build ${{ github.run_number }}"
+          files: app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

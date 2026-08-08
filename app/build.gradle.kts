@@ -2,6 +2,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 plugins {
+val appPackage = project.findProperty("appPackage") as? String ?: "com.nikhil.yt"
+
     alias(libs.plugins.android.application)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.ksp)
@@ -25,7 +27,7 @@ android {
     }
 
     defaultConfig {
-    applicationId = "com.nikhil.yt"
+    applicationId = appPackage
         minSdk = 26
         targetSdk = 36
         versionCode = 10
