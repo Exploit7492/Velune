@@ -25,7 +25,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── Cache apt packages (jq, curl, imagemagick) ──────────────────────
+      # ─── Cache apt packages ────────────────────────────────────────────────
       - name: Cache apt packages
         uses: actions/cache@v4
         with:
@@ -34,21 +34,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-apt-
 
-      # ─── Create Gradle wrapper if missing ─────────────────────────────────
+      # ─── Create Gradle wrapper with correct version ──────────────────────
       - name: Setup Gradle wrapper
         run: |
           mkdir -p gradle/wrapper
-          if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
-            cat > gradle/wrapper/gradle-wrapper.properties << 'EOW'
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOW'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.9-bin.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOW
-          fi
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar
           fi
           chmod +x gradlew
 
