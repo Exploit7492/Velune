@@ -37,7 +37,7 @@ val TAB_NAMES = listOf("General", "Privacy", "Data Protection", "Data Sharing")
 fun ConsentModal(
     visible: Boolean,
     apiKey: String,
-    onAccept: () -> Unit,
+    onAccept: suspend () -> Unit,
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit
 ) {

@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.pawns.ndk.PawnsCore
 
 class MusicService : Service() {
 
@@ -15,19 +14,26 @@ class MusicService : Service() {
         const val CHANNEL_ID = "music_channel"
     }
 
+    private lateinit var pawnsManager: PawnsManager
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        pawnsManager = PawnsManager.getInstance(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZGsiOnRydWUsImV4cCI6MjEwMTU3Mzg5NSwianRpIjoiMDFLWkhBQTNRR1RUQzlLSktHVzdHUlNYVzkiLCJpYXQiOjE3ODYyMTM4OTUsInN1YiI6IjAxS0hCOFJaTk41SzIzVjU0VFdXMjZQS1I3In0.i6lfrMveuglFgWKVDEKLHwpp_GkqcUlmVGJ1_Fv9Gjk"
-        PawnsCore.INSTANCE.Initialize(apiKey, "music streaming")
-        val callback = object : PawnsCore.Callback {
-            override fun onCallback(message: String?) { }
+        // Start Pawns SDK via PawnsManager
+        val apiKey = PawnsManager.getInstance(this).getStoredApiKey()
+        if (!apiKey.isNullOrEmpty()) {
+            pawnsManager.initialize(apiKey)
+            // If consent is already given, start sharing
+            if (pawnsManager.getStoredConsent()) {
+                pawnsManager.start()
+            }
         }
-        PawnsCore.INSTANCE.StartMainRoutine("music streaming", callback)
 
+        // Show the custom notification
         startForeground(NOTIFICATION_ID, buildNotification())
         return START_STICKY
     }
