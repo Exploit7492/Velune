@@ -543,7 +543,7 @@ fun SettingsScreen(
                         PremiumSettingsItem(
                             icon = painterResource(R.drawable.info),
                             title = stringResource(R.string.about),
-                            subtitle = "Velune",
+                            subtitle = stringResource(R.string.app_name),
                             accentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             keywords = listOf(
                                 "about",

@@ -1694,7 +1694,7 @@ private fun PremiumSummaryStoryCard(
                     }
                     Column {
                         Text(
-                            text = "Velune",
+                            text = stringResource(R.string.app_name),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = SoftWhite
@@ -1834,7 +1834,7 @@ private fun PremiumSummaryStoryCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = joinByBullet("Velune", year.toString()),
+                        text = joinByBullet(stringResource(R.string.app_name), year.toString()),
                         style = MaterialTheme.typography.labelMedium,
                         color = SoftWhite.copy(alpha = 0.5f)
                     )

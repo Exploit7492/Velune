@@ -91,7 +91,7 @@ object Updater {
             client.get("https://api.github.com/repos/Zapier-codes/Velune/releases?per_page=$perPage") {
                 headers {
                     append("Accept", "application/vnd.github+json")
-                    append("User-Agent", "Velune")
+                    append("User-Agent", getString(R.string.app_name))
                     if (!cachedEtag.isNullOrBlank()) {
                         append("If-None-Match", cachedEtag)
                     }
