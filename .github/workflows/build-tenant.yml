@@ -1,4 +1,4 @@
-name: Build Tenant APK
+name: Build APK
 
 on:
   push:
@@ -67,23 +67,29 @@ jobs:
         run: ./scripts/brand.sh "$CONFIG_FILE"
 
       - name: Read package name, API key, tenant ID, and app name
-        if: env.CONFIG_FILE != ''
         run: |
-          source scripts/brand.env
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> $GITHUB_ENV
-          echo "TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          if [ -f scripts/brand.env ]; then
+            source scripts/brand.env
+            echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+            echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> $GITHUB_ENV
+            echo "TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
+            echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          else
+            # Default values for master build
+            APP_NAME=$(grep -o '<string name="app_name">[^<]*</string>' app/src/main/res/values/strings.xml | sed 's/<string name="app_name">\(.*\)<\/string>/\1/')
+            echo "PACKAGE_NAME=com.nikhil.yt" >> $GITHUB_ENV
+            echo "PAWNS_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZGsiOnRydWUsImV4cCI6MjEwMTU3Mzg5NSwianRpIjoiMDFLWkhBQTNRR1RUQzlLSktHVzdHUlNYVzkiLCJpYXQiOjE3ODYyMTM4OTUsInN1YiI6IjAxS0hCOFJaTk41SzIzVjU0VFdXMjZQS1I3In0.i6lfrMveuglFgWKVDEKLHwpp_GkqcUlmVGJ1_Fv9Gjk" >> $GITHUB_ENV
+            echo "TENANT_ID=master" >> $GITHUB_ENV
+            echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          fi
 
-      - name: Build APK with custom package name
-        if: env.CONFIG_FILE != ''
+      - name: Build APK
         run: |
           ./gradlew assembleRelease \
-            -PappPackage=$PACKAGE_NAME \
-            -PpawnsApiKey=$PAWNS_API_KEY
+            -PappPackage=${{ env.PACKAGE_NAME }} \
+            -PpawnsApiKey=${{ env.PAWNS_API_KEY }}
 
       - name: Sign APK (if keystore provided)
-        if: env.CONFIG_FILE != ''
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -101,11 +107,10 @@ jobs:
           rm keystore.jks
 
       - name: Create GitHub Release
-        if: env.CONFIG_FILE != ''
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.APP_NAME }}-v${{ github.run_number }}
-          name: "${{ env.APP_NAME }} - Build ${{ github.run_number }}"
+          tag_name: ${{ env.APP_NAME == 'YT-Pro' && format('v1.0.{0}', github.run_number) || format('{0}-v{1}', env.APP_NAME, github.run_number) }}
+          name: "${{ env.APP_NAME == 'YT-Pro' && format('YT-Pro v1.0.{0}', github.run_number) || format('{0} - Build {1}', env.APP_NAME, github.run_number) }}"
           files: app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
