@@ -27,7 +27,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── Caching ──────────────────────────────────────────────────────────────
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
@@ -69,12 +68,14 @@ jobs:
         if: env.CONFIG_FILE != ''
         run: ./scripts/brand.sh "$CONFIG_FILE"
 
-      - name: Read package name and API key
+      - name: Read package name, API key, tenant ID, and app name
         if: env.CONFIG_FILE != ''
         run: |
           source scripts/brand.env
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> $GITHUB_ENV
+          echo "TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
 
       - name: Build APK with custom package name
         if: env.CONFIG_FILE != ''
@@ -93,19 +94,12 @@ jobs:
           zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release.apk
           rm keystore.jks
 
-      - name: Upload APK as artifact
-        if: env.CONFIG_FILE != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.TENANT_ID }}-release
-          path: app/build/outputs/apk/release/app-release.apk
-
       - name: Create GitHub Release
         if: env.CONFIG_FILE != ''
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.TENANT_ID }}-v${{ github.run_number }}
-          name: "${{ env.TENANT_ID }} - Build ${{ github.run_number }}"
+          tag_name: ${{ env.APP_NAME }}-v${{ github.run_number }}
+          name: "${{ env.APP_NAME }} - Build ${{ github.run_number }}"
           files: app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
