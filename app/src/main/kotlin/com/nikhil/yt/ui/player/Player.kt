@@ -4,8 +4,6 @@
  * Licensed Under GPL-3.0
  */
 
-
-
 package com.nikhil.yt.ui.player
 
 import android.content.ClipboardManager
@@ -14,6 +12,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +33,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -54,7 +52,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,7 +66,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.media3.common.C
@@ -96,6 +95,7 @@ import com.nikhil.yt.constants.PlayerCustomContrastKey
 import com.nikhil.yt.constants.PlayerCustomImageUriKey
 import com.nikhil.yt.constants.PlayerDesignStyle
 import com.nikhil.yt.constants.PlayerDesignStyleKey
+import com.nikhil.yt.constants.PlayerHorizontalPadding
 import com.nikhil.yt.constants.QueuePeekHeight
 import com.nikhil.yt.constants.SliderStyle
 import com.nikhil.yt.constants.SliderStyleKey
@@ -121,6 +121,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
+// ─── Import video morphing component ───────────────────────────────────────────
+import com.nikhil.yt.ui.player.VideoMorphingThumbnail
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -132,10 +135,36 @@ fun BottomSheetPlayer(
     val context = LocalContext.current
     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val menuState = LocalMenuState.current
-
     val bottomSheetPageState = LocalBottomSheetPageState.current
-
     val playerConnection = LocalPlayerConnection.current ?: return
+
+    // ─── Video morphing state ────────────────────────────────────────────────────
+    var isVideoMode by remember { mutableStateOf(false) }
+    var hasVideoTrack by remember { mutableStateOf(false) }
+
+    // Check for video track availability
+    LaunchedEffect(playerConnection.player) {
+        while (true) {
+            delay(500)
+            val videoFormat = playerConnection.player.videoFormat
+            hasVideoTrack = videoFormat != null
+            // If video track disappeared and we're in video mode, switch back
+            if (videoFormat == null && isVideoMode) {
+                isVideoMode = false
+            }
+        }
+    }
+
+    // Toggle function – enables/disables video track in the track selector
+    val toggleVideo = {
+        isVideoMode = !isVideoMode
+        val trackSelector = playerConnection.player.trackSelector
+        if (trackSelector is androidx.media3.exoplayer.trackselection.DefaultTrackSelector) {
+            val parameters = trackSelector.parameters.buildUpon()
+            parameters.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, !isVideoMode)
+            trackSelector.setParameters(parameters.build())
+        }
+    }
 
     val playerDesignStyle by rememberEnumPreference(
         key = PlayerDesignStyleKey,
@@ -536,6 +565,55 @@ fun BottomSheetPlayer(
             )
         },
     ) {
+        // ─── TOP BAR WITH SONG/VIDEO PILL SWITCH ──────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pill switch (Song / Video)
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Song button
+                Surface(
+                    modifier = Modifier
+                        .clickable { if (isVideoMode) toggleVideo() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ) {
+                    Text(
+                        text = "Song",
+                        color = if (!isVideoMode) MaterialTheme.colorScheme.onPrimary else TextBackgroundColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                // Video button
+                Surface(
+                    modifier = Modifier
+                        .clickable { if (!isVideoMode && hasVideoTrack) toggleVideo() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ) {
+                    Text(
+                        text = "Video",
+                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else TextBackgroundColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
         val onSliderValueChange: (Long) -> Unit = { sliderPosition = it }
         val onSliderValueChangeFinished: () -> Unit = {
             sliderPosition?.let {
@@ -597,7 +675,7 @@ fun BottomSheetPlayer(
                 clipboardManager = clipboardManager,
                 context = context,
                 onSliderValueChange = onSliderValueChange,
-                onSliderValueChangeFinished = onSliderValueChangeFinished,
+                onSliderValueChangeFinished = onSliderValueChangeFinished
             )
         }
 
@@ -613,8 +691,6 @@ fun BottomSheetPlayer(
                 playerCustomBrightness = playerCustomBrightness
             )
         }
-
-// distance
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
@@ -644,8 +720,10 @@ fun BottomSheetPlayer(
                                 }
                             },
                             context = context,
-                            bottomPadding = dynamicQueuePeekHeight
-
+                            bottomPadding = dynamicQueuePeekHeight,
+                            isVideoMode = isVideoMode,
+                            hasVideoTrack = hasVideoTrack,
+                            onToggleVideo = toggleVideo
                         )
                     }
 
@@ -662,10 +740,12 @@ fun BottomSheetPlayer(
                         ) {
                             val screenWidth = LocalConfiguration.current.screenWidthDp
                             val thumbnailSize = (screenWidth * 0.4).dp
-                            Thumbnail(
-                                sliderPositionProvider = { sliderPosition },
-                                modifier = Modifier.size(thumbnailSize),
-                                isPlayerExpanded = state.isExpanded
+                            VideoMorphingThumbnail(
+                                thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
+                                isVideoMode = isVideoMode,
+                                hasVideoTrack = hasVideoTrack,
+                                playerConnection = playerConnection,
+                                modifier = Modifier.size(thumbnailSize)
                             )
                         }
                         Column(
@@ -718,8 +798,10 @@ fun BottomSheetPlayer(
                                 }
                             },
                             context = context,
-                            bottomPadding = dynamicQueuePeekHeight
-
+                            bottomPadding = dynamicQueuePeekHeight,
+                            isVideoMode = isVideoMode,
+                            hasVideoTrack = hasVideoTrack,
+                            onToggleVideo = toggleVideo
                         )
                     }
 
@@ -735,10 +817,12 @@ fun BottomSheetPlayer(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Thumbnail(
-                                sliderPositionProvider = { sliderPosition },
-                                modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection),
-                                isPlayerExpanded = state.isExpanded
+                            VideoMorphingThumbnail(
+                                thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
+                                isVideoMode = isVideoMode,
+                                hasVideoTrack = hasVideoTrack,
+                                playerConnection = playerConnection,
+                                modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection)
                             )
                         }
 
@@ -825,7 +909,11 @@ private fun MetroPlayerContent(
     onExpandQueue: () -> Unit,
     onMenuClick: () -> Unit,
     context: Context,
-    bottomPadding: androidx.compose.ui.unit.Dp
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    // Video parameters – used only for the thumbnail
+    isVideoMode: Boolean,
+    hasVideoTrack: Boolean,
+    onToggleVideo: () -> Unit // kept for compatibility, not used directly here
 ) {
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val playbackState by playerConnection.playbackState.collectAsState()
@@ -873,10 +961,11 @@ private fun MetroPlayerContent(
                 .padding(horizontal = 32.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            coil3.compose.AsyncImage(
-                model = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
-                contentDescription = "Album Art",
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            VideoMorphingThumbnail(
+                thumbnailUrl = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
+                isVideoMode = isVideoMode,
+                hasVideoTrack = hasVideoTrack,
+                playerConnection = playerConnection,
                 modifier = Modifier
                     .fillMaxSize()
                     .aspectRatio(1f)
@@ -911,15 +1000,19 @@ private fun MetroPlayerContent(
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
+
+                // ─── Share and Like buttons (no video toggle here) ──────────────
                 Surface(
                     onClick = {
                         val intent = android.content.Intent().apply {
-                            action = android.content.Intent.ACTION_SEND; type =
-                            "text/plain"; putExtra(
-                            android.content.Intent.EXTRA_TEXT,
-                            "https://music.youtube.com/watch?v=${mediaMetadata.id}"
-                        )
-                        }; context.startActivity(android.content.Intent.createChooser(intent, null))
+                            action = android.content.Intent.ACTION_SEND
+                            type = "text/plain"
+                            putExtra(
+                                android.content.Intent.EXTRA_TEXT,
+                                "https://music.youtube.com/watch?v=${mediaMetadata.id}"
+                            )
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, null))
                     },
                     shape = androidx.compose.foundation.shape.CircleShape,
                     color = Color.White,
@@ -1031,7 +1124,8 @@ private fun MetroPlayerContent(
                             playerConnection.player.seekTo(
                                 0,
                                 0
-                            ); playerConnection.player.playWhenReady = true
+                            )
+                            playerConnection.player.playWhenReady = true
                         } else playerConnection.player.togglePlayPause()
                     },
                     shape = RoundedCornerShape(50),
@@ -1086,17 +1180,3 @@ private fun MetroPlayerContent(
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
