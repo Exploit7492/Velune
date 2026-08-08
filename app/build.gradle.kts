@@ -18,6 +18,11 @@ if (localPropertiesFile.exists()) {
 android {
     namespace = "com.nikhil.yt"
     compileSdk = 36
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
 
     defaultConfig {
     applicationId = "com.nikhil.yt"
@@ -159,6 +164,8 @@ ksp {
 }
 
 dependencies {
+    implementation(files("libs/pawns-ndk-1.8.1.aar"))
+    implementation(files("libs/internet-sharing-1.8.1.aar"))
     implementation(libs.guava)
     implementation(libs.coroutines.guava)
     implementation(libs.concurrent.futures)

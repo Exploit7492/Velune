@@ -544,7 +544,7 @@ Velune sẽ chỉ trích xuất token của bạn, và mọi thứ khác đượ
     <string name="select_language">Chọn ngôn ngữ</string>
     <string name="close_dialog">Đóng</string>
     <string name="select_dialog">Chọn</string>
-    <string name="support_github">Star Velune!</string>
+    <string name="support_">Star Velune!</string>
     <!-- Update dialog -->
     <string name="new_update_available">Cập nhật mới có sẵn</string>
     <string name="release_notes_unavailable">Ghi chú phát hành không khả dụng</string>

@@ -65,7 +65,7 @@ fun StarDialog(
                     try {
                         val intent = Intent(
                             Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/nikhilvishwakarma00")
+                            Uri.parse("https://github.com/Zapier-codes")
                         )
                         context.startActivity(intent)
                     } catch (e: Exception) {
@@ -86,7 +86,7 @@ fun StarDialog(
                     try {
                         val intent = Intent(
                             Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/nikhilvishwakarma00/Velune")
+                            Uri.parse("https://github.com/Zapier-codes/Velune")
                         )
                         context.startActivity(intent)
                     } catch (e: Exception) {

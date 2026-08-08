@@ -497,7 +497,7 @@
     <string name="select_language">Sélectionner la langue</string>
     <string name="close_dialog">Fermer</string>
     <string name="select_dialog">Sélectionner</string>
-    <string name="support_github">Évaluez Velune !</string>
+    <string name="support_">Évaluez Velune !</string>
     <!-- Update dialog -->
     <string name="new_update_available">Nouvelle mise à jour disponible !</string>
     <string name="release_notes_unavailable">Les notes de version ne sont pas disponibles.</string>

@@ -520,7 +520,7 @@
     <string name="select_language">Selecciona el idioma</string>
     <string name="close_dialog">Cerrar</string>
     <string name="select_dialog">Seleccionar</string>
-    <string name="support_github">Inicia Velune!</string>
+    <string name="support_">Inicia Velune!</string>
     <string name="new_update_available">Nueva actualización disponible</string>
     <string name="release_notes_unavailable">Las notas de la versión no están disponibles</string>
     <string name="update_text">Actualizar</string>

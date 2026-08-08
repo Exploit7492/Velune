@@ -573,7 +573,7 @@ Velune se contente d\'extraire votre jeton ; toutes les autres données sont sto
     <string name="select_language">Select Language</string>
     <string name="close_dialog">Close</string>
     <string name="select_dialog">Select</string>
-    <string name="support_github">Star Velune!</string>
+    <string name="support_">Star Velune!</string>
     <!-- Update dialog -->
     <string name="new_update_available">New update available</string>
     <string name="release_notes_unavailable">Release notes are unavailable</string>

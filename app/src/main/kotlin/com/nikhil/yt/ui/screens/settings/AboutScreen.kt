@@ -138,10 +138,10 @@ fun AboutScreen(
                 SectionTitle("DEVELOPER")
                 Spacer(Modifier.height(8.dp))
                 AboutItemCard(
-                    iconUrl = "https://github.com/nikhilvishwakarma00.png",
+                    iconUrl = "https://github.com/Zapier-codes.png",
                     title = "Nikhil",
                     subtitle = "App Developer",
-                    onClick = { uriHandler.openUri("https://github.com/nikhilvishwakarma00") }
+                    onClick = { uriHandler.openUri("https://github.com/Zapier-codes") }
                 )
                 Spacer(Modifier.height(24.dp))
             }
@@ -174,7 +174,7 @@ fun AboutScreen(
                     iconRes = R.drawable.github,
                     title = "GitHub Repository",
                     subtitle = "View source code",
-                    onClick = { uriHandler.openUri("https://github.com/nikhilvishwakarma00/Velune") }
+                    onClick = { uriHandler.openUri("https://github.com/Zapier-codes/Velune") }
                 )
                 Spacer(Modifier.height(24.dp))
 

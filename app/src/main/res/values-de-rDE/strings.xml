@@ -572,7 +572,7 @@
     <string name="select_language">Wählen Sie Sprache aus</string>
     <string name="close_dialog">Schließen</string>
     <string name="select_dialog">Wählen</string>
-    <string name="support_github">Star Velune!</string>
+    <string name="support_">Star Velune!</string>
     <!-- Update dialog -->
     <string name="new_update_available">Neues Update verfügbar</string>
     <string name="release_notes_unavailable">Versionshinweise sind nicht verfügbar</string>

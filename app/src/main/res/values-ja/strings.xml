@@ -496,7 +496,7 @@
     <string name="select_language">言語を選択</string>
     <string name="close_dialog">閉じる</string>
     <string name="select_dialog">選択</string>
-    <string name="support_github">スター・アーカイブ・チューン！</string>
+    <string name="support_">スター・アーカイブ・チューン！</string>
     <!-- Update dialog -->
     <string name="new_update_available">新しいアップデートが利用可能</string>
     <string name="release_notes_unavailable">リリースノートは次のとおりです 利用不可</string>
