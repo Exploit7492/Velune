@@ -1,3 +1,4 @@
+import com.nikhil.yt.utils.LocaleManager
 /*
  * Velune - by Nikhil
  * Nikhil
@@ -79,6 +80,7 @@ class App : Application(), SingletonImageLoader.Factory {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
+        LocaleManager.applyLocale(this)
         instance = this
         if (currentProcessName()?.endsWith(":crash") == true) {
             Timber.plant(Timber.DebugTree())
