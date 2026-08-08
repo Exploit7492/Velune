@@ -2,8 +2,6 @@ name: Build Tenant APK
 
 on:
   push:
-    paths:
-      - 'configs/*.json'
   workflow_dispatch:
     inputs:
       config_file:
