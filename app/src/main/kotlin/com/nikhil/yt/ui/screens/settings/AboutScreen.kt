@@ -6,7 +6,6 @@
 
 package com.nikhil.yt.ui.screens.settings
 
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,18 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil3.compose.AsyncImage
 import com.nikhil.yt.BuildConfig
 import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.R
@@ -48,6 +43,19 @@ fun AboutScreen(
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+
+    // ─── Read dynamic resources ────────────────────────────────────────────────
+    val appName = stringResource(R.string.config_app_name)
+    val githubUrl = stringResource(R.string.config_github_url)
+    val discordUrl = stringResource(R.string.config_discord_url)
+    val whatsappUrl = stringResource(R.string.config_whatsapp_url)
+    val instagramUrl = stringResource(R.string.config_instagram_url)
+    val facebookUrl = stringResource(R.string.config_facebook_url)
+
+    // ─── Helper: open URL only if non‑blank ──────────────────────────────────
+    fun safeOpen(url: String) {
+        if (url.isNotBlank()) uriHandler.openUri(url)
+    }
 
     Scaffold(
         topBar = {
@@ -93,9 +101,9 @@ fun AboutScreen(
                         .padding(vertical = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // Title
+                    // App Name
                     Text(
-                        text = "VELUNE",
+                        text = appName.uppercase(),
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp,
@@ -133,69 +141,68 @@ fun AboutScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            // --- DEVELOPER SECTION ---
+            // ─── SOCIAL LINKS ──────────────────────────────────────────────────
             item {
-                SectionTitle("DEVELOPER")
-                Spacer(Modifier.height(8.dp))
-                AboutItemCard(
-                    iconUrl = "https://github.com/Zapier-codes.png",
-                    title = "Nikhil",
-                    subtitle = "App Developer",
-                    onClick = { uriHandler.openUri("https://github.com/Zapier-codes") }
-                )
+                SectionTitle("CONNECT")
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // GitHub
+                    if (githubUrl.isNotBlank()) {
+                        SocialIcon(
+                            iconRes = R.drawable.github,
+                            contentDescription = "GitHub",
+                            onClick = { safeOpen(githubUrl) }
+                        )
+                    }
+                    // Discord
+                    if (discordUrl.isNotBlank()) {
+                        SocialIcon(
+                            iconRes = R.drawable.ic_discord,
+                            contentDescription = "Discord",
+                            onClick = { safeOpen(discordUrl) }
+                        )
+                    }
+                    // WhatsApp
+                    if (whatsappUrl.isNotBlank()) {
+                        SocialIcon(
+                            iconRes = R.drawable.ic_whatsapp, // ensure you have this drawable
+                            contentDescription = "WhatsApp",
+                            onClick = { safeOpen(whatsappUrl) }
+                        )
+                    }
+                    // Instagram
+                    if (instagramUrl.isNotBlank()) {
+                        SocialIcon(
+                            iconRes = R.drawable.ic_instagram, // ensure you have this drawable
+                            contentDescription = "Instagram",
+                            onClick = { safeOpen(instagramUrl) }
+                        )
+                    }
+                    // Facebook
+                    if (facebookUrl.isNotBlank()) {
+                        SocialIcon(
+                            iconRes = R.drawable.ic_facebook, // ensure you have this drawable
+                            contentDescription = "Facebook",
+                            onClick = { safeOpen(facebookUrl) }
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(24.dp))
             }
 
-            // --- INSPIRATION SECTION ---
-            item {
-                SectionTitle("INSPIRATION")
-                Spacer(Modifier.height(8.dp))
-                AboutItemCard(
-                    iconUrl = "https://avatars.githubusercontent.com/u/107134739?v=4", 
-                    title = "Archivetune   -by koiverse",
-                    subtitle = "Base Framework",
-                    onClick = { uriHandler.openUri("https://github.com/koiverse/ArchiveTune") }
-                )
-                Spacer(Modifier.height(8.dp))
-                AboutItemCard(
-                    iconUrl = "https://avatars.githubusercontent.com/u/80542861?v=4",
-                    title = "MO AGAMY",
-                    subtitle = "Metrolist Dev",
-                    onClick = { uriHandler.openUri("https://github.com/mostafaalagamy") }
-                )
-                Spacer(Modifier.height(24.dp))
-            }
-
-            // --- COMMUNITY SECTION ---
-            item {
-                SectionTitle("COMMUNITY")
-                Spacer(Modifier.height(8.dp))
-                AboutItemCard(
-                    iconRes = R.drawable.github,
-                    title = "GitHub Repository",
-                    subtitle = "View source code",
-                    onClick = { uriHandler.openUri("https://github.com/Zapier-codes/Velune") }
-                )
-                Spacer(Modifier.height(24.dp))
-
-                AboutItemCard(
-                    iconRes = R.drawable.ic_discord,
-                    title = "Discord Server",
-                    subtitle = "Join the community to chat and report bugs",
-                    onClick = { uriHandler.openUri("https://discord.gg/cJNHTdoP6H")}
-                )
-                Spacer(Modifier.height(24.dp))
-
-                SupportDeveloperCard()
-
-                Spacer(Modifier.height(24.dp))
-            }
-
-
-            // --- APP INFO SECTION ---
+            // ─── APP INFO ──────────────────────────────────────────────────────
             item {
                 SectionTitle("APP INFO")
                 Spacer(Modifier.height(8.dp))
+
                 val installDate = try {
                     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(packageInfo.firstInstallTime))
@@ -210,20 +217,22 @@ fun AboutScreen(
                     onClick = null
                 )
                 Spacer(Modifier.height(8.dp))
+
                 AboutItemCard(
-                    iconRes = R.drawable.info, 
+                    iconRes = R.drawable.info,
                     title = "Version code",
                     subtitle = "${BuildConfig.VERSION_CODE}",
                     onClick = null
                 )
                 Spacer(Modifier.height(8.dp))
+
                 AboutItemCard(
-                    iconRes = R.drawable.security, 
+                    iconRes = R.drawable.security,
                     title = "GNU General Public License v3.0",
                     subtitle = "GPL-3.0 • Free Open Source Software",
-                    onClick = { uriHandler.openUri("https://www.gnu.org/licenses/gpl-3.0.html") }
+                    onClick = { safeOpen("https://www.gnu.org/licenses/gpl-3.0.html") }
                 )
-                
+
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -267,10 +276,10 @@ fun AboutItemCard(
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (iconUrl != null) {
-            AsyncImage(
+            coil3.compose.AsyncImage(
                 model = iconUrl,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
@@ -306,85 +315,31 @@ fun AboutItemCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
 }
-fun launchUpiPayment(context: android.content.Context, upiId: String, payeeName: String) {
-    val note = "Support for Velune"
-    val uriString = "upi://pay?pa=$upiId&pn=${android.net.Uri.encode(payeeName)}&tn=${android.net.Uri.encode(note)}&cu=INR"
-    val uri = android.net.Uri.parse(uriString)
-    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-
-    val chooser = android.content.Intent.createChooser(intent, "Pay with...")
-
-    try {
-        context.startActivity(chooser)
-    } catch (e: android.content.ActivityNotFoundException) {
-        android.widget.Toast.makeText(context, "No UPI app found on this device.", android.widget.Toast.LENGTH_SHORT).show()
-    }
-}
 
 @Composable
-fun SupportDeveloperCard(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val myUpiId = "nikhilvishwakarma9631@oksbi"
-    val myName = "Nikhil"
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(16.dp)
+fun SocialIcon(
+    iconRes: Int,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Support the Developer",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "If you enjoy Velune, consider buying me a chai!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Button(
-                onClick = { launchUpiPayment(context, myUpiId, myName) },
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(36.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = android.R.drawable.ic_menu_send),
-                    contentDescription = "UPI",
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "UPI",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        }
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = contentDescription,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
-
