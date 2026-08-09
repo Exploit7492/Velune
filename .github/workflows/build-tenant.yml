@@ -27,7 +27,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── Cache apt packages ────────────────────────────────────────────────
+      # ─── Cache apt packages ──────────────────────────────────────────────
       - name: Cache apt packages
         uses: actions/cache@v4
         with:
@@ -128,9 +128,6 @@ jobs:
             exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-          jarsigner -verbose \
-            -keystore keystore.jks -storepass "$KEYSTORE_PASSWORD" \
-            app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk "$KEY_ALIAS"
           ZIPALIGN=$(find "$ANDROID_HOME" -name zipalign -type f 2>/dev/null | sort -V | tail -1)
           if [ -z "$ZIPALIGN" ]; then
             echo "zipalign not found under \$ANDROID_HOME, searching whole filesystem..."
@@ -140,9 +137,29 @@ jobs:
             echo "::error::zipalign binary could not be located on this runner"
             exit 1
           fi
+          APKSIGNER=$(find "$ANDROID_HOME" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner not found under \$ANDROID_HOME, searching whole filesystem..."
+            APKSIGNER=$(find / -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+          fi
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner binary could not be located on this runner"
+            exit 1
+          fi
           echo "Using zipalign at: $ZIPALIGN"
-          "$ZIPALIGN" -v -p 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
+          echo "Using apksigner at: $APKSIGNER"
+          "$ZIPALIGN" -v -p 4 \
+            app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk \
+            app/build/outputs/apk/arm64/release/app-arm64-release-aligned.apk
+          "$APKSIGNER" sign \
+            --ks keystore.jks \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --out app/build/outputs/apk/arm64/release/app-arm64-release.apk \
+            app/build/outputs/apk/arm64/release/app-arm64-release-aligned.apk
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/arm64/release/app-arm64-release.apk
           rm app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
+          rm app/build/outputs/apk/arm64/release/app-arm64-release-aligned.apk
           rm keystore.jks
 
       - name: Create GitHub Release
