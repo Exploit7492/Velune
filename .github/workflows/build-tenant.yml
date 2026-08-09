@@ -132,6 +132,7 @@ jobs:
             -keystore keystore.jks -storepass "$KEYSTORE_PASSWORD" \
             app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk "$KEY_ALIAS"
           zipalign -v 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
+          rm app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
           rm keystore.jks
 
       - name: Create GitHub Release
