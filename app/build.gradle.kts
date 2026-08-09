@@ -21,7 +21,7 @@ if (localPropertiesFile.exists()) {
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
 }
 android {
     namespace = "com.nikhil.yt"
