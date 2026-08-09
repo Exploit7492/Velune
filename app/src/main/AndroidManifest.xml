@@ -37,7 +37,8 @@
         android:supportsRtl="false"
         android:theme="@style/Theme.VeluneApp"
         android:usesCleartextTraffic="true"
-        tools:targetApi="tiramisu">
+        tools:targetApi="tiramisu"
+        tools:remove="android:localeConfig">
 
         <meta-data
             android:name="androidx.media3.session.default_notification_icon"
