@@ -40,3 +40,5 @@ captures/
 *.properties
 !gradle.properties
 .gradle/
+keystore.properties
+*.keystore
