@@ -327,7 +327,7 @@ fun SettingsScreen(
         ),
         SettingsIntegrationAction(
             icon = painterResource(R.drawable.fire),
-            label = stringResource(R.string.music_together),
+            label = stringResource(R.string.music_together, stringResource(R.string.app_name)),
             onClick = { navController.navigate("settings/music_together") },
             accentColor = MaterialTheme.colorScheme.tertiary,
         ),
@@ -675,7 +675,7 @@ fun SettingsScreen(
         add(
             PremiumSettingsItem(
                 icon = painterResource(R.drawable.fire),
-                title = stringResource(R.string.music_together),
+                title = stringResource(R.string.music_together, stringResource(R.string.app_name)),
                 subtitle = stringResource(R.string.integration),
                 accentColor = MaterialTheme.colorScheme.tertiary,
                 keywords = listOf(
@@ -1212,7 +1212,7 @@ private fun PremiumPermissionCard(
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = stringResource(R.string.permissions_title),
+                        text = stringResource(R.string.permissions_title, stringResource(R.string.app_name)),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,

@@ -178,7 +178,7 @@ fun DiscordSettings(
                     modifier = Modifier.padding(16.dp),
                 )
                 Text(
-                    text = stringResource(R.string.discord_information),
+                    text = stringResource(R.string.discord_information, stringResource(R.string.app_name)),
                     textAlign = TextAlign.Start,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )

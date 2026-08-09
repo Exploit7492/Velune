@@ -481,7 +481,7 @@ fun PlayerMenu(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
-                        text = stringResource(R.string.music_together),
+                        text = stringResource(R.string.music_together, stringResource(R.string.app_name)),
                         onClick = {
                             onDismiss()
                             playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)

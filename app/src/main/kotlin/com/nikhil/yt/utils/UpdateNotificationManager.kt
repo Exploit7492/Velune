@@ -161,7 +161,7 @@ object UpdateNotificationManager {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_velune_concept)
             .setContentTitle(context.getString(R.string.update_notification_title))
-            .setContentText(context.getString(R.string.update_notification_text, newVersion))
+            .setContentText(context.getString(R.string.update_notification_text, context.getString(R.string.app_name), newVersion))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)

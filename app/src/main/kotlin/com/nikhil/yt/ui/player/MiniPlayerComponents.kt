@@ -416,7 +416,7 @@ fun NewMiniPlayerContent(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.all_inclusive),
-                        contentDescription = stringResource(R.string.music_together),
+                        contentDescription = stringResource(R.string.music_together, stringResource(R.string.app_name)),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(14.dp),
                     )

@@ -465,7 +465,7 @@ fun AppearanceSettings(
         )
 
         SwitchPreference(
-            title = { Text(stringResource(R.string.velune_canvas)) },
+            title = { Text(stringResource(R.string.velune_canvas, stringResource(R.string.app_name))) },
             description = stringResource(R.string.velune_canvas_desc),
             icon = { Icon(painterResource(R.drawable.motion_photos_on), null) },
             checked = veluneCanvasEnabled,

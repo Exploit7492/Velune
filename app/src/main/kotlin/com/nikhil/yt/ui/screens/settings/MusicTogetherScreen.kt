@@ -474,7 +474,7 @@ fun MusicTogetherScreen(
     }
 
     TopAppBar(
-        title = { Text(stringResource(R.string.music_together)) },
+        title = { Text(stringResource(R.string.music_together, stringResource(R.string.app_name))) },
         navigationIcon = {
             AtIconButton(
                 onClick = navController::navigateUp,
@@ -680,7 +680,7 @@ private fun WelcomeDialog(
                     )
                 }
                 Text(
-                    text = stringResource(R.string.together_welcome_title),
+                    text = stringResource(R.string.together_welcome_title, stringResource(R.string.app_name)),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -709,7 +709,7 @@ private fun WelcomeDialog(
                             icon = R.drawable.fire,
                             accentColor = MaterialTheme.colorScheme.primary,
                             title = stringResource(R.string.together_welcome_host_title),
-                            body = stringResource(R.string.together_welcome_host_body),
+                            body = stringResource(R.string.together_welcome_host_body, stringResource(R.string.app_name)),
                         )
                         InstructionRow(
                             icon = R.drawable.link,

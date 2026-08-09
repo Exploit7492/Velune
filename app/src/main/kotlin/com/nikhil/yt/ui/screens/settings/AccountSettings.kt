@@ -257,7 +257,7 @@ fun AccountSettings(
 
                 SettingsClickableItem(
                     icon = painterResource(R.drawable.fire),
-                    title = stringResource(R.string.music_together),
+                    title = stringResource(R.string.music_together, stringResource(R.string.app_name)),
                     onClick = {
                         onClose()
                         navController.navigate("settings/music_together")
