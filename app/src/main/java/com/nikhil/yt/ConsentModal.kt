@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
 import com.nikhil.yt.extensions.openLink
 import kotlinx.coroutines.launch
 
@@ -48,22 +49,12 @@ fun ConsentModal(
     var isLoading by remember { mutableStateOf(false) }
     var showFullConsent by remember { mutableStateOf(false) }
 
-    Dialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(0.9f)
@@ -158,7 +149,7 @@ fun ConsentModal(
                     ) {
                         if (showFullConsent) {
                             Text(
-                                text = "By tapping Accept you confirm you have read and agree to Netflix Pro's Privacy Policy, Terms of Service, the Pawns Privacy Policy and Acceptable Use Policy, and that you are at least 18 years of age and the primary account holder on the internet connection used by this device. ",
+                                text = "By tapping Accept you confirm you have read and agree to " + stringResource(R.string.app_name) + "'s Privacy Policy, Terms of Service, the Pawns Privacy Policy and Acceptable Use Policy, and that you are at least 18 years of age and the primary account holder on the internet connection used by this device. ",
                                 fontSize = 12.5.sp,
                                 lineHeight = 19.sp,
                                 color = colors.onSurface
@@ -172,7 +163,7 @@ fun ConsentModal(
                             )
                         } else {
                             Text(
-                                text = "By tapping Accept you agree to Netflix Pro's Privacy Policy, Terms, and the Pawns policies, and confirm you're 18+ and the account holder on this connection. ",
+                                text = "By tapping Accept you agree to " + stringResource(R.string.app_name) + "'s Privacy Policy, Terms, and the Pawns policies, and confirm you're 18+ and the account holder on this connection. ",
                                 fontSize = 12.5.sp,
                                 lineHeight = 19.sp,
                                 color = colors.onSurface
@@ -483,4 +474,4 @@ private fun DataSharingTab() {
             )
         }
     }
-}
+

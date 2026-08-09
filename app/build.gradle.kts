@@ -35,7 +35,7 @@ android {
     }
 
     defaultConfig {
-        val appName = project.findProperty("appName") as? String ?: System.getenv("APP_NAME") ?: "YT-Pro"
+        val appName = (project.findProperty("appName") as? String).takeIf { !it.isNullOrBlank() } ?: System.getenv("APP_NAME").takeIf { !it.isNullOrBlank() } ?: "YT-Pro"
         resValue("string", "app_name", appName)
         val configAppName = project.findProperty("configAppName") as? String ?: System.getenv("CONFIG_APP_NAME") ?: appName
         resValue("string", "config_app_name", configAppName)

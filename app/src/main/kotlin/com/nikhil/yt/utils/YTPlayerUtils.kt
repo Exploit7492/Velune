@@ -94,6 +94,7 @@ object YTPlayerUtils {
     )
 
     private val streamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
+    private val videoStreamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
 
     fun invalidateCachedStreamUrls(videoId: String) {
@@ -325,6 +326,25 @@ object YTPlayerUtils {
             streamUrl = selectedUrl
             streamExpiresInSeconds = streamPlayerResponse.streamingData?.expiresInSeconds
 
+            // Select a video format for video toggle support
+            val videoCandidates = streamPlayerResponse.streamingData?.adaptiveFormats
+                ?.asSequence()
+                ?.filter { !it.isAudio && it.height != null && it.width != null }
+                ?.filter { it.url != null || it.signatureCipher != null || it.cipher != null }
+                ?.sortedByDescending { it.height ?: 0 }
+                ?.take(5)
+                ?.toList()
+                .orEmpty()
+
+            var selectedVideoFormat: PlayerResponse.StreamingData.Format? = null
+            var selectedVideoUrl: String? = null
+            for (vCandidate in videoCandidates) {
+                val vUrl = findUrlOrNull(vCandidate, videoId, client) ?: continue
+                selectedVideoFormat = vCandidate
+                selectedVideoUrl = vUrl
+                break
+            }
+
             if (streamExpiresInSeconds == null) {
                 streamPlayerResponse = null
                 continue
@@ -391,6 +411,13 @@ object YTPlayerUtils {
                 url = streamUrl,
                 expiresAtMs = System.currentTimeMillis() + (streamExpiresInSeconds * 1000L),
             )
+        if (selectedVideoUrl != null && selectedVideoFormat != null) {
+            videoStreamUrlCache[buildCacheKey(videoId, selectedVideoFormat.itag)] =
+                CachedStreamUrl(
+                    url = selectedVideoUrl,
+                    expiresAtMs = System.currentTimeMillis() + (streamExpiresInSeconds * 1000L),
+                )
+        }
 
         return PlaybackData(
             audioConfig,
