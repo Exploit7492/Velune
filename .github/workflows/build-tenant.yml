@@ -128,10 +128,20 @@ jobs:
             exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+          jarsigner -verbose \
             -keystore keystore.jks -storepass "$KEYSTORE_PASSWORD" \
             app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk "$KEY_ALIAS"
-          zipalign -v 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
+          ZIPALIGN=$(find "$ANDROID_HOME" -name zipalign -type f 2>/dev/null | sort -V | tail -1)
+          if [ -z "$ZIPALIGN" ]; then
+            echo "zipalign not found under \$ANDROID_HOME, searching whole filesystem..."
+            ZIPALIGN=$(find / -name zipalign -type f 2>/dev/null | sort -V | tail -1)
+          fi
+          if [ -z "$ZIPALIGN" ]; then
+            echo "::error::zipalign binary could not be located on this runner"
+            exit 1
+          fi
+          echo "Using zipalign at: $ZIPALIGN"
+          "$ZIPALIGN" -v 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
           rm app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
           rm keystore.jks
 
