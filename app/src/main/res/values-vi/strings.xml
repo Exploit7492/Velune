@@ -626,7 +626,7 @@
     <string name="update_notification_channel_name">Cập nhật Ứng dụng</string>
     <string name="update_notification_channel_desc">Thông báo cho các cập nhật ứng dụng mới</string>
     <string name="update_notification_title">Cập nhật Có sẵn</string>
-    <string name="update_notification_text">%1$s %s hiện đã có sẵn</string>
+    <string name="update_notification_text" formatted="false">%1$s %s hiện đã có sẵn</string>
     <string name="download">Tải xuống</string>
     <string name="permissions_title">Cho phép %1$s hoạt động tốt nhất</string>
     <string name="permissions_subtitle">Chúng tôi sử dụng một số quyền để phát và quản lý nhạc của bạn một cách đáng tin cậy. Bạn có thể thay đổi những quyền này bất cứ lúc nào trong cài đặt hệ thống.</string>

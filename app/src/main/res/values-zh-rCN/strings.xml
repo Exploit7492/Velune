@@ -324,7 +324,7 @@
     <string name="notification_settings">通知</string>
     <string name="enable_update_notification">启用更新通知</string>
     <string name="recent_commits">近期提交</string>
-    <string name="update_notification_text">%1$s%s现已发布</string>
+    <string name="update_notification_text" formatted="false">%1$s%s现已发布</string>
     <string name="permission_status_allowed">允许</string>
     <string name="permission_status_required">请允许所有必要的权限继续.</string>
     <string name="next">下一个</string>

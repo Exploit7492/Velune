@@ -604,7 +604,7 @@
     <string name="update_notification_channel_name">Uygulama Güncellemeleri</string>
     <string name="update_notification_channel_desc">Yeni uygulama güncellemeleri için bildirimler</string>
     <string name="update_notification_title">Güncelleme Mevcut</string>
-    <string name="update_notification_text">%1$s %s artık mevcut</string>
+    <string name="update_notification_text" formatted="false">%1$s %s artık mevcut</string>
     <string name="download">İndir</string>
     <string name="permissions_title">%1$s\'un en iyi şekilde çalışmasına izin verin</string>
     <string name="permissions_subtitle">Müziğinizi güvenilir bir şekilde oynatmak ve yönetmek için birkaç izin kullanıyoruz. Bunları istediğiniz zaman sistem ayarlarından değiştirebilirsiniz.</string>

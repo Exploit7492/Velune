@@ -578,7 +578,7 @@
     <string name="update_notification_channel_name">Mises à jour de l\'application</string>
     <string name="update_notification_channel_desc">Notifications pour les nouvelles mises à jour de l\'application</string>
     <string name="update_notification_title">Mise à jour disponible</string>
-    <string name="update_notification_text">%1$s %s est désormais disponible</string>
+    <string name="update_notification_text" formatted="false">%1$s %s est désormais disponible</string>
     <string name="download">Télécharger</string>
     <string name="added_to_playlist">Ajouté à %s</string>
     <string name="added_n_songs_to_playlist">Ajout de %1$d titres à %2$s</string>

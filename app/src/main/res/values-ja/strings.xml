@@ -574,7 +574,7 @@
     <string name="update_notification_channel_name">アプリの更新</string>
     <string name="update_notification_channel_desc">新しいアプリ更新の通知</string>
     <string name="update_notification_title">アップデート可能</string>
-    <string name="update_notification_text">%1$s %s が利用可能です</string>
+    <string name="update_notification_text" formatted="false">%1$s %s が利用可能です</string>
     <string name="download">ダウンロード</string>
     <string name="queue_continue_playing">プレイを続ける</string>
     <string name="queue_autoplaying_similar">類似した音楽の自動再生</string>

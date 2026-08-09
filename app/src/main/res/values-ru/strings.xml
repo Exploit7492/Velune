@@ -625,7 +625,7 @@
     <string name="update_notification_channel_name">Обновления приложения</string>
     <string name="update_notification_channel_desc">Уведомления для новых обновлений приложения</string>
     <string name="update_notification_title">Доступно обновление</string>
-    <string name="update_notification_text">%1$s %s теперь доступен</string>
+    <string name="update_notification_text" formatted="false">%1$s %s теперь доступен</string>
     <string name="download">Загрузить</string>
     <string name="permissions_title">Разрешите %1$s работать лучше</string>
     <string name="permissions_subtitle">Мы используем несколько разрешений чтобы надёжно воспроизводить и управлять вашей музыкой. Вы всегда можете изменить их в системных настройках.</string>

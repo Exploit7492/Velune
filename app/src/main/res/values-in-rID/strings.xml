@@ -667,7 +667,7 @@
     <string name="update_notification_channel_name">Pembaruan Aplikasi</string>
     <string name="update_notification_channel_desc">Notifikasi untuk pembaruan aplikasi baru</string>
     <string name="update_notification_title">Pembaruan Tersedia</string>
-    <string name="update_notification_text">%1$s %s sekarang tersedia</string>
+    <string name="update_notification_text" formatted="false">%1$s %s sekarang tersedia</string>
     <string name="download">Unduh</string>
     <string name="permissions_title">Izinkan %1$s berfungsi dengan optimal</string>
     <string name="permissions_subtitle">Kami menggunakan beberapa izin untuk memutar dan mengelola musik Anda dengan andal. Anda dapat mengubah izin-izin ini kapan saja di pengaturan sistem.</string>

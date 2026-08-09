@@ -620,7 +620,7 @@
     <string name="update_notification_channel_name">Actualizaciones de la aplicación</string>
     <string name="update_notification_channel_desc">Notificaciones para nuevas actualizaciones de la aplicación</string>
     <string name="update_notification_title">Actualización Disponible</string>
-    <string name="update_notification_text">%1$s %s esta ahora disponible</string>
+    <string name="update_notification_text" formatted="false">%1$s %s esta ahora disponible</string>
     <string name="download">Descargar</string>
     <string name="permissions_title">Permite a %1$s a trabajar mejor</string>
     <string name="permissions_subtitle">Utilizamos un par de permisos para reproducir y administrar tu música de forma fiable. Puedes cambiar esto en los ajustes del sistema cuando quieras.</string>

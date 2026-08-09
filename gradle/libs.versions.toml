@@ -1,4 +1,5 @@
 [versions]
+appcompat = "1.7.1"
 androidGradlePlugin = "9.1.1"
 annotation = "1.9.1"
 json = "20250517"
@@ -38,6 +39,7 @@ rhino = "1.9.1"
 multiplatformMarkdown = "0.39.2"
 
 [libraries]
+appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-guava", version.ref = "coroutinesGuava" }
