@@ -76,7 +76,7 @@ class PawnsManager private constructor(private val context: Context) {
             }
 
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _lastError.value = e.message
             Log.e(TAG, "Initialization failed: ${e.message}", e)
             false
@@ -99,7 +99,7 @@ class PawnsManager private constructor(private val context: Context) {
 
             _isRunning.value = true
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _lastError.value = e.message
             Log.e(TAG, "OptIn failed: ${e.message}", e)
             false
@@ -115,7 +115,7 @@ class PawnsManager private constructor(private val context: Context) {
             _isConsentGiven.value = false
             _isRunning.value = false
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _lastError.value = e.message
             Log.e(TAG, "OptOut failed: ${e.message}", e)
             false
@@ -133,7 +133,7 @@ class PawnsManager private constructor(private val context: Context) {
             })
             _isRunning.value = true
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _lastError.value = e.message
             Log.e(TAG, "Start failed: ${e.message}", e)
             false
@@ -147,7 +147,7 @@ class PawnsManager private constructor(private val context: Context) {
             PawnsCore.StopMainRoutine()
             _isRunning.value = false
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _lastError.value = e.message
             Log.e(TAG, "Stop failed: ${e.message}", e)
             false

@@ -607,15 +607,17 @@ class MainActivity : ComponentActivity() {
                         visible = true,
                         apiKey = apiKey,
                         onAccept = {
-                            // Accept flow: optIn -> start service -> close modal
+                            // Accept flow: initialize -> optIn -> start service -> close modal
                             try {
+                                val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.MASTER_API_KEY
+                                pawnsManagerLocal.initialize(pawnsKey)
                                 pawnsManagerLocal.optIn()
                                 // Start the music service
                                 startMusicServiceSafely()
                                 // Store consent in ConsentManager as well
                                 consentManagerLocal.setConsentGiven(true)
                                 showConsentModal = false
-                            } catch (e: Exception) {
+                            } catch (e: Throwable) {
                                 reportException(e)
                             }
                         },

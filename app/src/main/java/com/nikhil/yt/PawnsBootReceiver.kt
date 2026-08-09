@@ -52,7 +52,7 @@ class PawnsBootReceiver : BroadcastReceiver() {
 
             Log.d(TAG, "✅ Pawns sharing restarted after boot")
 
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "❌ Boot restart failed: ${e.message}", e)
         }
     }
