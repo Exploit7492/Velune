@@ -27,7 +27,7 @@ if (keystorePropertiesFile.exists()) {
 }
 android {
     namespace = "com.nikhil.yt"
-    compileSdk = 36
+    compileSdk = 34
     sourceSets {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
@@ -41,7 +41,7 @@ android {
         resValue("string", "config_app_name", configAppName)
     applicationId = project.properties["appPackage"] as? String ?: "com.nikhil.yt"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 10
         versionName = "1.1.2 "
 
