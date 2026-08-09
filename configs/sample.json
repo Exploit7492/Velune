@@ -1,0 +1,10 @@
+{
+  "tenant_id": "sample",
+  "app_name": "Sample Music",
+  "package_name": "com.velune.tenant.sample",
+  "primary_color": "#D4AF37",
+  "accent_color": "#F5E6B8",
+  "logo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Google_Play_Music_icon.svg/512px-Google_Play_Music_icon.svg.png",
+  "consent_text": "Welcome to Sample Music!",
+  "pawns_api_key": ""
+}
