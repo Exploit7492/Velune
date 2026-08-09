@@ -679,7 +679,7 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="update_notification_channel_name">App Updates</string>
     <string name="update_notification_channel_desc">Notifications for new app updates</string>
     <string name="update_notification_title">Update Available</string>
-    <string name="update_notification_text">%1$s %2$s is now available</string>
+    <string name="update_notification_text" formatted="false">%1$s %2$s is now available</string>
     <string name="download">Download</string>
 
     <string name="permissions_title">Allow %1$s to work best</string>
