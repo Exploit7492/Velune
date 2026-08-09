@@ -108,7 +108,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Only attach the signing config when a keystore is actually present.
+            // CI builds unsigned APKs here and signs them in a separate jarsigner
+            // step, so an empty/unconfigured signingConfig must not be assigned
+            // or AGP fails packaging with "missing required property storeFile".
+            if (file("keystore/release.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
