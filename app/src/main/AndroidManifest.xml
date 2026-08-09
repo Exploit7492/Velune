@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
         <intent>
@@ -22,18 +24,6 @@
         </intent>
     </queries>
 
-
-
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-        <receiver android:name=".PawnsBootReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
-<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -44,10 +34,11 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:usesCleartextTraffic="true"
         android:supportsRtl="false"
         android:theme="@style/Theme.VeluneApp"
+        android:usesCleartextTraffic="true"
         tools:targetApi="tiramisu">
+
         <meta-data
             android:name="androidx.media3.session.default_notification_icon"
             android:resource="@drawable/ic_velune_concept" />
@@ -192,7 +183,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
-        </receiver>        
+        </receiver>
+
+        <receiver
+            android:name=".PawnsBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <meta-data
             android:name="com.google.android.gms.car.application"
@@ -204,6 +204,7 @@
             android:process=":crash"
             android:theme="@style/Theme.VeluneApp">
         </activity>
+
         <receiver
             android:name=".ui.widget.VeluneWidgetReceiver"
             android:exported="true">
@@ -215,12 +216,16 @@
                 android:resource="@xml/velune_widget_info" />
         </receiver>
 
-
         <activity
             android:name=".ui.screens.settings.PoTokenExtractionActivity"
             android:exported="false"
             android:theme="@style/Theme.VeluneApp" />
-    <service android:name=".MusicService" android:enabled="true" android:exported="false" />
+
+        <service
+            android:name=".MusicService"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>
