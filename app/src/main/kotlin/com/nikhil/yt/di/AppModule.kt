@@ -21,6 +21,7 @@ import androidx.media3.datasource.cache.SimpleCache
 import com.nikhil.yt.constants.MaxSongCacheSizeKey
 import com.nikhil.yt.db.InternalDatabase
 import com.nikhil.yt.repository.LocalMusicRepository
+import com.nikhil.yt.repository.LocalMusicRepository
 import com.nikhil.yt.db.MusicDatabase
 import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.utils.get
@@ -153,6 +154,16 @@ object AppModule {
         @ApplicationContext context: Context,
         databaseProvider: DatabaseProvider,
     ): Cache =
+    @Singleton
+    @Provides
+    fun provideLocalMusicRepository(
+        @ApplicationContext context: Context,
+        database: MusicDatabase,
+    ): LocalMusicRepository = LocalMusicRepository(
+        context = context,
+        localMusicDao = database.localMusicDao,
+    )
+
     @Singleton
     @Provides
     fun provideLocalMusicRepository(
