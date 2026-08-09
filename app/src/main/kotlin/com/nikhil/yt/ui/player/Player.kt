@@ -73,8 +73,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_BUFFERING
 import androidx.media3.common.Player.STATE_READY
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.imageLoader
@@ -139,31 +142,62 @@ fun BottomSheetPlayer(
     val bottomSheetPageState = LocalBottomSheetPageState.current
     val playerConnection = LocalPlayerConnection.current ?: return
 
-    // ─── Video morphing state ────────────────────────────────────────────────────
-    var isVideoMode by remember { mutableStateOf(false) }
-    var hasVideoTrack by remember { mutableStateOf(false) }
-
-    // Check for video track availability
+    // Ensure master player never loads video (audio-only)
     LaunchedEffect(playerConnection.player) {
-        while (true) {
-            delay(500)
-            val videoFormat = playerConnection.player.videoFormat
-            hasVideoTrack = videoFormat != null
-            // If video track disappeared and we're in video mode, switch back
-            if (videoFormat == null && isVideoMode) {
-                isVideoMode = false
-            }
+        val trackSelector = playerConnection.player.trackSelector
+        if (trackSelector is DefaultTrackSelector) {
+            trackSelector.setParameters(
+                trackSelector.buildUponParameters()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+            )
         }
     }
 
-    // Toggle function – enables/disables video track in the track selector
+    // ─── Video morphing state ────────────────────────────────────────────────────
+    var isVideoMode by remember { mutableStateOf(false) }
+
+    // Slave video player (audio disabled, muted)
+    val slaveVideoPlayer = remember(context) {
+        ExoPlayer.Builder(context)
+            .setTrackSelector(DefaultTrackSelector(context).apply {
+                setParameters(buildUponParameters()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                )
+            })
+            .build()
+            .apply { volume = 0f }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { slaveVideoPlayer.release() }
+    }
+
+    // Stop slave when song changes
+    LaunchedEffect(mediaMetadata?.id) {
+        isVideoMode = false
+        slaveVideoPlayer.stop()
+        slaveVideoPlayer.clearMediaItems()
+    }
+
+    // Toggle function – manages slave video player
     val toggleVideo = {
         isVideoMode = !isVideoMode
-        val trackSelector = playerConnection.player.trackSelector
-        if (trackSelector is androidx.media3.exoplayer.trackselection.DefaultTrackSelector) {
-            val parameters = trackSelector.parameters.buildUpon()
-            parameters.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, !isVideoMode)
-            trackSelector.setParameters(parameters.build())
+        if (isVideoMode) {
+            val videoId = mediaMetadata?.id
+            val videoUrl = videoId?.let {
+                com.nikhil.yt.utils.YTPlayerUtils.getVideoStreamUrl(it)
+            }
+            if (videoUrl != null) {
+                slaveVideoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
+                slaveVideoPlayer.prepare()
+                slaveVideoPlayer.seekTo(playerConnection.player.currentPosition + 200)
+                slaveVideoPlayer.playWhenReady = true
+            } else {
+                isVideoMode = false
+            }
+        } else {
+            slaveVideoPlayer.stop()
+            slaveVideoPlayer.clearMediaItems()
         }
     }
 
@@ -600,7 +634,7 @@ fun BottomSheetPlayer(
                 // Video button
                 Surface(
                     modifier = Modifier
-                        .clickable { if (!isVideoMode && hasVideoTrack) toggleVideo() }
+                        .clickable { if (!isVideoMode) toggleVideo() }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     shape = RoundedCornerShape(16.dp),
                     color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -723,7 +757,7 @@ fun BottomSheetPlayer(
                             context = context,
                             bottomPadding = dynamicQueuePeekHeight,
                             isVideoMode = isVideoMode,
-                            hasVideoTrack = hasVideoTrack,
+                            videoPlayer = if (isVideoMode) slaveVideoPlayer else null,
                             onToggleVideo = toggleVideo
                         )
                     }
@@ -744,8 +778,7 @@ fun BottomSheetPlayer(
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
-                                hasVideoTrack = hasVideoTrack,
-                                playerConnection = playerConnection,
+                                videoPlayer = if (isVideoMode) slaveVideoPlayer else null,
                                 modifier = Modifier.size(thumbnailSize)
                             )
                         }
@@ -801,7 +834,7 @@ fun BottomSheetPlayer(
                             context = context,
                             bottomPadding = dynamicQueuePeekHeight,
                             isVideoMode = isVideoMode,
-                            hasVideoTrack = hasVideoTrack,
+                            videoPlayer = if (isVideoMode) slaveVideoPlayer else null,
                             onToggleVideo = toggleVideo
                         )
                     }
@@ -821,8 +854,7 @@ fun BottomSheetPlayer(
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
-                                hasVideoTrack = hasVideoTrack,
-                                playerConnection = playerConnection,
+                                videoPlayer = if (isVideoMode) slaveVideoPlayer else null,
                                 modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection)
                             )
                         }
@@ -913,7 +945,7 @@ private fun MetroPlayerContent(
     bottomPadding: androidx.compose.ui.unit.Dp,
     // Video parameters – used only for the thumbnail
     isVideoMode: Boolean,
-    hasVideoTrack: Boolean,
+    videoPlayer: Player?,
     onToggleVideo: () -> Unit // kept for compatibility, not used directly here
 ) {
     val isPlaying by playerConnection.isPlaying.collectAsState()
@@ -965,8 +997,7 @@ private fun MetroPlayerContent(
             VideoMorphingThumbnail(
                 thumbnailUrl = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
                 isVideoMode = isVideoMode,
-                hasVideoTrack = hasVideoTrack,
-                playerConnection = playerConnection,
+                videoPlayer = if (isVideoMode) slaveVideoPlayer else null,
                 modifier = Modifier
                     .fillMaxSize()
                     .aspectRatio(1f)

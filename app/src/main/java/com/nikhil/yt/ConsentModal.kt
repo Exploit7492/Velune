@@ -49,22 +49,12 @@ fun ConsentModal(
     var isLoading by remember { mutableStateOf(false) }
     var showFullConsent by remember { mutableStateOf(false) }
 
-    Dialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(0.9f)
@@ -484,4 +474,4 @@ private fun DataSharingTab() {
             )
         }
     }
-}
+
