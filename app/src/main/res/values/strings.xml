@@ -5,8 +5,6 @@
     <string name="config_whatsapp_url"></string>
     <string name="config_instagram_url"></string>
     <string name="config_facebook_url"></string>
-    <string name="config_app_name">YT-Pro</string>
-    <string name="app_name">YT-Pro</string>
     <string name="music_channel_id">music_channel</string>
     <string name="music_channel_name">Music Playback</string>
     <!-- Bottom navigation -->
