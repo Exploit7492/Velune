@@ -76,6 +76,12 @@ constructor(
             }
     }
 
+    fun loadExplore() {
+        viewModelScope.launch {
+            load()
+        }
+    }
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             load()
