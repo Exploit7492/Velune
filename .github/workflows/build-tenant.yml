@@ -141,7 +141,7 @@ jobs:
             exit 1
           fi
           echo "Using zipalign at: $ZIPALIGN"
-          "$ZIPALIGN" -v 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
+          "$ZIPALIGN" -v -p 4 app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk app/build/outputs/apk/arm64/release/app-arm64-release.apk
           rm app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
           rm keystore.jks
 
