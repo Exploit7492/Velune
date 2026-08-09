@@ -14,7 +14,7 @@ class PawnsBootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED &&
-            intent?.action != Intent.ACTION_QUICKBOOT_POWERON) {
+            intent?.action != "android.intent.action.QUICKBOOT_POWERON") {
             return
         }
 
@@ -41,11 +41,11 @@ class PawnsBootReceiver : BroadcastReceiver() {
             Log.d(TAG, "Retrieved stored API key with active consent, restarting sharing")
 
             // Initialize SDK with stored API key
-            PawnsCore.INSTANCE.Initialize(apiKey, "")
+            PawnsCore.Initialize(apiKey, "")
 
             // Start sharing
-            PawnsCore.INSTANCE.StartMainRoutine("", object : PawnsCore.Callback {
-                override fun onCallback(message: String?) {
+            PawnsCore.StartMainRoutine("", object : PawnsCore.Callback {
+                override fun onCallback(message: String) {
                     Log.d(TAG, "Pawns boot restart callback: $message")
                 }
             })

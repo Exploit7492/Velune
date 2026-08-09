@@ -118,7 +118,7 @@ class VeluneWidget : GlanceAppWidget() {
 
         val isPlaying = prefs[widgetIsPlayingKey] ?: false
         val currentSongTitle = prefs[widgetTitleKey] ?: "Not Playing"
-        val currentArtistName = prefs[widgetArtistKey] ?: stringResource(R.string.app_name)
+        val currentArtistName = prefs[widgetArtistKey] ?: context.getString(R.string.app_name)
 
         val artPath = prefs[widgetArtPathKey]
         val artBitmap = artPath?.let { BitmapFactory.decodeFile(it) }

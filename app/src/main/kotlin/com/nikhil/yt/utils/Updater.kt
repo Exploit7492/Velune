@@ -11,6 +11,7 @@ package com.nikhil.yt.utils
 import androidx.datastore.preferences.core.edit
 import com.nikhil.yt.BuildConfig
 import com.nikhil.yt.App
+import com.nikhil.yt.R
 import com.nikhil.yt.constants.GitHubReleasesEtagKey
 import com.nikhil.yt.constants.GitHubReleasesFingerprintKey
 import com.nikhil.yt.constants.GitHubReleasesJsonKey
@@ -91,7 +92,7 @@ object Updater {
             client.get("https://api.github.com/repos/Zapier-codes/Velune/releases?per_page=$perPage") {
                 headers {
                     append("Accept", "application/vnd.github+json")
-                    append("User-Agent", getString(R.string.app_name))
+                    append("User-Agent", App.instance.getString(R.string.app_name))
                     if (!cachedEtag.isNullOrBlank()) {
                         append("If-None-Match", cachedEtag)
                     }

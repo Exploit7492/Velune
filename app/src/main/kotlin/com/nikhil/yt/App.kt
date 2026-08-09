@@ -1,4 +1,3 @@
-import com.nikhil.yt.utils.LocaleManager
 /*
  * Velune - by Nikhil
  * Nikhil
@@ -9,6 +8,7 @@ import com.nikhil.yt.utils.LocaleManager
 
 package com.nikhil.yt
 
+import com.nikhil.yt.utils.LocaleManager
 import android.app.Application
 import android.app.ActivityManager
 import android.content.Context

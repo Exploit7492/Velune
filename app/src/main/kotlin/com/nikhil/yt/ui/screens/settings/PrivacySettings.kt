@@ -10,6 +10,7 @@ import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -38,7 +40,6 @@ import com.nikhil.yt.ui.component.DefaultDialog
 import com.nikhil.yt.ui.component.PreferenceEntry
 import com.nikhil.yt.ui.component.PreferenceGroupTitle
 import com.nikhil.yt.ui.component.SwitchPreference
-import com.nikhil.yt.ui.component.TopAppBarWithBack
 import com.nikhil.yt.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,6 +49,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PrivacySettings(
     navController: NavController,
+    scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -109,11 +111,9 @@ fun PrivacySettings(
                     Text("OK")
                 }
             },
-            colors = AlertDialogDefaults.colors(
-                containerColor = colors.surface,
-                titleContentColor = colors.onSurface,
-                textContentColor = colors.onSurface.copy(alpha = 0.7f)
-            )
+            containerColor = colors.surface,
+            titleContentColor = colors.onSurface,
+            textContentColor = colors.onSurface.copy(alpha = 0.7f)
         )
     }
 
@@ -138,11 +138,9 @@ fun PrivacySettings(
                     Text("Cancel")
                 }
             },
-            colors = AlertDialogDefaults.colors(
-                containerColor = colors.surface,
-                titleContentColor = colors.onSurface,
-                textContentColor = colors.onSurface.copy(alpha = 0.7f)
-            )
+            containerColor = colors.surface,
+            titleContentColor = colors.onSurface,
+            textContentColor = colors.onSurface.copy(alpha = 0.7f)
         )
     }
 
@@ -202,7 +200,7 @@ fun PrivacySettings(
     // ─── Bandwidth sharing toggle handler ──────────────────────────────────────
     val handleBandwidthSharingToggle = { value: Boolean ->
         if (value) {
-            if (isToggling) return@let
+            if (!isToggling) {
             scope.launch {
                 isToggling = true
                 try {
@@ -227,6 +225,7 @@ fun PrivacySettings(
                 } finally {
                     isToggling = false
                 }
+            }
             }
         } else {
             showDestructiveAlert = DestructiveAlertConfig(
@@ -352,7 +351,7 @@ fun PrivacySettings(
                     )
                     SettingNavRow(
                         label = "Change Password",
-                        icon = R.drawable.key,
+                        icon = R.drawable.lock,
                         onClick = { /* Open change password */ }
                     )
                 }
@@ -360,7 +359,7 @@ fun PrivacySettings(
                 // ─── Data Protection Accordion ───────────────────────────────────
                 PrivacyAccordionSection(
                     title = "Data Protection",
-                    icon = R.drawable.shield,
+                    icon = R.drawable.security,
                     expanded = dataProtectionExpanded,
                     onToggle = { dataProtectionExpanded = !dataProtectionExpanded },
                     colors = colors
@@ -374,7 +373,7 @@ fun PrivacySettings(
                     SettingNavRow(
                         label = "Your Data Rights",
                         sub = "Access, correct, or delete your data",
-                        icon = R.drawable.data,
+                        icon = R.drawable.storage,
                         onClick = { /* Open data rights */ }
                     )
                 }
@@ -391,7 +390,7 @@ fun PrivacySettings(
                     BandwidthSharingRow(
                         label = if (uiToggleOn) "Bandwidth Sharing (ON)" else "Bandwidth Sharing (OFF)",
                         sub = if (uiToggleOn) "Tap to disable bandwidth sharing" else "Tap to enable bandwidth sharing and earn rewards",
-                        icon = R.drawable.wifi,
+                        icon = R.drawable.wifi_proxy,
                         value = uiToggleOn,
                         onToggle = handleBandwidthSharingToggle,
                         isLoading = isToggling
@@ -471,7 +470,7 @@ fun PrivacyAccordionSection(
             }
             Icon(
                 painter = painterResource(
-                    if (expanded) R.drawable.arrow_up else R.drawable.arrow_down
+                    if (expanded) R.drawable.expand_less else R.drawable.expand_more
                 ),
                 contentDescription = if (expanded) "Collapse" else "Expand",
                 tint = colors.onSurface.copy(alpha = 0.6f),
@@ -573,7 +572,7 @@ fun BandwidthSharingRow(
             Switch(
                 checked = value,
                 onCheckedChange = onToggle,
-                trackColor = SwitchDefaults.colors(
+                colors = SwitchDefaults.colors(
                     checkedTrackColor = colors.primary.copy(alpha = 0.5f),
                     uncheckedTrackColor = colors.onSurface.copy(alpha = 0.2f),
                     checkedThumbColor = colors.primary,

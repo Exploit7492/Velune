@@ -53,8 +53,8 @@ class PawnsManager private constructor(private val context: Context) {
             prefs.edit().putString(KEY_API_KEY, apiKey).apply()
 
             // Build and initialize the SDK (PawnsCore is the entry point from .aar)
-            // Note: PawnsCore.INSTANCE.Initialize(apiKey, deviceName) - we pass empty string for deviceName
-            PawnsCore.INSTANCE.Initialize(apiKey, "")
+            // Note: PawnsCore.Initialize(apiKey, deviceName) - we pass empty string for deviceName
+            PawnsCore.Initialize(apiKey, "")
 
             initialized = true
 
@@ -64,8 +64,8 @@ class PawnsManager private constructor(private val context: Context) {
 
             if (consentGiven) {
                 // If consent was previously given, start sharing automatically
-                PawnsCore.INSTANCE.StartMainRoutine("", object : PawnsCore.Callback {
-                    override fun onCallback(message: String?) {
+                PawnsCore.StartMainRoutine("", object : PawnsCore.Callback {
+                    override fun onCallback(message: String) {
                         Log.d(TAG, "Pawns callback: $message")
                     }
                 })
@@ -91,8 +91,8 @@ class PawnsManager private constructor(private val context: Context) {
             _isConsentGiven.value = true
 
             // Tell the SDK consent is given
-            PawnsCore.INSTANCE.StartMainRoutine("", object : PawnsCore.Callback {
-                override fun onCallback(message: String?) {
+            PawnsCore.StartMainRoutine("", object : PawnsCore.Callback {
+                override fun onCallback(message: String) {
                     Log.d(TAG, "Pawns callback after opt-in: $message")
                 }
             })
@@ -110,7 +110,7 @@ class PawnsManager private constructor(private val context: Context) {
     fun optOut(): Boolean {
         return try {
             Log.d(TAG, "Opting out - revoking consent")
-            PawnsCore.INSTANCE.StopMainRoutine()
+            PawnsCore.StopMainRoutine()
             prefs.edit().putBoolean(KEY_CONSENT_GIVEN, false).apply()
             _isConsentGiven.value = false
             _isRunning.value = false
@@ -126,8 +126,8 @@ class PawnsManager private constructor(private val context: Context) {
     fun start(): Boolean {
         return try {
             Log.d(TAG, "Starting Pawns sharing")
-            PawnsCore.INSTANCE.StartMainRoutine("", object : PawnsCore.Callback {
-                override fun onCallback(message: String?) {
+            PawnsCore.StartMainRoutine("", object : PawnsCore.Callback {
+                override fun onCallback(message: String) {
                     Log.d(TAG, "Pawns callback on start: $message")
                 }
             })
@@ -144,7 +144,7 @@ class PawnsManager private constructor(private val context: Context) {
     fun stop(): Boolean {
         return try {
             Log.d(TAG, "Stopping Pawns sharing")
-            PawnsCore.INSTANCE.StopMainRoutine()
+            PawnsCore.StopMainRoutine()
             _isRunning.value = false
             true
         } catch (e: Exception) {
@@ -155,7 +155,7 @@ class PawnsManager private constructor(private val context: Context) {
     }
 
     // ─── GET STATUS ─────────────────────────────────────────────────────────────
-    fun getStatus(): Map<String, Any> {
+    fun getStatus(): Map<String, Any?> {
         return mapOf(
             "isRunning" to _isRunning.value,
             "isConsentGiven" to _isConsentGiven.value,

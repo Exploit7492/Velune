@@ -180,7 +180,7 @@ fun AboutScreen(
                     // Instagram
                     if (instagramUrl.isNotBlank()) {
                         SocialIcon(
-                            iconRes = R.drawable.ic_instagram, // ensure you have this drawable
+                            iconRes = R.drawable.instagram, // ensure you have this drawable
                             contentDescription = "Instagram",
                             onClick = { safeOpen(instagramUrl) }
                         )

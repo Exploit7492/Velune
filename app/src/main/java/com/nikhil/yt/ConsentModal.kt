@@ -1,10 +1,8 @@
 package com.nikhil.yt
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,12 +14,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.content.ContextCompat
+import com.nikhil.yt.extensions.openLink
+import kotlinx.coroutines.launch
 
 object ConsentUrls {
     const val PAWNS_PRIVACY = "https://pawns.app/privacy-policy"
@@ -43,9 +41,8 @@ fun ConsentModal(
 ) {
     if (!visible) return
 
-    val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
-    val typography = MaterialTheme.typography
+    val scope = rememberCoroutineScope()
 
     var activeTab by remember { mutableStateOf(0) }
     var isLoading by remember { mutableStateOf(false) }
@@ -78,14 +75,12 @@ fun ConsentModal(
                 tonalElevation = 4.dp
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Top hairline
                     Divider(
                         modifier = Modifier.height(2.dp).fillMaxWidth(),
                         color = colors.primary,
                         thickness = 2.dp
                     )
 
-                    // Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -114,7 +109,6 @@ fun ConsentModal(
                         }
                     }
 
-                    // Tab Row
                     ScrollableTabRow(
                         selectedTabIndex = activeTab,
                         containerColor = Color.Transparent,
@@ -140,7 +134,6 @@ fun ConsentModal(
                         }
                     }
 
-                    // Tab content
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -157,7 +150,6 @@ fun ConsentModal(
 
                     Divider(color = colors.primary.copy(alpha = 0.4f), thickness = 1.dp)
 
-                    // Footer – consent summary with "More"/"Less"
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -197,7 +189,6 @@ fun ConsentModal(
 
                     Divider(color = colors.primary.copy(alpha = 0.4f), thickness = 1.dp)
 
-                    // Action bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -210,11 +201,11 @@ fun ConsentModal(
                                 onOpenSettings()
                             },
                             modifier = Modifier.weight(1f),
-                            colors = OutlinedButtonDefaults.outlinedButtonColors(
+                            colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = colors.onSurface.copy(alpha = 0.8f)
                             ),
-                            border = OutlinedButtonDefaults.outlinedBorder(
-                                color = colors.primary.copy(alpha = 0.5f)
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp, colors.primary.copy(alpha = 0.5f)
                             ),
                             enabled = !isLoading
                         ) {
@@ -225,10 +216,13 @@ fun ConsentModal(
                             onClick = {
                                 if (!isLoading) {
                                     isLoading = true
-                                    // Call the accept handler – it should handle the SDK init
-                                    onAccept()
-                                    // The parent will close the modal
-                                    isLoading = false
+                                    scope.launch {
+                                        try {
+                                            onAccept()
+                                        } finally {
+                                            isLoading = false
+                                        }
+                                    }
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -262,8 +256,6 @@ fun ConsentModal(
         }
     }
 }
-
-// ─── Tab content composables ─────────────────────────────────────────────────
 
 @Composable
 private fun GeneralTab() {
@@ -452,4 +444,43 @@ private fun DataProtectionTab() {
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Text(
-                text = "Your personal information is never sold, rented, or shared with advertisers 
+                text = "Your personal information is never sold, rented, or shared with advertisers. The only data shared with the bandwidth-sharing SDK is limited to what is described in its own privacy policy.",
+                style = typography.bodySmall,
+                color = colors.onSurface.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DataSharingTab() {
+    val colors = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Text(
+                text = "What Gets Shared",
+                style = typography.titleSmall,
+                color = colors.onSurface,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            Text(
+                text = "When enabled, this feature shares a portion of your device's idle internet bandwidth with the third-party SDK. It does not access your files, messages, contacts, or media.",
+                style = typography.bodySmall,
+                color = colors.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            Text(
+                text = "You're Always in Control",
+                style = typography.titleSmall,
+                color = colors.onSurface,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            Text(
+                text = "You can turn this feature off at any time from Settings → Privacy. Turning it off immediately stops the sharing service and withdraws your consent.",
+                style = typography.bodySmall,
+                color = colors.onSurface.copy(alpha = 0.7f)
+            )
+        }
+    }
+}

@@ -9,6 +9,8 @@
 package com.nikhil.yt.extensions
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.nikhil.yt.constants.InnerTubeCookieKey
@@ -30,4 +32,11 @@ fun Context.isInternetConnected(): Boolean {
     val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
     return networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ?: false
+}
+
+fun Context.openLink(url: String) {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) {
+    }
 }
