@@ -61,10 +61,11 @@ fun LocalLibraryContent(
     val selectionMode by viewModel.selectionMode.collectAsState()
     val selectedIds by viewModel.selectedIds.collectAsState()
     val selectedCount by viewModel.selectedCount.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
-            isRefreshing = false,
+            isRefreshing = isScanning,
             onRefresh = { viewModel.refreshFolders() },
             modifier = Modifier.fillMaxSize(),
         ) {

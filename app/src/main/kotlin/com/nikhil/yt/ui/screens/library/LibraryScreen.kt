@@ -215,10 +215,7 @@ fun LibraryScreen(navController: NavController) {
     FolderBrowserDialog(
         visible = showFolderBrowser,
         onDismiss = { showFolderBrowser = false },
-        onAdd = { folderId ->
-            viewModel.addWatchedFolder(folderId)
-            showFolderBrowser = false
-        },
+        viewModel = viewModel,
     )
 
     LibrarySidebar(

@@ -34,6 +34,8 @@ import com.nikhil.yt.db.entities.AlbumEntity
 import com.nikhil.yt.db.entities.ArtistEntity
 import com.nikhil.yt.db.entities.Event
 import com.nikhil.yt.db.entities.FormatEntity
+import com.nikhil.yt.db.entities.LocalFolderEntity
+import com.nikhil.yt.db.entities.LocalTrackEntity
 import com.nikhil.yt.db.entities.LyricsEntity
 import com.nikhil.yt.db.entities.PlaylistEntity
 import com.nikhil.yt.db.entities.PlayCountEntity
@@ -111,7 +113,7 @@ class MusicDatabase(
 @Database(
     entities = [
         SongEntity::class,
-        ArtistEntity::class,\n        com.nikhil.yt.db.entities.local.LocalTrackEntity::class,\n        com.nikhil.yt.db.entities.local.LocalAlbumEntity::class,
+        ArtistEntity::class,
         AlbumEntity::class,
         PlaylistEntity::class,
         SongArtistMap::class,
@@ -130,8 +132,6 @@ class MusicDatabase(
         com.nikhil.yt.db.entities.SongSkipEntity::class,
         LocalTrackEntity::class,
         LocalFolderEntity::class,
-        LocalTrackEntity::class,
-        LocalFolderEntity::class
     ],
     views = [
         SortedSongArtistMap::class,
@@ -811,14 +811,4 @@ class Migration19To20 : AutoMigrationSpec {
 @DeleteColumn.Entries(DeleteColumn(tableName = "song", columnName = "artistName"))
 class Migration20To21 : AutoMigrationSpec
 
-@DeleteTable.Entries(
-    DeleteTable(tableName = "local_track"),
-    DeleteTable(tableName = "local_folder")
-)
-class Migration28To29 : AutoMigrationSpec
-
-@DeleteTable.Entries(
-    DeleteTable(tableName = "local_track"),
-    DeleteTable(tableName = "local_folder")
-)
 class Migration28To29 : AutoMigrationSpec

@@ -66,7 +66,7 @@ fun FolderDetailScreen(
     val sorts by viewModel.sorts.collectAsState()
     val searchActive by viewModel.searchActive.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val isScanning by viewModel.isScanning.collectAsState()
+    val isRefreshingFolder by viewModel.isRefreshingFolder.collectAsState()
 
     var sortPanelVisible by remember { mutableStateOf(false) }
 
@@ -214,21 +214,11 @@ fun FolderDetailScreen(
 
             // ── Track List ───────────────────────────────────────────────────
             PullToRefreshBox(
-                isRefreshing = isScanning,
+                isRefreshing = isRefreshingFolder,
                 onRefresh = { viewModel.refreshSelectedFolder() },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (isScanning) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            color = primary,
-                            modifier = Modifier.size(32.dp),
-                        )
-                    }
-                } else if (tracks.isEmpty()) {
+                if (tracks.isEmpty()) {
                     LocalEmptyState(
                         title = if (searchQuery.isNotBlank()) "No matches" else "No tracks",
                         subtitle = if (searchQuery.isNotBlank()) "Try a different search" else "Pull down to refresh",

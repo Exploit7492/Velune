@@ -81,8 +81,8 @@ class LocalLibraryViewModel @Inject constructor(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
-    private val _currentScanningFolder = MutableStateFlow<String?>(null)
-    val currentScanningFolder: StateFlow<String?> = _currentScanningFolder.asStateFlow()
+    private val _isRefreshingFolder = MutableStateFlow(false)
+    val isRefreshingFolder: StateFlow<Boolean> = _isRefreshingFolder.asStateFlow()
 
     // Selected Folder Detail
     private val _selectedFolder = MutableStateFlow<LocalFolderEntity?>(null)
@@ -169,15 +169,13 @@ class LocalLibraryViewModel @Inject constructor(
     fun refreshSelectedFolder() {
         val folder = _selectedFolder.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            _isScanning.value = true
-            _currentScanningFolder.value = folder.id
+            _isRefreshingFolder.value = true
             try {
                 repository.scanFolder(folder.id)
             } catch (e: Exception) {
                 Timber.e(e, "refreshSelectedFolder failed")
             } finally {
-                _isScanning.value = false
-                _currentScanningFolder.value = null
+                _isRefreshingFolder.value = false
             }
         }
     }
