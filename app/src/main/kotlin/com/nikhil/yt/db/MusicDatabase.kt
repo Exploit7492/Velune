@@ -162,13 +162,11 @@ class MusicDatabase(
         AutoMigration(from = 20, to = 21, spec = Migration20To21::class),
         AutoMigration(from = 21, to = 22),
         AutoMigration(from = 28, to = 29, spec = Migration28To29::class),
-        AutoMigration(from = 28, to = 29, spec = Migration28To29::class),
     ],
 )
 @TypeConverters(Converters::class)
 abstract class InternalDatabase : RoomDatabase() {
     abstract val dao: DatabaseDao
-    abstract val localMusicDao: LocalMusicDao
     abstract val localMusicDao: LocalMusicDao
 
     companion object {

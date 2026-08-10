@@ -4064,6 +4064,12 @@ class MusicService :
 
     private fun createDataSourceFactory(): DataSource.Factory {
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
+            // Bypass YouTube resolver for local file URIs
+            val uriStr = dataSpec.uri?.toString() ?: ""
+            if (uriStr.startsWith("content://") || uriStr.startsWith("file://")) {
+                return@Factory dataSpec
+            }
+
             val mediaId = dataSpec.key ?: error("No media id")
 
             val requiredCachedLength =

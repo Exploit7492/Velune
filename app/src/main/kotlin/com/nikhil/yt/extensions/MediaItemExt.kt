@@ -88,3 +88,28 @@ private fun SongItem.isMusicVideo(): Boolean {
     val musicVideoType = endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
     return musicVideoType == MUSIC_VIDEO_TYPE_OMV || musicVideoType == MUSIC_VIDEO_TYPE_UGC
 }
+
+fun com.nikhil.yt.db.entities.LocalTrackEntity.toMediaItem(): MediaItem {
+    val metadata = com.nikhil.yt.models.MediaMetadata(
+        id = id,
+        title = title,
+        artists = listOf(com.nikhil.yt.models.Artist(name = artist, id = "")),
+        duration = duration,
+        thumbnailUrl = artworkUri,
+        album = com.nikhil.yt.models.Album(title = album, id = folderId),
+    )
+    return MediaItem.Builder()
+        .setMediaId(id)
+        .setUri(fileUri)
+        .setCustomCacheKey(id)
+        .setTag(metadata)
+        .setMediaMetadata(
+            androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(artist)
+                .setArtworkUri(artworkUri?.toUri())
+                .setAlbumTitle(album)
+                .setMediaType(MEDIA_TYPE_MUSIC)
+                .build()
+        ).build()
+}

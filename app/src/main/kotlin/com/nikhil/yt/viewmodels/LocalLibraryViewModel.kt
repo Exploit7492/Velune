@@ -290,9 +290,24 @@ class LocalLibraryViewModel @Inject constructor(
         }
     }
 
+    fun deleteSelectedFolders() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _selectedIds.value.forEach { id ->
+                repository.deleteFolderFromDevice(id)
+            }
+            withContext(Dispatchers.Main) {
+                exitSelectionMode()
+            }
+        }
+    }
+
     fun addWatchedFolder(folderId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            val wasEmpty = watchedFolders.value.isEmpty()
             repository.addWatchedFolder(folderId)
+            if (wasEmpty) {
+                setLibraryMode(LibraryMode.LOCAL)
+            }
         }
     }
 

@@ -109,7 +109,7 @@ fun LocalLibraryContent(
         SelectionBottomBar(
             selectedCount = selectedCount,
             onRemove = { viewModel.removeSelectedFolders() },
-            onDelete = { /* Stage 4: implement device deletion */ },
+            onDelete = { viewModel.deleteSelectedFolders() },
             visible = selectionMode,
         )
     }
