@@ -108,7 +108,7 @@ class MusicDatabase(
 @Database(
     entities = [
         SongEntity::class,
-        ArtistEntity::class,
+        ArtistEntity::class,\n        com.nikhil.yt.db.entities.local.LocalTrackEntity::class,\n        com.nikhil.yt.db.entities.local.LocalAlbumEntity::class,
         AlbumEntity::class,
         PlaylistEntity::class,
         SongArtistMap::class,
