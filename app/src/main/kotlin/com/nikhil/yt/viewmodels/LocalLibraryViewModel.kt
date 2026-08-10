@@ -91,6 +91,9 @@ class LocalLibraryViewModel @Inject constructor(
     private val _folderTracks = MutableStateFlow<List<LocalTrackEntity>>(emptyList())
     val folderTracks: StateFlow<List<LocalTrackEntity>> = _folderTracks.asStateFlow()
 
+    private val _isRefreshingFolder = MutableStateFlow(false)
+    val isRefreshingFolder: StateFlow<Boolean> = _isRefreshingFolder.asStateFlow()
+
     // Sorting
     val sorts: StateFlow<List<SortEntry>> = dataStore.data
         .map { prefs ->
@@ -157,6 +160,21 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val tracks = repository.getTracksByFolder(folder.id)
             _folderTracks.value = tracks
+        }
+    }
+
+    fun refreshSelectedFolder() {
+        val folder = _selectedFolder.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _isRefreshingFolder.value = true
+            try {
+                repository.scanFolder(folder.id)
+                _folderTracks.value = repository.getTracksByFolder(folder.id)
+            } catch (e: Exception) {
+                Timber.e(e, "refreshSelectedFolder failed")
+            } finally {
+                _isRefreshingFolder.value = false
+            }
         }
     }
 
