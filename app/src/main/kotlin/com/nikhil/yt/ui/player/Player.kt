@@ -9,7 +9,13 @@ package com.nikhil.yt.ui.player
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
+import android.media.audiofx.AudioEffect
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.rememberSaveable
+import com.nikhil.yt.ui.menu.EqualizerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -180,6 +186,30 @@ fun BottomSheetPlayer(
     }
 
     // Toggle function – manages slave video player
+    // Equalizer — moved to a direct top-bar icon (previously only reachable via the
+    // overflow "..." menu in PlayerMenu.kt). Mirrors the same dialog + system-EQ
+    // launcher PlayerMenu.kt uses so behavior stays identical either way it's opened.
+    var showEqualizerDialog by rememberSaveable { mutableStateOf(false) }
+    val equalizerActivityResultLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+
+    if (showEqualizerDialog) {
+        EqualizerDialog(
+            onDismiss = { showEqualizerDialog = false },
+            openSystemEqualizer = {
+                val intent =
+                    Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
+                        putExtra(AudioEffect.EXTRA_AUDIO_SESSION, playerConnection.player.audioSessionId)
+                        putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+                        putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+                    }
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    equalizerActivityResultLauncher.launch(intent)
+                }
+            },
+        )
+    }
+
     val toggleVideo = {
         isVideoMode = !isVideoMode
         if (isVideoMode) {
@@ -600,15 +630,15 @@ fun BottomSheetPlayer(
             )
         },
     ) {
-        // ─── TOP BAR WITH SONG/VIDEO PILL SWITCH ──────────────────────────────────
+        // ─── TOP BAR: SONG/VIDEO PILL (left) — EQUALIZER (right) ───────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Pill switch (Song / Video)
+            // Pill switch (Song / Video) — top-left
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -646,6 +676,16 @@ fun BottomSheetPlayer(
                         fontWeight = FontWeight.Medium
                     )
                 }
+            }
+
+            // Equalizer — top-right. Previously only reachable via the overflow
+            // "..." menu; now a direct icon here too (menu entry left intact).
+            IconButton(onClick = { showEqualizerDialog = true }) {
+                Icon(
+                    painter = painterResource(R.drawable.equalizer),
+                    contentDescription = stringResource(R.string.equalizer),
+                    tint = TextBackgroundColor,
+                )
             }
         }
 

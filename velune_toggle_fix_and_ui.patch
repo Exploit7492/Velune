@@ -1,0 +1,147 @@
+diff --git a/app/src/main/kotlin/com/nikhil/yt/ui/player/Player.kt b/app/src/main/kotlin/com/nikhil/yt/ui/player/Player.kt
+index feb4320..7d69716 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/ui/player/Player.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/ui/player/Player.kt
+@@ -9,7 +9,13 @@ package com.nikhil.yt.ui.player
+ import android.content.ClipboardManager
+ import android.content.Context
+ import android.content.res.Configuration
++import android.media.audiofx.AudioEffect
+ import androidx.activity.compose.BackHandler
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.material3.IconButton
++import androidx.compose.runtime.rememberSaveable
++import com.nikhil.yt.ui.menu.EqualizerDialog
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.basicMarquee
+ import androidx.compose.foundation.clickable
+@@ -180,6 +186,30 @@ fun BottomSheetPlayer(
+     }
+ 
+     // Toggle function – manages slave video player
++    // Equalizer — moved to a direct top-bar icon (previously only reachable via the
++    // overflow "..." menu in PlayerMenu.kt). Mirrors the same dialog + system-EQ
++    // launcher PlayerMenu.kt uses so behavior stays identical either way it's opened.
++    var showEqualizerDialog by rememberSaveable { mutableStateOf(false) }
++    val equalizerActivityResultLauncher =
++        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
++
++    if (showEqualizerDialog) {
++        EqualizerDialog(
++            onDismiss = { showEqualizerDialog = false },
++            openSystemEqualizer = {
++                val intent =
++                    Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
++                        putExtra(AudioEffect.EXTRA_AUDIO_SESSION, playerConnection.player.audioSessionId)
++                        putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
++                        putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
++                    }
++                if (intent.resolveActivity(context.packageManager) != null) {
++                    equalizerActivityResultLauncher.launch(intent)
++                }
++            },
++        )
++    }
++
+     val toggleVideo = {
+         isVideoMode = !isVideoMode
+         if (isVideoMode) {
+@@ -600,15 +630,15 @@ fun BottomSheetPlayer(
+             )
+         },
+     ) {
+-        // ─── TOP BAR WITH SONG/VIDEO PILL SWITCH ──────────────────────────────────
++        // ─── TOP BAR: SONG/VIDEO PILL (left) — EQUALIZER (right) ───────────────────
+         Row(
+             modifier = Modifier
+                 .fillMaxWidth()
+                 .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
+-            horizontalArrangement = Arrangement.Center,
++            horizontalArrangement = Arrangement.SpaceBetween,
+             verticalAlignment = Alignment.CenterVertically
+         ) {
+-            // Pill switch (Song / Video)
++            // Pill switch (Song / Video) — top-left
+             Row(
+                 modifier = Modifier
+                     .clip(RoundedCornerShape(20.dp))
+@@ -647,6 +677,16 @@ fun BottomSheetPlayer(
+                     )
+                 }
+             }
++
++            // Equalizer — top-right. Previously only reachable via the overflow
++            // "..." menu; now a direct icon here too (menu entry left intact).
++            IconButton(onClick = { showEqualizerDialog = true }) {
++                Icon(
++                    painter = painterResource(R.drawable.equalizer),
++                    contentDescription = stringResource(R.string.equalizer),
++                    tint = TextBackgroundColor,
++                )
++            }
+         }
+ 
+         val onSliderValueChange: (Long) -> Unit = { sliderPosition = it }
+diff --git a/app/src/main/kotlin/com/nikhil/yt/utils/YTPlayerUtils.kt b/app/src/main/kotlin/com/nikhil/yt/utils/YTPlayerUtils.kt
+index 5431553..f13530c 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/utils/YTPlayerUtils.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/utils/YTPlayerUtils.kt
+@@ -97,6 +97,29 @@ object YTPlayerUtils {
+     private val videoStreamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
+     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
+ 
++    /**
++     * Returns a still-valid, previously-resolved video stream URL for [videoId], or null.
++     *
++     * This is a plain cache read — it does NOT perform network extraction itself.
++     * [videoStreamUrlCache] is populated as a side effect of the normal audio
++     * resolution path (see the hoisted selectedVideoFormat/selectedVideoUrl above),
++     * which always runs before playback starts. By the time the user can tap the
++     * Song/Video toggle, a track is already playing, so a matching cache entry is
++     * expected to exist. If it doesn't (cache miss or expired), callers should treat
++     * a null return as "video unavailable right now" rather than blocking on a
++     * fresh network fetch — that keeps this call synchronous and toggleVideo() in
++     * Player.kt does not need to become a suspend/coroutine call.
++     */
++    fun getVideoStreamUrl(videoId: String): String? {
++        val prefix = "$videoId:"
++        val now = System.currentTimeMillis()
++        return videoStreamUrlCache.entries
++            .filter { it.key.startsWith(prefix) && it.value.expiresAtMs > now }
++            .maxByOrNull { it.value.expiresAtMs }
++            ?.value
++            ?.url
++    }
++
+     fun invalidateCachedStreamUrls(videoId: String) {
+         val prefix = "$videoId:"
+         streamUrlCache.keys.removeIf { it.startsWith(prefix) }
+@@ -251,6 +274,15 @@ object YTPlayerUtils {
+ 
+         val botDetectedClients = mutableSetOf<String>()
+ 
++        // FIX: hoisted out of the loop below — these were previously declared with
++        // `var` *inside* the for-loop body and read after the loop closed, which is
++        // an unresolved-reference compile error in Kotlin (loop-body locals go out
++        // of scope when the loop ends). Declaring them here and resetting them at
++        // the top of each iteration keeps the "last successful candidate wins"
++        // behavior while actually compiling.
++        var selectedVideoFormat: PlayerResponse.StreamingData.Format? = null
++        var selectedVideoUrl: String? = null
++
+         for ((index, client) in streamClients.withIndex()) {
+             format = null
+             streamUrl = null
+@@ -336,8 +368,9 @@ object YTPlayerUtils {
+                 ?.toList()
+                 .orEmpty()
+ 
+-            var selectedVideoFormat: PlayerResponse.StreamingData.Format? = null
+-            var selectedVideoUrl: String? = null
++            // Reset per client-iteration instead of re-declaring (see hoisted vars above).
++            selectedVideoFormat = null
++            selectedVideoUrl = null
+             for (vCandidate in videoCandidates) {
+                 val vUrl = findUrlOrNull(vCandidate, videoId, client) ?: continue
+                 selectedVideoFormat = vCandidate

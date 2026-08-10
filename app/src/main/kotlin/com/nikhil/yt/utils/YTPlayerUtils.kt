@@ -97,6 +97,29 @@ object YTPlayerUtils {
     private val videoStreamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
 
+    /**
+     * Returns a still-valid, previously-resolved video stream URL for [videoId], or null.
+     *
+     * This is a plain cache read — it does NOT perform network extraction itself.
+     * [videoStreamUrlCache] is populated as a side effect of the normal audio
+     * resolution path (see the hoisted selectedVideoFormat/selectedVideoUrl above),
+     * which always runs before playback starts. By the time the user can tap the
+     * Song/Video toggle, a track is already playing, so a matching cache entry is
+     * expected to exist. If it doesn't (cache miss or expired), callers should treat
+     * a null return as "video unavailable right now" rather than blocking on a
+     * fresh network fetch — that keeps this call synchronous and toggleVideo() in
+     * Player.kt does not need to become a suspend/coroutine call.
+     */
+    fun getVideoStreamUrl(videoId: String): String? {
+        val prefix = "$videoId:"
+        val now = System.currentTimeMillis()
+        return videoStreamUrlCache.entries
+            .filter { it.key.startsWith(prefix) && it.value.expiresAtMs > now }
+            .maxByOrNull { it.value.expiresAtMs }
+            ?.value
+            ?.url
+    }
+
     fun invalidateCachedStreamUrls(videoId: String) {
         val prefix = "$videoId:"
         streamUrlCache.keys.removeIf { it.startsWith(prefix) }
@@ -251,6 +274,15 @@ object YTPlayerUtils {
 
         val botDetectedClients = mutableSetOf<String>()
 
+        // FIX: hoisted out of the loop below — these were previously declared with
+        // `var` *inside* the for-loop body and read after the loop closed, which is
+        // an unresolved-reference compile error in Kotlin (loop-body locals go out
+        // of scope when the loop ends). Declaring them here and resetting them at
+        // the top of each iteration keeps the "last successful candidate wins"
+        // behavior while actually compiling.
+        var selectedVideoFormat: PlayerResponse.StreamingData.Format? = null
+        var selectedVideoUrl: String? = null
+
         for ((index, client) in streamClients.withIndex()) {
             format = null
             streamUrl = null
@@ -336,8 +368,9 @@ object YTPlayerUtils {
                 ?.toList()
                 .orEmpty()
 
-            var selectedVideoFormat: PlayerResponse.StreamingData.Format? = null
-            var selectedVideoUrl: String? = null
+            // Reset per client-iteration instead of re-declaring (see hoisted vars above).
+            selectedVideoFormat = null
+            selectedVideoUrl = null
             for (vCandidate in videoCandidates) {
                 val vUrl = findUrlOrNull(vCandidate, videoId, client) ?: continue
                 selectedVideoFormat = vCandidate
