@@ -211,6 +211,25 @@ class LocalLibraryViewModel @Inject constructor(
         }
     }
 
+    fun toggleSort(key: LocalSortKey) {
+        viewModelScope.launch {
+            val current = sorts.first()
+            if (current.any { it.key == key }) {
+                removeSort(key)
+            } else {
+                addSort(key)
+                // Default date sorts to DESC (newest first)
+                if (key == LocalSortKey.DATE_ADDED || key == LocalSortKey.DATE_MODIFIED) {
+                    toggleSortDir(key)
+                }
+            }
+        }
+    }
+
+    fun selectAllWatched(folderIds: List<String>) {
+        _selectedIds.value = folderIds.toSet()
+    }
+
     private suspend fun saveSorts(sorts: List<SortEntry>) {
         val json = JSONArray().apply {
             sorts.forEach { s ->

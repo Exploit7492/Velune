@@ -37,11 +37,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -82,7 +86,7 @@ fun LibraryScreen(navController: NavController) {
                 mode = libraryMode,
                 onModeChange = { viewModel.setLibraryMode(it) },
                 onAddClick = { /* Stage 3: open folder browser */ },
-                onMenuClick = { /* Stage 4: open sidebar */ },
+                onMenuClick = { showSidebar = true },
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
@@ -125,6 +129,22 @@ fun LibraryScreen(navController: NavController) {
                 }
             }
         }
+
+        // Overlays
+        FolderBrowserDialog(
+            visible = showFolderBrowser,
+            onDismiss = { showFolderBrowser = false },
+        )
+
+        LibrarySidebar(
+            visible = showSidebar,
+            onDismiss = { showSidebar = false },
+            currentMode = libraryMode,
+            onModeChange = { viewModel.setLibraryMode(it) },
+            onNavigate = { route ->
+                // TODO: navController.navigate(route)
+            },
+        )
     }
 }
 
@@ -285,5 +305,21 @@ private fun SelectionHeader(
                 // TODO: all-selected checkmark
             }
         }
+
+        // Overlays
+        FolderBrowserDialog(
+            visible = showFolderBrowser,
+            onDismiss = { showFolderBrowser = false },
+        )
+
+        LibrarySidebar(
+            visible = showSidebar,
+            onDismiss = { showSidebar = false },
+            currentMode = libraryMode,
+            onModeChange = { viewModel.setLibraryMode(it) },
+            onNavigate = { route ->
+                // TODO: navController.navigate(route)
+            },
+        )
     }
 }

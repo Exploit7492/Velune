@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,10 +63,15 @@ fun LocalLibraryContent(
     val selectedCount by viewModel.selectedCount.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = false,
+            onRefresh = { viewModel.refreshFolders() },
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp),
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 100.dp),
+            ) {
             if (watchedFolders.isEmpty()) {
                 item {
                     LocalEmptyState(
@@ -98,6 +104,8 @@ fun LocalLibraryContent(
         }
 
         // Selection bottom bar
+        }
+
         SelectionBottomBar(
             selectedCount = selectedCount,
             onRemove = { viewModel.removeSelectedFolders() },
