@@ -7,6 +7,8 @@
 
 
 package com.nikhil.yt.extensions
+import com.nikhil.yt.db.entities.Artist
+import com.nikhil.yt.db.entities.Album
 
 import android.os.Bundle
 import androidx.core.net.toUri
@@ -93,10 +95,10 @@ fun com.nikhil.yt.db.entities.LocalTrackEntity.toMediaItem(): MediaItem {
     val metadata = com.nikhil.yt.models.MediaMetadata(
         id = id,
         title = title,
-        artists = listOf(com.nikhil.yt.models.Artist(name = artist, id = "")),
+        artists = listOf(com.nikhil.yt.db.entities.Artist(name = artist, id = "")),
         duration = (duration / 1000L).toInt(),
         thumbnailUrl = artworkUri,
-        album = com.nikhil.yt.models.Album(title = album, id = folderId),
+        album = com.nikhil.yt.db.entities.Album(title = album, id = folderId),
     )
     return MediaItem.Builder()
         .setMediaId(id)

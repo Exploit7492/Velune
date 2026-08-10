@@ -65,7 +65,7 @@ class LocalLibraryViewModel @Inject constructor(
 
     fun setLibraryMode(mode: LibraryMode) {
         viewModelScope.launch {
-            dataStore.set(LocalLibraryModeKey, mode.name)
+            dataStore.edit { it[LocalLibraryModeKey] = mode.name }
         }
     }
 
@@ -261,7 +261,7 @@ class LocalLibraryViewModel @Inject constructor(
                 })
             }
         }
-        dataStore.set(LocalSortsKey, json.toString())
+        dataStore.edit { it[LocalSortsKey] = json.toString( })
     }
 
     private fun parseSortsJson(json: String): List<SortEntry> {

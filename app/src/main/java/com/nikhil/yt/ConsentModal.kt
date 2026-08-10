@@ -246,7 +246,6 @@ fun ConsentModal(
             }
         }
     }
-}
 
 @Composable
 private fun GeneralTab() {
@@ -475,3 +474,5 @@ private fun DataSharingTab() {
         }
     }
 
+}
+}

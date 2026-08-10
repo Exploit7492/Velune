@@ -212,6 +212,8 @@ dependencies {
     implementation(libs.appcompat)
 
     implementation(libs.material3)
+    implementation(libs.material.icons.core)
+    implementation(libs.material.icons.extended)
     implementation(libs.palette)
     implementation(libs.multiplatform.markdown)
 

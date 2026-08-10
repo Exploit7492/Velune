@@ -174,3 +174,7 @@ inline fun <reified T : Enum<T>> rememberEnumPreference(
         }
     }
 }
+
+suspend fun <T> DataStore<Preferences>.set(key: Preferences.Key<T>, value: T) {
+    edit { it[key] = value }
+}
