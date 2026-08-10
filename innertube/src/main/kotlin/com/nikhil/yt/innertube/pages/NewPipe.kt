@@ -22,6 +22,7 @@ import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ParsingException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
+import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import java.io.IOException
 import java.net.Proxy
 import java.net.SocketTimeoutException
@@ -48,6 +49,21 @@ private class NewPipeDownloaderImpl(proxy: Proxy?) : Downloader() {
         val requestBuilder = okhttp3.Request.Builder()
             .method(httpMethod, dataToSend?.toRequestBody())
             .url(url)
+
+        // FIX: inject the SOCS consent cookie via YoutubeParsingHelper.getCookieHeader(),
+        // matching the official TeamNewPipe DownloaderImpl pattern. Without setConsentAccepted(true)
+        // (set once in NewPipeUtils.init below) + this per-request cookie, some EU-region requests
+        // get served a consent-wall response instead of the real player.js / InnerTube payload,
+        // which silently breaks signature/throttling-parameter deobfuscation for those users.
+        // Only injected when the extractor hasn't already supplied its own Cookie header.
+        val hasCookieHeaderFromExtractor = headers.keys.any { it.equals("Cookie", ignoreCase = true) }
+        if (!hasCookieHeaderFromExtractor) {
+            runCatching {
+                YoutubeParsingHelper.getCookieHeader().forEach { (key, values) ->
+                    values.forEach { value -> requestBuilder.addHeader(key, value) }
+                }
+            }
+        }
 
         var hasUserAgent = false
         headers.forEach { (headerName, headerValueList) ->
@@ -88,6 +104,10 @@ object NewPipeUtils {
 
     init {
         NewPipe.init(NewPipeDownloaderImpl(YouTube.proxy))
+        // FIX: was never called. Per NewPipeExtractor's javadoc, this sets the internal
+        // SOCS consent state that getCookieHeader() (injected in execute() above) reads
+        // from. Needed for player.js/InnerTube requests in EU countries specifically.
+        YoutubeParsingHelper.setConsentAccepted(true)
     }
 
     fun getSignatureTimestamp(videoId: String): Result<Int> = runCatching {
