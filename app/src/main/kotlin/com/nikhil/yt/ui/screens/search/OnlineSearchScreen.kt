@@ -449,7 +449,7 @@ private fun SectionHeader(
         )
         if (onClick != null) {
             Icon(
-                painter = painterResource(R.drawable.chevron_right),
+                painter = painterResource(R.drawable.navigate_next),
                 contentDescription = null,
                 tint = if (pureBlack) Color.White.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)

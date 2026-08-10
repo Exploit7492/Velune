@@ -15,7 +15,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.IconButton
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.DisposableEffect
 import com.nikhil.yt.ui.menu.EqualizerDialog
 import androidx.compose.foundation.background
@@ -54,25 +53,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,11 +81,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player.STATE_BUFFERING
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player.STATE_READY
-import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.navigation.NavController
@@ -1052,7 +1038,7 @@ private fun MetroPlayerContent(
             VideoMorphingThumbnail(
                 thumbnailUrl = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
                 isVideoMode = isVideoMode,
-                videoPlayer = if (isVideoMode) player else null,
+                videoPlayer = videoPlayer,
                 modifier = Modifier
                     .fillMaxSize()
                     .aspectRatio(1f)

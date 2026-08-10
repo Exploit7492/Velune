@@ -65,7 +65,7 @@ class LocalLibraryViewModel @Inject constructor(
 
     fun setLibraryMode(mode: LibraryMode) {
         viewModelScope.launch {
-            dataStore.edit { it[LocalLibraryModeKey] = mode.name }
+            dataStore.set(LocalLibraryModeKey, mode.name)
         }
     }
 
