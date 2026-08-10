@@ -580,3 +580,13 @@ enum class UpdateChannel {
     STABLE,
     NIGHTLY,
 }
+
+// Local Music Library
+val LocalLibraryModeKey = stringPreferencesKey("local_library_mode")
+val LocalSortsKey = stringPreferencesKey("local_sorts_json")
+val LocalSearchActiveKey = booleanPreferencesKey("local_search_active")
+
+// Local Music Library
+val LocalLibraryModeKey = stringPreferencesKey("local_library_mode")
+val LocalSortsKey = stringPreferencesKey("local_sorts_json")
+val LocalSearchActiveKey = booleanPreferencesKey("local_search_active")
