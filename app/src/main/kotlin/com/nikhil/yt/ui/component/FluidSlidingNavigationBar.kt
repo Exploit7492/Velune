@@ -30,6 +30,7 @@ fun FluidSlidingNavigationBar(
     items: List<Screens>,
     currentRoute: String,
     pureBlack: Boolean,
+    badgeCounts: Map<String, Int> = emptyMap(),
     onTabSelected: (Screens) -> Unit
 ) {
     val selectedIndex = items.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
@@ -87,12 +88,20 @@ fun FluidSlidingNavigationBar(
                 ) {
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    Icon(
-                        painter = painterResource(id = if (isSelected) item.iconIdActive else item.iconIdInactive),
-                        contentDescription = stringResource(id = item.titleId),
-                        tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        Icon(
+                            painter = painterResource(id = if (isSelected) item.iconIdActive else item.iconIdInactive),
+                            contentDescription = stringResource(id = item.titleId),
+                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        val badgeCount = badgeCounts[item.route] ?: 0
+                        if (badgeCount > 0) {
+                            Badge(modifier = Modifier.offset(x = 8.dp, y = (-4).dp), containerColor = MaterialTheme.colorScheme.error) {
+                                Text(if (badgeCount > 99) "99+" else badgeCount.toString(), fontSize = 8.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 

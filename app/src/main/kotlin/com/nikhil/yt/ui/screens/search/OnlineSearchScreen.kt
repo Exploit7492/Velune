@@ -161,7 +161,7 @@ fun OnlineSearchScreen(
                 item(key = "newreleases_header") {
                     SectionHeader(
                         title = stringResource(R.string.new_release_albums),
-                        onClick = { navController.navigate("new_releases") },
+                        onClick = { // navController.navigate("new_releases") // REMOVED: route mismatch },
                         pureBlack = pureBlack
                     )
                 }

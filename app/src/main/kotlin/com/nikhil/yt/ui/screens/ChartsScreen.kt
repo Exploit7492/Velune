@@ -105,7 +105,7 @@ fun ChartsScreen(
         ) {
             if (isLoading || chartsPage == null) {
                 ShimmerHost(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().padding(top = com.nikhil.yt.constants.AppBarHeight + 8.dp),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)

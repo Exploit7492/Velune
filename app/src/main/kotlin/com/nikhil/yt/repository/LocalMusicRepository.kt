@@ -86,6 +86,9 @@ class LocalMusicRepository @Inject constructor(
         localMusicDao.renameFolder(folderId, newName)
     }
 
+    suspend fun getFolderById(folderId: String): LocalFolderEntity? =
+        dao.getFolderById(folderId)
+
     suspend fun deleteFolderFromDevice(folderId: String) {
         localMusicDao.deleteFolder(folderId)
         localMusicDao.deleteTracksByFolder(folderId)

@@ -661,22 +661,7 @@ fun PlayerMenu(
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
 
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.equalizer)) },
-                            leadingContent = {
-                                Icon(
-                                    painter = painterResource(R.drawable.equalizer),
-                                    contentDescription = null,
-                                )
-                            },
-                            modifier = Modifier.clickable { showEqualizerDialog = true },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 56.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                        )
+                        // Equalizer removed — accessible via player top-right icon
 
                         ListItem(
                             headlineContent = { Text(text = stringResource(R.string.tempo_and_pitch)) },
@@ -1402,7 +1387,44 @@ fun EqualizerDialog(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 TopAppBar(
-                    title = { Text(text = stringResource(R.string.equalizer)) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = stringResource(R.string.equalizer))
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(24.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
+                ) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "spectrum")
+                    val barHeights = List(8) { index ->
+                        infiniteTransition.animateFloat(
+                            initialValue = 0.2f, targetValue = 0.8f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(500 + index * 100, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ), label = "bar$index"
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        barHeights.forEach { height ->
+                            Box(
+                                modifier = Modifier.width(6.dp).fillMaxHeight(height.value)
+                                    .background(
+                                        if (eqEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(2.dp)
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(
@@ -1577,6 +1599,46 @@ fun EqualizerDialog(
                     }
 
                     Spacer(Modifier.height(12.dp))
+
+                    // ─── Frequency Response Curve ─────────────────────────────────
+                    val bandLabels = caps.centerFreqHz.map { formatHz(it) }
+                    val barCount = bandLevelsMb.size.coerceAtLeast(bandCount)
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        val barWidth = size.width / barCount * 0.6f
+                        val gap = size.width / barCount * 0.4f
+                        val zeroY = size.height / 2f
+                        val maxH = size.height / 2f - 4f
+
+                        for (i in 0 until barCount) {
+                            val level = bandLevelsMb.getOrNull(i) ?: 0
+                            val normalized = (level.toFloat() - minMb) / (maxMb - minMb).toFloat()
+                            val barH = normalized * maxH * 2 - maxH
+                            val x = i * (barWidth + gap) + gap / 2
+                            val color = when {
+                                level > 500 -> Color(0xFFE57373)
+                                level < -500 -> Color(0xFF64B5F6)
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                            drawRoundRect(
+                                color = color.copy(alpha = 0.8f),
+                                topLeft = androidx.compose.ui.geometry.Offset(x, if (barH >= 0) zeroY - barH else zeroY),
+                                size = androidx.compose.ui.geometry.Size(barWidth, kotlin.math.abs(barH)),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f)
+                            )
+                        }
+                        // Zero line
+                        drawLine(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            start = androidx.compose.ui.geometry.Offset(0f, zeroY),
+                            end = androidx.compose.ui.geometry.Offset(size.width, zeroY),
+                            strokeWidth = 1f
+                        )
+                    }
 
                     EqSection(
                         title = stringResource(R.string.eq_bands),

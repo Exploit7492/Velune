@@ -213,21 +213,31 @@ fun BottomSheetPlayer(
     }
 
     val toggleVideo = {
-        isVideoMode = !isVideoMode
-        if (isVideoMode) {
+        val targetVideoMode = not(isVideoMode)
+        if (targetVideoMode) {
             val videoId = mediaMetadata?.id
-            val videoUrl = videoId?.let {
-                com.nikhil.yt.utils.YTPlayerUtils.getVideoStreamUrl(it)
-            }
-            if (videoUrl != null) {
-                player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
-                player.prepare()
-                player.seekTo(playerConnection.player.currentPosition + 200)
-                player.playWhenReady = true
+            if (videoId != null) {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val videoUrl = try {
+                        com.nikhil.yt.utils.YTPlayerUtils.getVideoStreamUrl(videoId)
+                    } catch (e: Exception) { null }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        if (videoUrl != null) {
+                            isVideoMode = true
+                            player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
+                            player.prepare()
+                            player.seekTo(playerConnection.player.currentPosition + 200)
+                            player.playWhenReady = true
+                        } else {
+                            isVideoMode = false
+                        }
+                    }
+                }
             } else {
                 isVideoMode = false
             }
         } else {
+            isVideoMode = false
             player.stop()
             player.clearMediaItems()
         }
@@ -643,7 +653,7 @@ fun BottomSheetPlayer(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -672,7 +682,7 @@ fun BottomSheetPlayer(
                 ) {
                     Text(
                         text = "Video",
-                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else TextBackgroundColor,
+                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -685,7 +695,7 @@ fun BottomSheetPlayer(
                 Icon(
                     painter = painterResource(R.drawable.equalizer),
                     contentDescription = stringResource(R.string.equalizer),
-                    tint = TextBackgroundColor,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

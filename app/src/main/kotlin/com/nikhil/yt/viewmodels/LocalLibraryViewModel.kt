@@ -42,6 +42,18 @@ class LocalLibraryViewModel @Inject constructor(
     application: Application,
     private val repository: LocalMusicRepository,
 ) : AndroidViewModel(application) {
+    init {
+        viewModelScope.launch {
+            val savedId = dataStore.data.map { it[LastSelectedFolderIdKey] }.first()
+                val folder = repository.getFolderById(savedId)
+                if (folder != null) {
+                    _selectedFolder.value = folder
+                    _folderTracks.value = repository.getTracksByFolder(savedId)
+                }
+            }
+        }
+    }
+
 
     private val dataStore = application.dataStore
 
@@ -158,6 +170,7 @@ class LocalLibraryViewModel @Inject constructor(
     fun selectFolder(folder: LocalFolderEntity) {
         _selectedFolder.value = folder
         viewModelScope.launch(Dispatchers.IO) {
+            dataStore.set(LastSelectedFolderIdKey, folder.id)
             val tracks = repository.getTracksByFolder(folder.id)
             _folderTracks.value = tracks
         }

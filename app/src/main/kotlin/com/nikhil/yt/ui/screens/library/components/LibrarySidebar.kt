@@ -82,22 +82,22 @@ fun LibrarySidebar(
         SidebarItem(
             icon = Icons.Outlined.FavoriteBorder,
             label = "Favourites",
-            action = { onNavigate("favorites"); onDismiss() },
+            action = { onNavigate("auto_playlist/liked"); onDismiss() },
         ),
         SidebarItem(
             icon = Icons.Outlined.CloudDownload,
             label = "Downloads",
-            action = { onNavigate("downloads"); onDismiss() },
+            action = { onNavigate("cache_playlist/downloaded"); onDismiss() },
         ),
         SidebarItem(
             icon = Icons.Outlined.History,
             label = "Recently Played",
-            action = { onNavigate("recentlyPlayed"); onDismiss() },
+            action = { onNavigate("history"); onDismiss() },
         ),
         SidebarItem(
             icon = Icons.Outlined.TrendingUp,
             label = "Most Played",
-            action = { onNavigate("mostPlayed"); onDismiss() },
+            action = { onNavigate("top_playlist/Top"); onDismiss() },
         ),
     )
 
@@ -115,7 +115,7 @@ fun LibrarySidebar(
             )
         }
 
-        // Panel
+        // Panel — icon-only, content-width, no title
         AnimatedVisibility(
             visible = visible,
             enter = slideInHorizontally { it },
@@ -124,63 +124,35 @@ fun LibrarySidebar(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(220.dp)
+                    .width(64.dp)
                     .align(Alignment.CenterEnd)
-                    .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
+                    .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     .border(
                         0.5.dp,
                         primary.copy(alpha = 0.22f),
-                        RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+                        RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
                     )
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(vertical = 20.dp, horizontal = 14.dp),
+                    .padding(vertical = 16.dp, horizontal = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "Library",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp, start = 6.dp),
-                )
-
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = 20.dp),
-                ) {
-                    items(items) { item ->
-                        val isActive = item.label == "Browse" && currentMode == LibraryMode.BROWSE
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isActive) primary.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent)
-                                .clickable(onClick = item.action)
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(end = 12.dp)
-                                    .size(32.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(primary.copy(alpha = 0.10f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = item.label,
-                                    tint = if (isActive) primary else primary.copy(alpha = 0.70f),
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                            Text(
-                                text = item.label,
-                                color = if (isActive) primary else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 13.sp,
-                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
-                            )
-                        }
+                items.forEach { item ->
+                    val isActive = item.label == "Browse" && currentMode == LibraryMode.BROWSE
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isActive) primary.copy(alpha = 0.15f) else androidx.compose.ui.graphics.Color.Transparent)
+                            .clickable(onClick = item.action),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                            tint = if (isActive) primary else primary.copy(alpha = 0.60f),
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                 }
             }

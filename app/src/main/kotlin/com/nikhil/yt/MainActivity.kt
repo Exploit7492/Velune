@@ -1415,6 +1415,7 @@ class MainActivity : ComponentActivity() {
                                                 else MaterialTheme.colorScheme.surfaceContainer
 
                                                 FluidSlidingNavigationBar(
+                                                    badgeCounts = mapOf(Screens.History.route to 0),
                                                     modifier = Modifier
                                                         .align(Alignment.BottomCenter)
                                                         .padding(

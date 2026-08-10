@@ -50,6 +50,8 @@ import com.nikhil.yt.ui.screens.library.components.LocalEmptyState
 import com.nikhil.yt.ui.screens.library.components.QuickPill
 import com.nikhil.yt.ui.screens.library.components.SelectionBottomBar
 import com.nikhil.yt.viewmodels.LocalLibraryViewModel
+import com.nikhil.yt.ui.screens.library.components.InlineFilterRow
+import com.nikhil.yt.ui.screens.library.components.SortPanel
 
 @Composable
 fun LocalLibraryContent(
@@ -63,11 +65,50 @@ fun LocalLibraryContent(
     val selectedCount by viewModel.selectedCount.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
 
+    var showSortPanel by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
+        // Sort / Filter bar
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .align(Alignment.TopCenter),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                InlineFilterRow(
+                    sorts = emptyList(),
+                    onRemove = {},
+                    onToggleDir = {},
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { showSortPanel = !showSortPanel }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Sort,
+                        contentDescription = "Sort",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = showSortPanel) {
+                SortPanel(
+                    availableSorts = emptyList(),
+                    selectedSorts = emptyList(),
+                    onSortSelected = {},
+                    onDismiss = { showSortPanel = false },
+                )
+            }
+        }
+
         PullToRefreshBox(
             isRefreshing = isScanning,
             onRefresh = { viewModel.refreshFolders() },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(top = 52.dp),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -137,7 +178,7 @@ fun BrowseLibraryContent(
                 },
                 label = "Favourites",
                 sub = "Songs you've liked",
-                onClick = { /* navController.navigate("favorites") */ },
+                onClick = { navController.navigate("auto_playlist/liked") },
             )
         }
         item {
@@ -152,7 +193,7 @@ fun BrowseLibraryContent(
                 },
                 label = "Downloads",
                 sub = "Offline listening",
-                onClick = { /* navController.navigate("downloads") */ },
+                onClick = { navController.navigate("cache_playlist/downloaded") },
             )
         }
         item {
@@ -167,7 +208,7 @@ fun BrowseLibraryContent(
                 },
                 label = "Recently Played",
                 sub = "Jump back in",
-                onClick = { /* navController.navigate("recentlyPlayed") */ },
+                onClick = { navController.navigate("history") },
             )
         }
         item {
@@ -182,7 +223,7 @@ fun BrowseLibraryContent(
                 },
                 label = "Most Played",
                 sub = "Your top tracks",
-                onClick = { /* navController.navigate("mostPlayed") */ },
+                onClick = { navController.navigate("top_playlist/Top") },
             )
         }
         item {

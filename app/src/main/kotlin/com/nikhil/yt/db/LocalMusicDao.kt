@@ -45,6 +45,9 @@ interface LocalMusicDao {
     @Query("UPDATE local_folder SET trackCount = :count, lastScan = :lastScan WHERE id = :folderId")
     suspend fun updateFolderTrackCount(folderId: String, count: Int, lastScan: Long)
 
+    @Query("SELECT * FROM local_folder WHERE id = :folderId LIMIT 1")
+    suspend fun getFolderById(folderId: String): LocalFolderEntity?
+
     @Query("DELETE FROM local_folder WHERE id = :folderId")
     suspend fun deleteFolder(folderId: String)
 
