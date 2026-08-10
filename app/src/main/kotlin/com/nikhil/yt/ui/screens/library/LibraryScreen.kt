@@ -144,6 +144,7 @@ fun LibraryScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(top = com.nikhil.yt.constants.AppBarHeight + 8.dp)
             .pointerInput(libraryMode) {
                 var totalDrag = 0f
                 detectHorizontalDragGestures(

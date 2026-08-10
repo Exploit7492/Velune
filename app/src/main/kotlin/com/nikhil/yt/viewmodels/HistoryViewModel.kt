@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.constants.SeenNotificationIdsKey
 import com.nikhil.yt.constants.NotificationLastFetchKey
 import com.nikhil.yt.db.MusicDatabase
@@ -88,7 +89,11 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
         for (region in regions) {
             try {
                 val url = URL("https://trendgetter.vercel.app/api/youtube/videos?region_code=$region&limit=50")
-                val response = url.readText(timeoutMillis = 15000)
+                val connection = url.openConnection().apply {
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                }
+                val response = connection.getInputStream().bufferedReader().use { it.readText() }
                 val data = json.decodeFromString(TrendingResponse.serializer(), response)
                 for (video in data.data) {
                     val viewCount = video.statistics?.view_count?.toLongOrNull() ?: 0L

@@ -9,6 +9,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nikhil.yt.constants.LibraryMode
+import com.nikhil.yt.constants.LastSelectedFolderIdKey
 import com.nikhil.yt.constants.LocalLibraryModeKey
 import com.nikhil.yt.constants.LocalSortKey
 import com.nikhil.yt.constants.LocalSortsKey
@@ -42,19 +43,6 @@ class LocalLibraryViewModel @Inject constructor(
     application: Application,
     private val repository: LocalMusicRepository,
 ) : AndroidViewModel(application) {
-    init {
-        viewModelScope.launch {
-            val savedId = dataStore.data.map { it[LastSelectedFolderIdKey] }.first()
-                val folder = repository.getFolderById(savedId)
-                if (folder != null) {
-                    _selectedFolder.value = folder
-                    _folderTracks.value = repository.getTracksByFolder(savedId)
-                }
-            }
-        }
-    }
-
-
     private val dataStore = application.dataStore
 
     // Permission
@@ -105,6 +93,17 @@ class LocalLibraryViewModel @Inject constructor(
 
     private val _isRefreshingFolder = MutableStateFlow(false)
     val isRefreshingFolder: StateFlow<Boolean> = _isRefreshingFolder.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val savedId = dataStore.data.map { it[LastSelectedFolderIdKey] }.first()
+            val folder = savedId?.let { repository.getFolderById(it) }
+            if (folder != null) {
+                _selectedFolder.value = folder
+                _folderTracks.value = repository.getTracksByFolder(folder.id)
+            }
+        }
+    }
 
     // Sorting
     val sorts: StateFlow<List<SortEntry>> = dataStore.data

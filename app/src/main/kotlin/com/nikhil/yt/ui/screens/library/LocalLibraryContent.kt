@@ -50,8 +50,6 @@ import com.nikhil.yt.ui.screens.library.components.LocalEmptyState
 import com.nikhil.yt.ui.screens.library.components.QuickPill
 import com.nikhil.yt.ui.screens.library.components.SelectionBottomBar
 import com.nikhil.yt.viewmodels.LocalLibraryViewModel
-import com.nikhil.yt.ui.screens.library.components.InlineFilterRow
-import com.nikhil.yt.ui.screens.library.components.SortPanel
 
 @Composable
 fun LocalLibraryContent(
@@ -65,50 +63,11 @@ fun LocalLibraryContent(
     val selectedCount by viewModel.selectedCount.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
 
-    var showSortPanel by remember { mutableStateOf(false) }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        // Sort / Filter bar
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .align(Alignment.TopCenter),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                InlineFilterRow(
-                    sorts = emptyList(),
-                    onRemove = {},
-                    onToggleDir = {},
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { showSortPanel = !showSortPanel }) {
-                    Icon(
-                        imageVector = Icons.Outlined.Sort,
-                        contentDescription = "Sort",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = showSortPanel) {
-                SortPanel(
-                    availableSorts = emptyList(),
-                    selectedSorts = emptyList(),
-                    onSortSelected = {},
-                    onDismiss = { showSortPanel = false },
-                )
-            }
-        }
-
         PullToRefreshBox(
             isRefreshing = isScanning,
             onRefresh = { viewModel.refreshFolders() },
-            modifier = Modifier.fillMaxSize().padding(top = 52.dp),
+            modifier = Modifier.fillMaxSize(),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

@@ -226,6 +226,8 @@ val ShowLikedPlaylistKey = booleanPreferencesKey("show_liked_playlist")
 val ShowDownloadedPlaylistKey = booleanPreferencesKey("show_downloaded_playlist")
 val ShowTopPlaylistKey = booleanPreferencesKey("show_top_playlist")
 val ShowCachedPlaylistKey = booleanPreferencesKey("show_cached_playlist")
+val SeenNotificationIdsKey = stringPreferencesKey("seen_notification_ids")
+val NotificationLastFetchKey = longPreferencesKey("notification_last_fetch")
 
 enum class LibraryViewType {
     LIST,

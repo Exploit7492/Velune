@@ -39,3 +39,4 @@ data class SortEntry(
 val LocalLibraryModeKey = stringPreferencesKey("local_library_mode")
 val LocalSortsKey = stringPreferencesKey("local_sorts_json")
 val LocalSearchActiveKey = booleanPreferencesKey("local_search_active")
+val LastSelectedFolderIdKey = stringPreferencesKey("last_selected_folder_id")

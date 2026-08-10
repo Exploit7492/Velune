@@ -4063,7 +4063,6 @@ class MusicService :
             .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
 
     private fun createDataSourceFactory(): DataSource.Factory {
-        val localFactory = DefaultDataSource.Factory(this)
         val onlineFactory = ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
             // Bypass YouTube resolver for local file URIs
             val uriStr = dataSpec.uri?.toString() ?: ""
@@ -4186,6 +4185,7 @@ class MusicService :
                 return@Factory dataSpec.withUri(streamUrl.toUri()).subrange(dataSpec.uriPositionOffset, length)
             }
         }
+        return onlineFactory
     }
 
     fun retryCurrentFromFreshStream() {

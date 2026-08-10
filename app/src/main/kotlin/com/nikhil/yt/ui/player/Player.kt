@@ -127,6 +127,7 @@ import com.nikhil.yt.ui.utils.ShowMediaInfo
 import com.nikhil.yt.utils.rememberEnumPreference
 import com.nikhil.yt.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -213,7 +214,7 @@ fun BottomSheetPlayer(
     }
 
     val toggleVideo = {
-        val targetVideoMode = not(isVideoMode)
+        val targetVideoMode = !isVideoMode
         if (targetVideoMode) {
             val videoId = mediaMetadata?.id
             if (videoId != null) {
