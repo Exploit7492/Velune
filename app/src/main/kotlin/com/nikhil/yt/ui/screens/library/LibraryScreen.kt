@@ -15,6 +15,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,14 +81,36 @@ fun LibraryScreen(navController: NavController) {
     }
 
     if (!permissionGranted) {
-        LocalMusicPermissionGate(
-            onGranted = { },
-            onRequest = { showPermissionDenied = true },
-        )
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+        // Re-check permission whenever the user comes back to this screen
+        // (e.g. after granting it from the system Settings app).
+        androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    viewModel.checkPermission()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+
         if (showPermissionDenied) {
             PermissionDeniedScreen(
-                onOpenSettings = { },
+                onOpenSettings = {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", context.packageName, null),
+                    )
+                    context.startActivity(intent)
+                },
                 onCancel = { showPermissionDenied = false },
+            )
+        } else {
+            LocalMusicPermissionGate(
+                onGranted = { viewModel.checkPermission() },
+                onRequest = { showPermissionDenied = true },
             )
         }
         return
@@ -117,7 +141,27 @@ fun LibraryScreen(navController: NavController) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(libraryMode) {
+                var totalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                    onDragEnd = {
+                        val threshold = 120f
+                        when {
+                            totalDrag < -threshold -> showSidebar = true
+                            totalDrag > threshold && !showSidebar ->
+                                viewModel.setLibraryMode(
+                                    if (libraryMode == LibraryMode.BROWSE) LibraryMode.LOCAL else LibraryMode.BROWSE
+                                )
+                        }
+                    },
+                )
+            },
+    ) {
         if (!selectionMode) {
             LibraryModeHeader(
                 mode = libraryMode,
