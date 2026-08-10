@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -212,35 +213,41 @@ fun FolderDetailScreen(
             )
 
             // ── Track List ───────────────────────────────────────────────────
-            if (isScanning) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(
-                        color = primary,
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-            } else if (tracks.isEmpty()) {
-                LocalEmptyState(
-                    title = if (searchQuery.isNotBlank()) "No matches" else "No tracks",
-                    subtitle = if (searchQuery.isNotBlank()) "Try a different search" else "Pull down to refresh",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(tracks, key = { it.id }) { track ->
-                        TrackRow(
-                            track = track,
-                            isPlaying = currentTrackId == track.id,
-                            onClick = {
-                                val playlist = buildPlaylist(tracks, track)
-                                onPlayTrack(track, playlist)
-                            },
+            PullToRefreshBox(
+                isRefreshing = isScanning,
+                onRefresh = { viewModel.refreshSelectedFolder() },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (isScanning) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            color = primary,
+                            modifier = Modifier.size(32.dp),
                         )
+                    }
+                } else if (tracks.isEmpty()) {
+                    LocalEmptyState(
+                        title = if (searchQuery.isNotBlank()) "No matches" else "No tracks",
+                        subtitle = if (searchQuery.isNotBlank()) "Try a different search" else "Pull down to refresh",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(tracks, key = { it.id }) { track ->
+                            TrackRow(
+                                track = track,
+                                isPlaying = currentTrackId == track.id,
+                                onClick = {
+                                    val playlist = buildPlaylist(tracks, track)
+                                    onPlayTrack(track, playlist)
+                                },
+                            )
+                        }
                     }
                 }
             }

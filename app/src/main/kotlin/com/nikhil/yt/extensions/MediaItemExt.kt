@@ -94,7 +94,7 @@ fun com.nikhil.yt.db.entities.LocalTrackEntity.toMediaItem(): MediaItem {
         id = id,
         title = title,
         artists = listOf(com.nikhil.yt.models.Artist(name = artist, id = "")),
-        duration = duration,
+        duration = (duration / 1000L).toInt(),
         thumbnailUrl = artworkUri,
         album = com.nikhil.yt.models.Album(title = album, id = folderId),
     )

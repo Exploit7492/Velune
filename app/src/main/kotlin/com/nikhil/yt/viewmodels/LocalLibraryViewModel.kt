@@ -91,6 +91,8 @@ class LocalLibraryViewModel @Inject constructor(
     private val _folderTracks = MutableStateFlow<List<LocalTrackEntity>>(emptyList())
     val folderTracks: StateFlow<List<LocalTrackEntity>> = _folderTracks.asStateFlow()
 
+    private var folderTracksJob: kotlinx.coroutines.Job? = null
+
     // Sorting
     val sorts: StateFlow<List<SortEntry>> = dataStore.data
         .map { prefs ->
@@ -144,6 +146,7 @@ class LocalLibraryViewModel @Inject constructor(
             _isScanning.value = true
             try {
                 repository.refreshAvailableAlbums()
+                repository.scanAllWatchedFolders()
             } catch (e: Exception) {
                 Timber.e(e, "refreshFolders failed")
             } finally {
@@ -154,13 +157,34 @@ class LocalLibraryViewModel @Inject constructor(
 
     fun selectFolder(folder: LocalFolderEntity) {
         _selectedFolder.value = folder
+        folderTracksJob?.cancel()
+        folderTracksJob = viewModelScope.launch(Dispatchers.IO) {
+            repository.tracksByFolderFlow(folder.id).collect { tracks ->
+                _folderTracks.value = tracks
+            }
+        }
+    }
+
+    /** Re-scans just the currently open folder (e.g. from a pull-to-refresh gesture). */
+    fun refreshSelectedFolder() {
+        val folder = _selectedFolder.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val tracks = repository.getTracksByFolder(folder.id)
-            _folderTracks.value = tracks
+            _isScanning.value = true
+            _currentScanningFolder.value = folder.id
+            try {
+                repository.scanFolder(folder.id)
+            } catch (e: Exception) {
+                Timber.e(e, "refreshSelectedFolder failed")
+            } finally {
+                _isScanning.value = false
+                _currentScanningFolder.value = null
+            }
         }
     }
 
     fun clearSelectedFolder() {
+        folderTracksJob?.cancel()
+        folderTracksJob = null
         _selectedFolder.value = null
         _folderTracks.value = emptyList()
         _searchQuery.value = ""

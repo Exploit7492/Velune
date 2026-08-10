@@ -169,7 +169,7 @@ class LocalMusicRepository @Inject constructor(
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
         val selection = "$audioSelection AND ${MediaStore.Audio.Media.DATA} LIKE ?"
-        val selectionArgs = arrayOf("$folderPath%")
+        val selectionArgs = arrayOf("$folderPath/%")
 
         context.contentResolver.query(
             uri,

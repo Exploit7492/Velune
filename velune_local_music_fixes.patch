@@ -1,0 +1,207 @@
+diff --git a/app/src/main/kotlin/com/nikhil/yt/di/AppModule.kt b/app/src/main/kotlin/com/nikhil/yt/di/AppModule.kt
+index a6f6f71..1b03519 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/di/AppModule.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/di/AppModule.kt
+@@ -21,7 +21,6 @@ import androidx.media3.datasource.cache.SimpleCache
+ import com.nikhil.yt.constants.MaxSongCacheSizeKey
+ import com.nikhil.yt.db.InternalDatabase
+ import com.nikhil.yt.repository.LocalMusicRepository
+-import com.nikhil.yt.repository.LocalMusicRepository
+ import com.nikhil.yt.db.MusicDatabase
+ import com.nikhil.yt.utils.dataStore
+ import com.nikhil.yt.utils.get
+@@ -154,15 +153,9 @@ object AppModule {
+         @ApplicationContext context: Context,
+         databaseProvider: DatabaseProvider,
+     ): Cache =
+-    @Singleton
+-    @Provides
+-    fun provideLocalMusicRepository(
+-        @ApplicationContext context: Context,
+-        database: MusicDatabase,
+-    ): LocalMusicRepository = LocalMusicRepository(
+-        context = context,
+-        localMusicDao = database.localMusicDao,
+-    )
++        LazyCache {
++            SimpleCache(context.filesDir.resolve("download"), NoOpCacheEvictor(), databaseProvider)
++        }
+ 
+     @Singleton
+     @Provides
+@@ -173,8 +166,4 @@ object AppModule {
+         context = context,
+         localMusicDao = database.localMusicDao,
+     )
+-
+-        LazyCache {
+-            SimpleCache(context.filesDir.resolve("download"), NoOpCacheEvictor(), databaseProvider)
+-        }
+ }
+diff --git a/app/src/main/kotlin/com/nikhil/yt/extensions/MediaItemExt.kt b/app/src/main/kotlin/com/nikhil/yt/extensions/MediaItemExt.kt
+index 0292cda..ff08175 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/extensions/MediaItemExt.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/extensions/MediaItemExt.kt
+@@ -94,7 +94,7 @@ fun com.nikhil.yt.db.entities.LocalTrackEntity.toMediaItem(): MediaItem {
+         id = id,
+         title = title,
+         artists = listOf(com.nikhil.yt.models.Artist(name = artist, id = "")),
+-        duration = duration,
++        duration = (duration / 1000L).toInt(),
+         thumbnailUrl = artworkUri,
+         album = com.nikhil.yt.models.Album(title = album, id = folderId),
+     )
+diff --git a/app/src/main/kotlin/com/nikhil/yt/repository/LocalMusicRepository.kt b/app/src/main/kotlin/com/nikhil/yt/repository/LocalMusicRepository.kt
+index f92b8e6..3aa15ba 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/repository/LocalMusicRepository.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/repository/LocalMusicRepository.kt
+@@ -169,7 +169,7 @@ class LocalMusicRepository @Inject constructor(
+         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+ 
+         val selection = "$audioSelection AND ${MediaStore.Audio.Media.DATA} LIKE ?"
+-        val selectionArgs = arrayOf("$folderPath%")
++        val selectionArgs = arrayOf("$folderPath/%")
+ 
+         context.contentResolver.query(
+             uri,
+diff --git a/app/src/main/kotlin/com/nikhil/yt/ui/screens/library/FolderDetailScreen.kt b/app/src/main/kotlin/com/nikhil/yt/ui/screens/library/FolderDetailScreen.kt
+index 3293a19..2308fdf 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/ui/screens/library/FolderDetailScreen.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/ui/screens/library/FolderDetailScreen.kt
+@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.Text
++import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.collectAsState
+@@ -212,36 +213,42 @@ fun FolderDetailScreen(
+             )
+ 
+             // ── Track List ───────────────────────────────────────────────────
+-            if (isScanning) {
+-                Box(
+-                    modifier = Modifier.fillMaxSize(),
+-                    contentAlignment = Alignment.Center,
+-                ) {
+-                    CircularProgressIndicator(
+-                        color = primary,
+-                        modifier = Modifier.size(32.dp),
+-                    )
+-                }
+-            } else if (tracks.isEmpty()) {
+-                LocalEmptyState(
+-                    title = if (searchQuery.isNotBlank()) "No matches" else "No tracks",
+-                    subtitle = if (searchQuery.isNotBlank()) "Try a different search" else "Pull down to refresh",
+-                    modifier = Modifier.fillMaxWidth(),
+-                )
+-            } else {
+-                LazyColumn(
+-                    modifier = Modifier.fillMaxSize(),
+-                ) {
+-                    items(tracks, key = { it.id }) { track ->
+-                        TrackRow(
+-                            track = track,
+-                            isPlaying = currentTrackId == track.id,
+-                            onClick = {
+-                                val playlist = buildPlaylist(tracks, track)
+-                                onPlayTrack(track, playlist)
+-                            },
++            PullToRefreshBox(
++                isRefreshing = isScanning,
++                onRefresh = { viewModel.refreshSelectedFolder() },
++                modifier = Modifier.fillMaxSize(),
++            ) {
++                if (isScanning) {
++                    Box(
++                        modifier = Modifier.fillMaxSize(),
++                        contentAlignment = Alignment.Center,
++                    ) {
++                        CircularProgressIndicator(
++                            color = primary,
++                            modifier = Modifier.size(32.dp),
+                         )
+                     }
++                } else if (tracks.isEmpty()) {
++                    LocalEmptyState(
++                        title = if (searchQuery.isNotBlank()) "No matches" else "No tracks",
++                        subtitle = if (searchQuery.isNotBlank()) "Try a different search" else "Pull down to refresh",
++                        modifier = Modifier.fillMaxWidth(),
++                    )
++                } else {
++                    LazyColumn(
++                        modifier = Modifier.fillMaxSize(),
++                    ) {
++                        items(tracks, key = { it.id }) { track ->
++                            TrackRow(
++                                track = track,
++                                isPlaying = currentTrackId == track.id,
++                                onClick = {
++                                    val playlist = buildPlaylist(tracks, track)
++                                    onPlayTrack(track, playlist)
++                                },
++                            )
++                        }
++                    }
+                 }
+             }
+         }
+diff --git a/app/src/main/kotlin/com/nikhil/yt/viewmodels/LocalLibraryViewModel.kt b/app/src/main/kotlin/com/nikhil/yt/viewmodels/LocalLibraryViewModel.kt
+index 6d21948..1101621 100644
+--- a/app/src/main/kotlin/com/nikhil/yt/viewmodels/LocalLibraryViewModel.kt
++++ b/app/src/main/kotlin/com/nikhil/yt/viewmodels/LocalLibraryViewModel.kt
+@@ -91,6 +91,8 @@ class LocalLibraryViewModel @Inject constructor(
+     private val _folderTracks = MutableStateFlow<List<LocalTrackEntity>>(emptyList())
+     val folderTracks: StateFlow<List<LocalTrackEntity>> = _folderTracks.asStateFlow()
+ 
++    private var folderTracksJob: kotlinx.coroutines.Job? = null
++
+     // Sorting
+     val sorts: StateFlow<List<SortEntry>> = dataStore.data
+         .map { prefs ->
+@@ -144,6 +146,7 @@ class LocalLibraryViewModel @Inject constructor(
+             _isScanning.value = true
+             try {
+                 repository.refreshAvailableAlbums()
++                repository.scanAllWatchedFolders()
+             } catch (e: Exception) {
+                 Timber.e(e, "refreshFolders failed")
+             } finally {
+@@ -154,13 +157,34 @@ class LocalLibraryViewModel @Inject constructor(
+ 
+     fun selectFolder(folder: LocalFolderEntity) {
+         _selectedFolder.value = folder
++        folderTracksJob?.cancel()
++        folderTracksJob = viewModelScope.launch(Dispatchers.IO) {
++            repository.tracksByFolderFlow(folder.id).collect { tracks ->
++                _folderTracks.value = tracks
++            }
++        }
++    }
++
++    /** Re-scans just the currently open folder (e.g. from a pull-to-refresh gesture). */
++    fun refreshSelectedFolder() {
++        val folder = _selectedFolder.value ?: return
+         viewModelScope.launch(Dispatchers.IO) {
+-            val tracks = repository.getTracksByFolder(folder.id)
+-            _folderTracks.value = tracks
++            _isScanning.value = true
++            _currentScanningFolder.value = folder.id
++            try {
++                repository.scanFolder(folder.id)
++            } catch (e: Exception) {
++                Timber.e(e, "refreshSelectedFolder failed")
++            } finally {
++                _isScanning.value = false
++                _currentScanningFolder.value = null
++            }
+         }
+     }
+ 
+     fun clearSelectedFolder() {
++        folderTracksJob?.cancel()
++        folderTracksJob = null
+         _selectedFolder.value = null
+         _folderTracks.value = emptyList()
+         _searchQuery.value = ""
