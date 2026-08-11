@@ -27,7 +27,6 @@
     <string name="allows_for_sync_witch_youtube">Note: This allows for syncing with YouTube Music. This is NOT changeable later.</string>
     <string name="generating_image">Generating image</string>
     <string name="please_wait">Please wait</string>
-    <string name="cancel">Cancel</string>
     <string name="share_lyrics">Share lyrics</string>
     <string name="share_as_text">Share as text</string>
     <string name="share_as_image">Share as image</string>
@@ -60,7 +59,6 @@
     <string name="link_copied">Link copied to clipboard</string>
     <string name="starting_radio">Starting radio</string>
     <string name="now_playing">Now Playing</string>
-    <string name="close">Close</string>
     <string name="minimum_volume">Minimum Volume</string>
     <string name="maximum_volume">Maximum Volume</string>
     <string name="hide_player_thumbnail">Hide Player Thumbnail</string>
@@ -279,12 +277,8 @@
     <string name="restore_step_restoring_settings">Restoring settings</string>
     <string name="restore_step_restoring_file">Restoring %1$s</string>
     <string name="restore_step_restarting">Restarting app</string>
-    <string name="romanization">Romanization</string>
     <string name="romanization_enable">Enable romanization</string>
     <string name="romanization_enable_desc">Show romanized lyrics for non-Latin scripts</string>
-    <string name="ringtone_set">Set as ringtone</string>
-    <string name="ringtone_trim">Trim ringtone</string>
-    <string name="uptime">Uptime</string>
     <string name="uptime_stats">Listening uptime</string>
     <string name="uptime_stats_desc">Total time spent listening to music</string>
 </resources>
