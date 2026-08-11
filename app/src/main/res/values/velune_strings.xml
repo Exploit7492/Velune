@@ -279,7 +279,6 @@
     <string name="restore_step_restoring_settings">Restoring settings</string>
     <string name="restore_step_restoring_file">Restoring %1$s</string>
     <string name="restore_step_restarting">Restarting app</string>
-</resources>
     <string name="romanization">Romanization</string>
     <string name="romanization_enable">Enable romanization</string>
     <string name="romanization_enable_desc">Show romanized lyrics for non-Latin scripts</string>
@@ -288,3 +287,4 @@
     <string name="uptime">Uptime</string>
     <string name="uptime_stats">Listening uptime</string>
     <string name="uptime_stats_desc">Total time spent listening to music</string>
+</resources>
