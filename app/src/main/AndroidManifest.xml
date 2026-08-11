@@ -274,7 +274,7 @@
             android:finishOnTaskLaunch="true"
             android:launchMode="singleInstance"
             android:noHistory="true"
-            android:theme="@style/Theme.Velune" />
+            android:theme="@style/Theme.VeluneApp" />
     
         <service
             android:name=".quicksettings.MusicRecognizerTileService"
