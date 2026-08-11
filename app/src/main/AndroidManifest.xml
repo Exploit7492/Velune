@@ -291,7 +291,7 @@
 
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com\.nikhil\.yt.androidx-startup"
+            android:authorities="com.nikhil.yt.androidx-startup"
             android:exported="false"
             tools:node="merge">
             <meta-data
