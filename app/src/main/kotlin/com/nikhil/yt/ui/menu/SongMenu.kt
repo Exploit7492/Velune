@@ -485,6 +485,21 @@ fun SongMenu(
                 text = editText,
                 onClick = { showEditDialog = true },
             ),
+        NewAction(
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.download),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            text = exportText,
+            onClick = {
+                onDismiss()
+                exportLauncher.launch(null)
+            },
+        ),
         )
     }
 

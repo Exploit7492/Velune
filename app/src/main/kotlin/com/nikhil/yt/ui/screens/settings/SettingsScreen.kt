@@ -397,6 +397,21 @@ fun SettingsScreen(
                         onClick = { navController.navigate("settings/content") },
                     ),
                     PremiumSettingsItem(
+                        icon = painterResource(R.drawable.auto_awesome),
+                        title = stringResource(R.string.ai_lyrics_translation),
+                        subtitle = stringResource(R.string.ai_lyrics_translation_subtitle),
+                        accentColor = MaterialTheme.colorScheme.tertiary,
+                        keywords = listOf(
+                            "ai",
+                            "translate",
+                            "translation",
+                            "lyrics",
+                            "zai",
+                            "openrouter",
+                        ),
+                        onClick = { navController.navigate("settings/ai") },
+                    ),
+                    PremiumSettingsItem(
                         icon = painterResource(R.drawable.token),
                         title = stringResource(R.string.po_token_generation),
                         subtitle = stringResource(R.string.po_token_generation_subtitle),

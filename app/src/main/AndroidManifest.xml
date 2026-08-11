@@ -142,6 +142,11 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.FileProvider"
@@ -214,6 +219,28 @@
                 android:resource="@xml/velune_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".ui.widget.PlaylistWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/velune_playlist_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.TurntableWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/velune_turntable_widget_info" />
+        </receiver>
+
         <activity
             android:name=".ui.screens.settings.PoTokenExtractionActivity"
             android:exported="false"
@@ -222,6 +249,9 @@
         <service
             android:name=".MusicService"
             android:enabled="true"
+            android:exported="false" />
+
+            <service android:name=".playback.AudioExportService"
             android:exported="false" />
 
     </application>

@@ -59,6 +59,12 @@ android {
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastfmApiKey\"")
         buildConfigField("String", "LASTFM_SECRET", "\"$lastfmSecret\"")
 
+        val zaiApiKey =
+            localProperties.getProperty("ZAI_API_KEY")
+                ?: System.getenv("ZAI_API_KEY")
+                ?: ""
+        buildConfigField("String", "ZAI_API_KEY", "\"$zaiApiKey\"")
+
         val togetherBearerToken =
             localProperties.getProperty("TOGETHER_BEARER_TOKEN")
                 ?: System.getenv("TOGETHER_BEARER_TOKEN")
@@ -221,6 +227,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     implementation(libs.shimmer)
+    implementation(libs.ucrop)
+    implementation(libs.lottie.compose)
 
     implementation(libs.media3)
     implementation("androidx.media3:media3-exoplayer-hls:${libs.versions.media3.get()}")
@@ -249,6 +257,9 @@ dependencies {
     implementation(project(":kizzy"))
     implementation(project(":simpmusic"))
     implementation(project(":canvas"))
+    implementation(project(":paxsenixlyrics"))
+    implementation(project(":youlyplus"))
+    implementation(project(":unison"))
     implementation("com.github.Kyant0:m3color:2025.4")
     implementation(libs.backdrop)
 
@@ -264,6 +275,8 @@ dependencies {
     coreLibraryDesugaring(libs.desugaring)
 
     implementation(libs.timber)
+    implementation(libs.ffmpeg.kit)
+    implementation(libs.documentfile)
     testImplementation(libs.junit)
     // Ensure ProcessLifecycleOwner is available for the presence manager and CI unit tests
     implementation("com.github.therealbush:translator:1.1.1")

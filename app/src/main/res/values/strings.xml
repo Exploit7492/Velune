@@ -790,4 +790,20 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="token_copied">Token copied to clipboard</string>
     <string name="no_visitor_data">No visitor data available. Tokens cannot be generated.</string>
     <string name="extracting_from_url">Extracting tokens from URL…</string>
+    <string name="ai_provider">AI Provider</string>
+    <string name="ai_base_url">Base URL</string>
+    <string name="ai_setup_guide">API Configuration</string>
+    <string name="ai_api_key">API Key</string>
+    <string name="ai_model">Model</string>
+    <string name="ai_translation_mode">Translation Mode</string>
+    <string name="ai_translation_literal">Literal</string>
+    <string name="ai_translation_transcribed">Transcribed</string>
+    <string name="ai_target_language">Target Language</string>
+    <string name="ai_auto_translate">Auto-Translate Lyrics</string>
+    <string name="ai_auto_translate_desc">Automatically translate lyrics into your target language when available</string>
+    <string name="ai_lyrics_translation">AI &amp; Lyrics Translation</string>
+    <string name="ai_lyrics_translation_subtitle">Configure AI provider and translation</string>
+    <string name="not_set">Not set</string>
+    <string name="export_to_mp3">Export to MP3</string>
+    <string name="export_started">Export started</string>
 </resources>

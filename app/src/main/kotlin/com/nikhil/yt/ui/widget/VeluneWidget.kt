@@ -288,11 +288,13 @@ fun updateVeluneWidgetState(context: Context, title: String, artist: String, isP
     CoroutineScope(Dispatchers.IO).launch {
         val manager = GlanceAppWidgetManager(context)
         val glanceIds = manager.getGlanceIds(VeluneWidget::class.java)
-        if (glanceIds.isEmpty()) return@launch
+        val turntableGlanceIds = manager.getGlanceIds(TurntableWidget::class.java)
+        if (glanceIds.isEmpty() && turntableGlanceIds.isEmpty()) return@launch
 
+        val stateSourceId = glanceIds.firstOrNull() ?: turntableGlanceIds.first()
         val state: Preferences = androidx.glance.appwidget.state.getAppWidgetState(
             context = context,
-            glanceId = glanceIds.first(),
+            glanceId = stateSourceId,
             definition = PreferencesGlanceStateDefinition
         )
 
@@ -328,7 +330,7 @@ fun updateVeluneWidgetState(context: Context, title: String, artist: String, isP
             }
         }
 
-        glanceIds.forEach { glanceId ->
+        (glanceIds + turntableGlanceIds).forEach { glanceId ->
             updateAppWidgetState(context, glanceId) { prefs ->
                 prefs[widgetTitleKey] = title
                 prefs[widgetArtistKey] = artist
@@ -339,7 +341,11 @@ fun updateVeluneWidgetState(context: Context, title: String, artist: String, isP
                     prefs[widgetArtPathKey] = downloadedArtPath
                 }
             }
-            VeluneWidget().update(context, glanceId)
+            if (glanceId in turntableGlanceIds) {
+                TurntableWidget().update(context, glanceId)
+            } else {
+                VeluneWidget().update(context, glanceId)
+            }
         }
     }
 }

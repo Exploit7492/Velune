@@ -1624,6 +1624,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLinkIntent(intent: Intent, navController: NavHostController) {
+        intent.getStringExtra(com.nikhil.yt.ui.widget.EXTRA_OPEN_LOCAL_PLAYLIST_ID)?.let { playlistId ->
+            navController.navigate("local_playlist/$playlistId")
+            return
+        }
+
         val uri = intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)?.toUri() ?: return
         val coroutineScope = lifecycleScope
 

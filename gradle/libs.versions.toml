@@ -1,4 +1,6 @@
 [versions]
+ffmpegKit = "6.0-2"
+documentfile = "1.0.1"
 appcompat = "1.7.1"
 androidGradlePlugin = "9.1.1"
 annotation = "1.9.1"
@@ -26,6 +28,8 @@ workManager = "2.11.1"
 composeReorderable = "3.0.0"
 squigglyslider = "1.0.0"
 shimmer = "1.3.3"
+ucrop = "2.2.11"
+lottie = "6.6.2"
 palette = "1.0.0"
 backdrop = "1.0.6"
 apacheLang3 = "3.20.0"
@@ -39,6 +43,8 @@ rhino = "1.9.1"
 multiplatformMarkdown = "0.39.2"
 
 [libraries]
+ffmpeg-kit = { module = "com.arthenica:ffmpeg-kit-audio", version.ref = "ffmpegKit" }
+documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
@@ -71,6 +77,8 @@ coil = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 
 shimmer = { module = "com.valentinilk.shimmer:compose-shimmer", version.ref = "shimmer" }
+ucrop = { module = "com.github.yalantis:ucrop", version.ref = "ucrop" }
+lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie" }
 
 palette = { module = "androidx.palette:palette-ktx", version.ref = "palette" }
 backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }

@@ -44,6 +44,9 @@ constructor(
             KuGouLyricsProvider,
             YouTubeSubtitleLyricsProvider,
             YouTubeLyricsProvider,
+            PaxSenixLyricsProvider,
+            YouLyPlusLyricsProvider,
+            UnisonLyricsProvider,
         )
 
     private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)

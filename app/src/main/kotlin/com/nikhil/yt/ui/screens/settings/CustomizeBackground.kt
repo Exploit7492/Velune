@@ -26,6 +26,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.yalantis.ucrop.UCrop
+import androidx.core.content.FileProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,13 +62,33 @@ fun CustomizeBackground(
     val (contrast, onContrastChange) = rememberPreference(PlayerCustomContrastKey, 1f)
     val (brightness, onBrightnessChange) = rememberPreference(PlayerCustomBrightnessKey, 1f)
 
+    var pendingCropDestUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cropLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        if (res.resultCode == android.app.Activity.RESULT_OK) {
+            val output = res.data?.let { UCrop.getOutput(it) } ?: pendingCropDestUri
+            if (output != null) onImageUriChange(output.toString())
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
-            onImageUriChange(uri.toString())
+            val destFile = java.io.File(context.cacheDir, "player_background_crop_${System.currentTimeMillis()}.jpg")
+            val destUri = FileProvider.getUriForFile(context, "${context.packageName}.FileProvider", destFile)
+            pendingCropDestUri = destUri
+
+            val options = UCrop.Options().apply {
+                setCompressionFormat(android.graphics.Bitmap.CompressFormat.JPEG)
+                setCompressionQuality(90)
+                setToolbarTitle(context.getString(R.string.customize_background_title))
+            }
+
+            val intent = UCrop.of(uri, destUri)
+                .withOptions(options)
+                .getIntent(context)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            cropLauncher.launch(intent)
         }
     }
 

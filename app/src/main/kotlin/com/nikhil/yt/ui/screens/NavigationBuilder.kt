@@ -71,6 +71,7 @@ import com.nikhil.yt.ui.screens.settings.VeluneSettingsScreen
 import com.nikhil.yt.ui.screens.settings.VeluneAccountSettingsScreen
 import com.nikhil.yt.ui.screens.settings.ChangelogScreen
 import com.nikhil.yt.ui.screens.settings.ContentSettings
+import com.nikhil.yt.ui.screens.settings.AiSettings
 import com.nikhil.yt.ui.screens.settings.DarkMode
 import com.nikhil.yt.ui.screens.settings.DiscordLoginScreen
 import com.nikhil.yt.ui.screens.settings.DiscordSettings
@@ -316,6 +317,9 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/content") {
         ContentSettings(navController, scrollBehavior)
+    }
+    composable("settings/ai") {
+        AiSettings(navController, scrollBehavior)
     }
     composable("settings/player") {
         PlayerSettings(navController, scrollBehavior)
