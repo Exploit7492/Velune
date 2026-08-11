@@ -1,3 +1,4 @@
+import com.nikhil.yt.db.entities.SpeedDialItem
 /*
  * Velune - by Nikhil
  * Nikhil
@@ -112,6 +113,7 @@ class MusicDatabase(
 
 @Database(
     entities = [
+        SpeedDialItem::class,
         SongEntity::class,
         ArtistEntity::class,
         AlbumEntity::class,

@@ -825,7 +825,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="preamp_db">Preamp: %1$s dB</string>
     <string name="frequency_hz">Frequency: %1$d Hz</string>
     <string name="gain_db">Gain: %1$s dB</string>
-    <string name="eq_bands">EQ Bands</string>
     <string name="add_band">Add Band</string>
     <string name="remove">Remove</string>
     <string name="paste_json_or_pick_file">Paste JSON or pick a file</string>
@@ -859,10 +858,7 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="load_playlists">Load Playlists</string>
     <string name="logout">Log Out</string>
     <string name="your_playlists">Your Playlists</string>
-    <string name="liked_songs">Liked Songs</string>
-    <string name="refresh">Refresh</string>
     <string name="play_imported">Play All</string>
-    <string name="import_failed">Import Failed</string>
     <string name="close">Close</string>
     <string name="data_saver">Data Saver</string>
     <string name="data_saver_desc">Reduce streaming quality, disable background fetches, and suppress metadata lookups</string>
@@ -903,16 +899,12 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="ai_playlist">AI Playlist</string>
     <string name="ai_playlist_desc">Generate playlists with AI</string>
     <string name="ai_recommendations">AI Recommendations</string>
-    <string name="ai_api_key">AI API Key</string>
-    <string name="ai_base_url">AI Base URL</string>
-    <string name="ai_model">AI Model</string>
     <string name="cast">Cast</string>
     <string name="cast_desc">Enable Chromecast support</string>
     <string name="auto_update">Auto Update</string>
     <string name="auto_update_desc">Check for updates automatically</string>
     <string name="spotify">Spotify</string>
     <string name="spotify_desc">Connect Spotify account</string>
-    <string name="spotify_import">Import Spotify Playlist</string>
     <string name="romanization">Romanization</string>
     <string name="romanization_desc">Show romanized lyrics for CJK</string>
     <string name="ringtone">Set as Ringtone</string>
