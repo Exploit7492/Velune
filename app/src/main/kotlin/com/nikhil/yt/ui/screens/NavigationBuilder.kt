@@ -390,4 +390,10 @@ fun NavGraphBuilder.navigationBuilder(
     composable("login") {
         LoginScreen(navController)
     }
+        composable("eq/axion") { AxionEqScreen(navController, scrollBehavior) }
 }
+
+        composable("ambient") { AmbientModeScreen(navController, scrollBehavior) }
+        composable("player/floating") { FloatingMiniPlayer() }
+        composable("settings/search") { SearchableSettings(navController, scrollBehavior) }
+        composable("settings/appearance/glass") { GlassEffectSettings(navController, scrollBehavior) }

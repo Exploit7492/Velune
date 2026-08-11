@@ -1,14 +1,9 @@
-/*
- * Velune - by Nikhil
- * Nikhil
- * Licensed Under GPL-3.0
- */
-
 
 
 package com.nikhil.yt.playback
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.media3.common.MediaItem
@@ -21,10 +16,10 @@ import kotlin.time.Duration.Companion.minutes
 
 class SleepTimer(
     private val scope: CoroutineScope,
-    val player: Player,
+    var player: Player,
 ) : Player.Listener {
     private var sleepTimerJob: Job? = null
-    var triggerTime by mutableStateOf(-1L)
+    var triggerTime by mutableLongStateOf(-1L)
         private set
     var pauseWhenSongEnd by mutableStateOf(false)
         private set
@@ -36,14 +31,40 @@ class SleepTimer(
         sleepTimerJob = null
         if (minute == -1) {
             pauseWhenSongEnd = true
+            triggerTime = -1L
         } else {
+            pauseWhenSongEnd = false
             triggerTime = System.currentTimeMillis() + minute.minutes.inWholeMilliseconds
             sleepTimerJob =
                 scope.launch {
-                    delay(minute.minutes)
-                    player.pause()
+                    val delayTime = triggerTime - System.currentTimeMillis()
+                    if (delayTime > 0) {
+                        delay(delayTime)
+                    }
+                    fadeOutAndPause()
                     triggerTime = -1L
                 }
+        }
+    }
+
+    private suspend fun fadeOutAndPause() {
+        val initialVolume = player.volume
+        val fadeDuration = 3000L
+        val steps = 30
+        val stepDelay = fadeDuration / steps
+        for (i in steps downTo 1) {
+            player.volume = initialVolume * (i.toFloat() / steps)
+            delay(stepDelay)
+        }
+        player.pause()
+        player.volume = initialVolume
+    }
+
+    
+    fun notifySongTransition() {
+        if (pauseWhenSongEnd) {
+            pauseWhenSongEnd = false
+            scope.launch { fadeOutAndPause() }
         }
     }
 
@@ -60,7 +81,7 @@ class SleepTimer(
     ) {
         if (pauseWhenSongEnd) {
             pauseWhenSongEnd = false
-            player.pause()
+            scope.launch { fadeOutAndPause() }
         }
     }
 
@@ -69,7 +90,7 @@ class SleepTimer(
     ) {
         if (playbackState == Player.STATE_ENDED && pauseWhenSongEnd) {
             pauseWhenSongEnd = false
-            player.pause()
+            scope.launch { fadeOutAndPause() }
         }
     }
 }

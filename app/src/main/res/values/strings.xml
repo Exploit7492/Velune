@@ -866,4 +866,58 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="close">Close</string>
     <string name="data_saver">Data Saver</string>
     <string name="data_saver_desc">Reduce streaming quality, disable background fetches, and suppress metadata lookups</string>
+
+    <string name="crash_title">Oops! Something went wrong</string>
+    <string name="crash_description">Velune crashed unexpectedly. You can share the crash log to help us fix it.</string>
+    <string name="crash_share">Share crash log</string>
+    <string name="crash_restart">Restart app</string>
+    <string name="crash_copy">Copy to clipboard</string>
+    <string name="network_reload">Retry</string>
+    <string name="network_error">Connection failed</string>
+
+   <string name="automix_duck">Automix duck</string>
+   <string name="automix_duck_desc">Duck audio volume during track transitions</string>
+   <string name="silence_skip">Skip silence</string>
+   <string name="silence_skip_desc">Automatically skip silent sections in tracks</string>
+   <string name="silence_threshold">Silence threshold (dB)</string>
+   <string name="beat_analysis">Beat analysis</string>
+   <string name="beat_analysis_desc">Analyze beats for visual effects and automix</string>
+   <string name="beat_sensitivity">Beat sensitivity</string>
+
+ <string name="axion_eq">Axion EQ</string>
+ <string name="axion_eq_desc">Circular dial equalizer</string>
+ <string name="ambient_mode">Ambient Mode</string>
+ <string name="ambient_mode_desc">Full-screen glow player view</string>
+ <string name="floating_mini_player">Floating Mini Player</string>
+ <string name="floating_mini_player_desc">Floating overlay mini player</string>
+ <string name="canvas_artwork">Canvas Artwork</string>
+ <string name="canvas_artwork_desc">Show canvas video in player</string>
+ <string name="floating_nav_bar">Floating Navigation</string>
+ <string name="floating_nav_bar_desc">Floating tab bar style</string>
+
+    <string name="sponsorblock">SponsorBlock</string>
+    <string name="sponsorblock_desc">Skip sponsor segments in YouTube videos</string>
+    <string name="sponsorblock_categories">Categories to skip</string>
+    <string name="comments">Comments</string>
+    <string name="comments_desc">Show YouTube comments</string>
+    <string name="ai_playlist">AI Playlist</string>
+    <string name="ai_playlist_desc">Generate playlists with AI</string>
+    <string name="ai_recommendations">AI Recommendations</string>
+    <string name="ai_api_key">AI API Key</string>
+    <string name="ai_base_url">AI Base URL</string>
+    <string name="ai_model">AI Model</string>
+    <string name="cast">Cast</string>
+    <string name="cast_desc">Enable Chromecast support</string>
+    <string name="auto_update">Auto Update</string>
+    <string name="auto_update_desc">Check for updates automatically</string>
+    <string name="spotify">Spotify</string>
+    <string name="spotify_desc">Connect Spotify account</string>
+    <string name="spotify_import">Import Spotify Playlist</string>
+    <string name="romanization">Romanization</string>
+    <string name="romanization_desc">Show romanized lyrics for CJK</string>
+    <string name="ringtone">Set as Ringtone</string>
+    <string name="ringtone_trim">Trim Ringtone</string>
+    <string name="ringtone_set">Set Ringtone</string>
+    <string name="uptime">Uptime</string>
+    <string name="uptime_desc">Total listening time</string>
 </resources>

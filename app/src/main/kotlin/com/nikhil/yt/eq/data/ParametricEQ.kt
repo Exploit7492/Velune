@@ -1,24 +1,25 @@
-/*
- * Velune - Parametric EQ band configuration.
- * Ported from Echo Music (GPL-3.0).
- */
-
 package com.nikhil.yt.eq.data
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-data class ParametricEQ(
-    val frequency: Float,
-    val gain: Float,
-    val q: Float,
-    val filterType: FilterType,
-)
 
 @Serializable
-data class ParametricEQProfile(
-    val id: String,
-    val name: String,
-    val preamp: Float = 0f,
-    val bands: List<ParametricEQ> = emptyList(),
+data class ParametricEQBand(
+    val frequency: Double,                      
+    val gain: Double,                           
+    val q: Double = 1.41,                       
+    val filterType: FilterType = FilterType.PK, 
+    val enabled: Boolean = true                 
 )
+
+
+@Serializable
+data class ParametricEQ(
+    val preamp: Double,                         
+    val bands: List<ParametricEQBand>,          
+    val metadata: Map<String, String> = emptyMap()  
+) {
+    companion object {
+        const val MAX_BANDS = 20  
+    }
+}

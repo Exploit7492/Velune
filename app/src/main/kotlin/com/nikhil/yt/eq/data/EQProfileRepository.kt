@@ -1,100 +1,172 @@
-/*
- * Velune - Parametric EQ profile repository.
- * Manages built-in and user-saved EQ profiles.
- * Ported from Echo Music (GPL-3.0).
- */
-
 package com.nikhil.yt.eq.data
 
 import android.content.Context
-import com.nikhil.yt.playback.EqualizerJson
-import kotlinx.serialization.encodeToString
-import java.io.File
+import android.content.SharedPreferences
+import android.util.Log
+import androidx.core.content.edit
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class EQProfileRepository(private val context: Context) {
 
-    private val userProfilesDir: File
-        get() = context.filesDir.resolve("eq_profiles").also { it.mkdirs() }
+@Serializable
+data class SavedEQProfile(
+    val id: String,                       
+    val name: String,                     
+    val deviceModel: String,              
+    val bands: List<ParametricEQBand>,    
+    val preamp: Double = 0.0,             
+    val isCustom: Boolean = false,        
+    val isActive: Boolean = false,        
+    val addedTimestamp: Long = System.currentTimeMillis()
+)
 
-    private val builtInProfiles: List<ParametricEQProfile> by lazy {
-        listOf(
-            ParametricEQProfile(
-                id = "flat",
-                name = "Flat",
-                preamp = 0f,
-                bands = emptyList(),
-            ),
-            ParametricEQProfile(
-                id = "bass_boost",
-                name = "Bass Boost",
-                preamp = -3f,
-                bands = listOf(
-                    ParametricEQ(60f, 6f, 0.7f, FilterType.LOW_SHELF),
-                    ParametricEQ(150f, 3f, 1.0f, FilterType.PEAK),
-                ),
-            ),
-            ParametricEQProfile(
-                id = "v_shape",
-                name = "V-Shape",
-                preamp = -4f,
-                bands = listOf(
-                    ParametricEQ(60f, 5f, 0.7f, FilterType.LOW_SHELF),
-                    ParametricEQ(12000f, 5f, 0.7f, FilterType.HIGH_SHELF),
-                ),
-            ),
-            ParametricEQProfile(
-                id = "vocal_boost",
-                name = "Vocal Boost",
-                preamp = -2f,
-                bands = listOf(
-                    ParametricEQ(2500f, 4f, 1.2f, FilterType.PEAK),
-                    ParametricEQ(4000f, 3f, 1.5f, FilterType.PEAK),
-                ),
-            ),
-            ParametricEQProfile(
-                id = "treble_boost",
-                name = "Treble Boost",
-                preamp = -3f,
-                bands = listOf(
-                    ParametricEQ(8000f, 5f, 0.7f, FilterType.HIGH_SHELF),
-                    ParametricEQ(12000f, 3f, 1.0f, FilterType.PEAK),
-                ),
-            ),
-        )
+
+@Singleton
+class EQProfileRepository @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val prefs: SharedPreferences = context.getSharedPreferences(
+        "nanosonic_eq_profiles",
+        Context.MODE_PRIVATE
+    )
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
     }
 
-    fun getAllProfiles(): List<ParametricEQProfile> {
-        return builtInProfiles + loadUserProfiles()
+    private val _profiles = MutableStateFlow<List<SavedEQProfile>>(emptyList())
+    val profiles: StateFlow<List<SavedEQProfile>> = _profiles.asStateFlow()
+
+    private val _activeProfile = MutableStateFlow<SavedEQProfile?>(null)
+    val activeProfile: StateFlow<SavedEQProfile?> = _activeProfile.asStateFlow()
+
+    companion object {
+        private const val KEY_PROFILES = "eq_profiles"
+        private const val KEY_ACTIVE_PROFILE_ID = "active_profile_id"
     }
 
-    fun getProfile(id: String): ParametricEQProfile? {
-        return getAllProfiles().find { it.id == id }
+    init {
+        loadProfiles()
     }
 
-    fun saveUserProfile(profile: ParametricEQProfile) {
-        val file = userProfilesDir.resolve("${profile.id}.json")
-        file.writeText(EqualizerJson.json.encodeToString(profile))
-    }
+    
+    private fun loadProfiles() {
+        try {
+            val profilesJson = prefs.getString(KEY_PROFILES, null)
+            if (profilesJson != null) {
+                val loadedProfiles = json.decodeFromString<List<SavedEQProfile>>(profilesJson)
+                _profiles.value = loadedProfiles
 
-    fun deleteUserProfile(id: String) {
-        userProfilesDir.resolve("$id.json").delete()
-    }
-
-    fun importFromAutoEq(json: String): ParametricEQProfile? {
-        return ParametricEQParser.parseAutoEqJson(json)
-    }
-
-    fun importFromWavelet(json: String): ParametricEQProfile? {
-        return ParametricEQParser.parseWaveletJson(json)
-    }
-
-    private fun loadUserProfiles(): List<ParametricEQProfile> {
-        return userProfilesDir.listFiles { f -> f.extension == "json" }
-            ?.mapNotNull { file ->
-                runCatching {
-                    EqualizerJson.json.decodeFromString<ParametricEQProfile>(file.readText())
-                }.getOrNull()
+                
+                val activeId = prefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+                _activeProfile.value = loadedProfiles.find { it.id == activeId }
             }
-            ?: emptyList()
+        } catch (e: Exception) {
+            Log.e("EQProfileRepository", "Error loading EQ profiles", e)
+            _profiles.value = emptyList()
+            _activeProfile.value = null
+        }
+    }
+
+    
+    suspend fun saveProfile(profile: SavedEQProfile) = withContext(Dispatchers.IO) {
+        val currentProfiles = _profiles.value.toMutableList()
+
+        
+        val existingIndex = currentProfiles.indexOfFirst { it.id == profile.id }
+
+        if (existingIndex >= 0) {
+            
+            currentProfiles[existingIndex] = profile
+        } else {
+            
+            currentProfiles.add(profile)
+        }
+
+        
+        val profilesJson = json.encodeToString<List<SavedEQProfile>>(currentProfiles)
+        prefs.edit { putString(KEY_PROFILES, profilesJson) }
+
+        _profiles.value = currentProfiles
+    }
+
+    
+    suspend fun deleteProfile(profileId: String) = withContext(Dispatchers.IO) {
+        val currentProfiles = _profiles.value.toMutableList()
+        currentProfiles.removeAll { it.id == profileId }
+
+        val profilesJson = json.encodeToString<List<SavedEQProfile>>(currentProfiles)
+        prefs.edit { putString(KEY_PROFILES, profilesJson) }
+
+        
+        if (_activeProfile.value?.id == profileId) {
+            _activeProfile.value = null
+            prefs.edit { remove(KEY_ACTIVE_PROFILE_ID) }
+        }
+
+        _profiles.value = currentProfiles
+    }
+
+    
+    suspend fun setActiveProfile(profileId: String?) = withContext(Dispatchers.IO) {
+        val currentProfiles = _profiles.value
+
+        if (profileId == null) {
+            
+            _activeProfile.value = null
+            prefs.edit { remove(KEY_ACTIVE_PROFILE_ID) }
+        } else {
+            val profile = currentProfiles.find { it.id == profileId }
+            _activeProfile.value = profile
+            prefs.edit { putString(KEY_ACTIVE_PROFILE_ID, profileId) }
+        }
+    }
+
+    
+    fun getAllProfiles(): List<SavedEQProfile> {
+        return _profiles.value
+    }
+
+    
+    fun getActiveProfile(): SavedEQProfile? {
+        return _activeProfile.value
+    }
+
+    
+    suspend fun importCustomProfile(
+        name: String,
+        parametricEQ: ParametricEQ
+    ) = withContext(Dispatchers.IO) {
+        
+        val id = "custom_${System.currentTimeMillis()}_${name.hashCode()}"
+
+        val customProfile = SavedEQProfile(
+            id = id,
+            name = name,
+            deviceModel = name,
+            bands = parametricEQ.bands,  
+            preamp = parametricEQ.preamp,
+            isActive = false,
+            isCustom = true 
+        )
+
+        saveProfile(customProfile)
+    }
+
+    
+    fun getSortedProfiles(): List<SavedEQProfile> {
+        
+        return _profiles.value
+            .filter { it.isCustom }
+            .sortedByDescending { it.addedTimestamp }
     }
 }

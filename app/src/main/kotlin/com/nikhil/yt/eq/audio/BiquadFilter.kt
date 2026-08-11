@@ -1,153 +1,182 @@
-/*
- * Velune - Biquad IIR filter for parametric EQ.
- * Direct Form 1 implementation. Double-precision coefficients,
- * float-precision processing for speed.
- * Ported from Echo Music (GPL-3.0).
- */
-
 package com.nikhil.yt.eq.audio
 
 import com.nikhil.yt.eq.data.FilterType
-import com.nikhil.yt.eq.data.ParametricEQ
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
-import kotlin.math.tan
 
-class BiquadFilter {
+class BiquadFilter(
+    private val sampleRate: Int,
+    private val frequency: Double,
+    private val gain: Double,
+    private val q: Double = 1.41,
+    private val filterType: FilterType = FilterType.PEAK
+) {
+    private var a0 = 1.0
+    private var a1 = 0.0
+    private var a2 = 0.0
+    private var b0 = 1.0
+    private var b1 = 0.0
+    private var b2 = 0.0
 
-    private var b0: Double = 1.0
-    private var b1: Double = 0.0
-    private var b2: Double = 0.0
-    private var a1: Double = 0.0
-    private var a2: Double = 0.0
+    private var x1L = 0.0
+    private var x2L = 0.0
+    private var y1L = 0.0
+    private var y2L = 0.0
 
-    private var x1: Float = 0f
-    private var x2: Float = 0f
-    private var y1: Float = 0f
-    private var y2: Float = 0f
+    private var x1R = 0.0
+    private var x2R = 0.0
+    private var y1R = 0.0
+    private var y2R = 0.0
 
-    fun configure(sampleRate: Int, eq: ParametricEQ) {
-        val w0 = 2.0 * PI * eq.frequency / sampleRate
-        val cosW0 = cos(w0)
-        val sinW0 = sin(w0)
-        val alpha = sinW0 / (2.0 * eq.q)
-        val a = 10.0.pow(eq.gain / 40.0) // for shelf filters
-        val sqrtA = sqrt(a)
-
-        when (eq.filterType) {
-            FilterType.PEAK -> {
-                b0 = 1.0 + alpha * a
-                b1 = -2.0 * cosW0
-                b2 = 1.0 - alpha * a
-                val a0 = 1.0 + alpha / a
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha / a) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.LOW_SHELF -> {
-                b0 = a * ((a + 1) - (a - 1) * cosW0 + 2 * sqrtA * alpha)
-                b1 = 2 * a * ((a - 1) - (a + 1) * cosW0)
-                b2 = a * ((a + 1) - (a - 1) * cosW0 - 2 * sqrtA * alpha)
-                val a0 = (a + 1) + (a - 1) * cosW0 + 2 * sqrtA * alpha
-                a1 = (-2 * ((a - 1) + (a + 1) * cosW0)) / a0
-                a2 = ((a + 1) + (a - 1) * cosW0 - 2 * sqrtA * alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.HIGH_SHELF -> {
-                b0 = a * ((a + 1) + (a - 1) * cosW0 + 2 * sqrtA * alpha)
-                b1 = -2 * a * ((a - 1) + (a + 1) * cosW0)
-                b2 = a * ((a + 1) + (a - 1) * cosW0 - 2 * sqrtA * alpha)
-                val a0 = (a + 1) - (a - 1) * cosW0 + 2 * sqrtA * alpha
-                a1 = (2 * ((a - 1) - (a + 1) * cosW0)) / a0
-                a2 = ((a + 1) - (a - 1) * cosW0 - 2 * sqrtA * alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.LOW_PASS -> {
-                b0 = (1.0 - cosW0) / 2.0
-                b1 = 1.0 - cosW0
-                b2 = (1.0 - cosW0) / 2.0
-                val a0 = 1.0 + alpha
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.HIGH_PASS -> {
-                b0 = (1.0 + cosW0) / 2.0
-                b1 = -(1.0 + cosW0)
-                b2 = (1.0 + cosW0) / 2.0
-                val a0 = 1.0 + alpha
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.BAND_PASS -> {
-                b0 = alpha
-                b1 = 0.0
-                b2 = -alpha
-                val a0 = 1.0 + alpha
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.NOTCH -> {
-                b0 = 1.0
-                b1 = -2.0 * cosW0
-                b2 = 1.0
-                val a0 = 1.0 + alpha
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-            FilterType.ALL_PASS -> {
-                b0 = 1.0 - alpha
-                b1 = -2.0 * cosW0
-                b2 = 1.0 + alpha
-                val a0 = 1.0 + alpha
-                a1 = (-2.0 * cosW0) / a0
-                a2 = (1.0 - alpha) / a0
-                b0 /= a0
-                b1 /= a0
-                b2 /= a0
-            }
-        }
-
-        // Reset state on reconfiguration
-        x1 = 0f; x2 = 0f; y1 = 0f; y2 = 0f
+    init {
+        calculateCoefficients()
     }
 
-    fun process(input: FloatArray, output: FloatArray, offset: Int, length: Int) {
-        for (i in offset until offset + length) {
-            val x0 = input[i]
-            val y0 = (b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2).toFloat()
-            output[i] = y0
-            x2 = x1
-            x1 = x0
-            y2 = y1
-            y1 = y0
+    private fun calculateCoefficients() {
+        val A = 10.0.pow(gain / 40.0)
+        val omega = 2.0 * PI * frequency / sampleRate
+        val sinOmega = sin(omega)
+        val cosOmega = cos(omega)
+        val alpha = sinOmega / (2.0 * q)
+
+        when (filterType) {
+            FilterType.PEAK -> calculatePeakingCoefficients(A, cosOmega, alpha)
+            FilterType.LOW_SHELF -> calculateLowShelfCoefficients(A, cosOmega, sinOmega)
+            FilterType.HIGH_SHELF -> calculateHighShelfCoefficients(A, cosOmega, sinOmega)
+            FilterType.LOW_PASS -> calculateLowPassCoefficients(cosOmega, alpha)
+            FilterType.HIGH_PASS -> calculateHighPassCoefficients(cosOmega, alpha)
+            FilterType.BAND_PASS -> calculateBandPassCoefficients(alpha, cosOmega)
+            FilterType.NOTCH -> calculateNotchCoefficients(cosOmega, alpha)
+            FilterType.ALL_PASS -> calculateAllPassCoefficients(cosOmega, alpha)
+            else -> calculatePeakingCoefficients(A, cosOmega, alpha)
         }
+    }
+
+    private fun calculatePeakingCoefficients(A: Double, cosOmega: Double, alpha: Double) {
+        b0 = 1.0 + alpha * A
+        b1 = -2.0 * cosOmega
+        b2 = 1.0 - alpha * A
+        a0 = 1.0 + alpha / A
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha / A
+        normalize()
+    }
+
+    private fun calculateLowShelfCoefficients(A: Double, cosOmega: Double, sinOmega: Double) {
+        val sqrtA = sqrt(A)
+        val S = 1.0
+        val alpha = sinOmega / 2.0 * sqrt((A + 1.0 / A) * (1.0 / S - 1.0) + 2.0)
+        b0 = A * ((A + 1.0) - (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha)
+        b1 = 2.0 * A * ((A - 1.0) - (A + 1.0) * cosOmega)
+        b2 = A * ((A + 1.0) - (A - 1.0) * cosOmega - 2.0 * sqrtA * alpha)
+        a0 = (A + 1.0) + (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha
+        a1 = -2.0 * ((A - 1.0) + (A + 1.0) * cosOmega)
+        a2 = (A + 1.0) + (A - 1.0) * cosOmega - 2.0 * sqrtA * alpha
+        normalize()
+    }
+
+    private fun calculateHighShelfCoefficients(A: Double, cosOmega: Double, sinOmega: Double) {
+        val sqrtA = sqrt(A)
+        val S = 1.0
+        val alpha = sinOmega / 2.0 * sqrt((A + 1.0 / A) * (1.0 / S - 1.0) + 2.0)
+        b0 = A * ((A + 1.0) + (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha)
+        b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cosOmega)
+        b2 = A * ((A + 1.0) + (A - 1.0) * cosOmega - 2.0 * sqrtA * alpha)
+        a0 = (A + 1.0) - (A - 1.0) * cosOmega + 2.0 * sqrtA * alpha
+        a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cosOmega)
+        a2 = (A + 1.0) - (A - 1.0) * cosOmega - 2.0 * sqrtA * alpha
+        normalize()
+    }
+
+    private fun calculateLowPassCoefficients(cosOmega: Double, alpha: Double) {
+        b0 = (1.0 - cosOmega) / 2.0
+        b1 = 1.0 - cosOmega
+        b2 = (1.0 - cosOmega) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha
+        normalize()
+    }
+
+    private fun calculateHighPassCoefficients(cosOmega: Double, alpha: Double) {
+        b0 = (1.0 + cosOmega) / 2.0
+        b1 = -(1.0 + cosOmega)
+        b2 = (1.0 + cosOmega) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha
+        normalize()
+    }
+
+    private fun calculateBandPassCoefficients(alpha: Double, cosOmega: Double) {
+        b0 = alpha
+        b1 = 0.0
+        b2 = -alpha
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha
+        normalize()
+    }
+
+    private fun calculateNotchCoefficients(cosOmega: Double, alpha: Double) {
+        b0 = 1.0
+        b1 = -2.0 * cosOmega
+        b2 = 1.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha
+        normalize()
+    }
+
+    private fun calculateAllPassCoefficients(cosOmega: Double, alpha: Double) {
+        b0 = 1.0 - alpha
+        b1 = -2.0 * cosOmega
+        b2 = 1.0 + alpha
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cosOmega
+        a2 = 1.0 - alpha
+        normalize()
+    }
+
+    private fun normalize() {
+        b0 /= a0
+        b1 /= a0
+        b2 /= a0
+        a1 /= a0
+        a2 /= a0
+        a0 = 1.0
+    }
+
+    fun processSample(input: Double): Double {
+        val output = b0 * input + b1 * x1L + b2 * x2L - a1 * y1L - a2 * y2L
+        x2L = x1L
+        x1L = input
+        y2L = y1L
+        y1L = output
+        return output
+    }
+
+    fun processStereo(inputLeft: Double, inputRight: Double): Pair<Double, Double> {
+        val outputLeft = b0 * inputLeft + b1 * x1L + b2 * x2L - a1 * y1L - a2 * y2L
+        x2L = x1L
+        x1L = inputLeft
+        y2L = y1L
+        y1L = outputLeft
+
+        val outputRight = b0 * inputRight + b1 * x1R + b2 * x2R - a1 * y1R - a2 * y2R
+        x2R = x1R
+        x1R = inputRight
+        y2R = y1R
+        y1R = outputRight
+
+        return Pair(outputLeft, outputRight)
     }
 
     fun reset() {
-        x1 = 0f; x2 = 0f; y1 = 0f; y2 = 0f
-    }
-
-    companion object {
-        private fun Double.pow(exp: Double): Double = kotlin.math.pow(this, exp)
+        x1L = 0.0; x2L = 0.0; y1L = 0.0; y2L = 0.0
+        x1R = 0.0; x2R = 0.0; y1R = 0.0; y2R = 0.0
     }
 }

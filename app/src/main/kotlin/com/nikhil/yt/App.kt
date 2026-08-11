@@ -80,6 +80,14 @@ class App : Application(), SingletonImageLoader.Factory {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
+
+        // WorkManager for AI + Updater
+        androidx.work.Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .build()
+
+        // Phase 1: Crash handling
+        CrashHandler.install(this)
         LocaleManager.applyLocale(this)
         instance = this
         if (currentProcessName()?.endsWith(":crash") == true) {

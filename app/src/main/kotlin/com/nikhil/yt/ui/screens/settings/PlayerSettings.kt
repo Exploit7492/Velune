@@ -1,31 +1,24 @@
-/*
- * Velune - by Nikhil
- * Nikhil
- * Licensed Under GPL-3.0
- */
-
 
 
 package com.nikhil.yt.ui.screens.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
@@ -35,87 +28,148 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.nikhil.yt.BuildConfig
 import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.R
-import com.nikhil.yt.constants.ArtistSeparatorsKey
 import com.nikhil.yt.constants.AudioNormalizationKey
 import com.nikhil.yt.constants.AudioOffload
 import com.nikhil.yt.constants.AudioQuality
 import com.nikhil.yt.constants.AudioQualityKey
-import com.nikhil.yt.constants.NetworkMeteredKey
 import com.nikhil.yt.constants.AutoDownloadOnLikeKey
-import com.nikhil.yt.constants.AutoStartOnBluetoothKey
+import com.nikhil.yt.constants.AutomixCrossfadeKey
+import com.nikhil.yt.constants.AutomixDebugOverlayKey
+import com.nikhil.yt.constants.CrossfadeDurationKey
+import com.nikhil.yt.constants.CrossfadeEnabledKey
+import com.nikhil.yt.constants.CrossfadeGaplessKey
+import com.nikhil.yt.constants.AutoLoadMoreKey
 import com.nikhil.yt.constants.AutoSkipNextOnErrorKey
-import com.nikhil.yt.constants.PauseOnDeviceMuteKey
-import com.nikhil.yt.constants.PermanentShuffleKey
+import com.nikhil.yt.constants.DisableLoadMoreWhenRepeatAllKey
+import com.nikhil.yt.constants.EnableGoogleCastKey
+import com.nikhil.yt.constants.HistoryDuration
+import com.nikhil.yt.constants.KeepScreenOn
+import com.nikhil.yt.constants.PauseOnMute
 import com.nikhil.yt.constants.PersistentQueueKey
+import com.nikhil.yt.constants.PersistentShuffleAcrossQueuesKey
+import com.nikhil.yt.constants.PreventDuplicateTracksInQueueKey
+import com.nikhil.yt.constants.RememberShuffleAndRepeatKey
+import com.nikhil.yt.constants.ResumeOnBluetoothConnectKey
+import com.nikhil.yt.constants.SeekExtraSeconds
+import com.nikhil.yt.constants.ShufflePlaylistFirstKey
+import com.nikhil.yt.constants.SimilarContent
 
+import com.nikhil.yt.constants.SkipSilenceInstantKey
 import com.nikhil.yt.constants.SkipSilenceKey
 import com.nikhil.yt.constants.StopMusicOnTaskClearKey
-import com.nikhil.yt.constants.HistoryDuration
-import com.nikhil.yt.constants.AudioCrossfadeDurationKey
-import com.nikhil.yt.constants.PlayerStreamClient
-import com.nikhil.yt.constants.PlayerStreamClientKey
-import com.nikhil.yt.constants.SeekExtraSeconds
-import com.nikhil.yt.ui.component.ArtistSeparatorsDialog
-import com.nikhil.yt.ui.component.TagsManagementDialog
-import com.nikhil.yt.ui.component.EnumListPreference
+import com.nikhil.yt.constants.EnableExportAsMp3Key
+
+import com.nikhil.yt.constants.PreloadNextSongEnabledKey
+import com.nikhil.yt.constants.PreloadNextSongLimitKey
+import com.nikhil.yt.constants.PreloadLyricsEnabledKey
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.nikhil.yt.ui.component.DefaultDialog
+import com.nikhil.yt.ui.component.EnumDialog
 import com.nikhil.yt.ui.component.IconButton
-import com.nikhil.yt.ui.component.ListDialog
-import com.nikhil.yt.ui.component.PreferenceEntry
-import com.nikhil.yt.ui.component.PreferenceGroupTitle
-import com.nikhil.yt.ui.component.SliderPreference
-import com.nikhil.yt.ui.component.CrossfadeSliderPreference
-import com.nikhil.yt.ui.component.SwitchPreference
+import com.nikhil.yt.ui.component.Material3SettingsGroup
+import com.nikhil.yt.ui.component.Material3SettingsItem
 import com.nikhil.yt.ui.utils.backToMain
 import com.nikhil.yt.utils.rememberEnumPreference
 import com.nikhil.yt.utils.rememberPreference
-import com.nikhil.yt.LocalDatabase
+import kotlin.math.roundToInt
+import android.content.Intent
+import android.net.Uri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerSettings(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
-) {
+highlightKey: String? = null) {
+    val scrollState = androidx.compose.foundation.rememberScrollState()
+
     val (audioQuality, onAudioQualityChange) = rememberEnumPreference(
         AudioQualityKey,
-        defaultValue = AudioQuality.AUTO
+        defaultValue = AudioQuality.OPUS
     )
-    val (playerStreamClient, onPlayerStreamClientChange) = rememberEnumPreference(
-        PlayerStreamClientKey,
-        defaultValue = PlayerStreamClient.MOBILE
+
+    val (crossfadeEnabled, onCrossfadeEnabledChange) = rememberPreference(
+        CrossfadeEnabledKey,
+        defaultValue = false
     )
-    val (networkMetered, onNetworkMeteredChange) = rememberPreference(
-        NetworkMeteredKey,
+    val (crossfadeDuration, onCrossfadeDurationChange) = rememberPreference(
+        CrossfadeDurationKey,
+        defaultValue = 5f
+    )
+    val (automixCrossfade, onAutomixCrossfadeChange) = rememberPreference(
+        AutomixCrossfadeKey,
+        defaultValue = false
+    )
+    val (automixDebugOverlay, onAutomixDebugOverlayChange) = rememberPreference(
+        AutomixDebugOverlayKey,
+        defaultValue = false
+    )
+    val (crossfadeGapless, onCrossfadeGaplessChange) = rememberPreference(
+        CrossfadeGaplessKey,
         defaultValue = true
     )
     val (persistentQueue, onPersistentQueueChange) = rememberPreference(
         PersistentQueueKey,
         defaultValue = true
     )
-    val (permanentShuffle, onPermanentShuffleChange) = rememberPreference(
-        PermanentShuffleKey,
-        defaultValue = false
-    )
     val (skipSilence, onSkipSilenceChange) = rememberPreference(
         SkipSilenceKey,
+        defaultValue = false
+    )
+    val (skipSilenceInstant, onSkipSilenceInstantChange) = rememberPreference(
+        SkipSilenceInstantKey,
         defaultValue = false
     )
     val (audioNormalization, onAudioNormalizationChange) = rememberPreference(
         AudioNormalizationKey,
         defaultValue = true
     )
-    val (dataSaverEnabled, onDataSaverEnabledChange) = rememberPreference(
-        DataSaverEnabledKey,
+
+    val (audioOffload, onAudioOffloadChange) = rememberPreference(
+        key = AudioOffload,
         defaultValue = false
     )
-    val (audioOffload, onAudioOffloadChange) = rememberPreference(
-        AudioOffload,
+
+
+    val (preloadNextSongEnabled, onPreloadNextSongEnabledChange) = rememberPreference(
+        key = PreloadNextSongEnabledKey,
+        defaultValue = true
+    )
+
+    val (preloadNextSongLimit, onPreloadNextSongLimitChange) = rememberPreference(
+        key = PreloadNextSongLimitKey,
+        defaultValue = 10
+    )
+
+    val (preloadLyricsEnabled, onPreloadLyricsEnabledChange) = rememberPreference(
+        key = PreloadLyricsEnabledKey,
+        defaultValue = true
+    )
+
+    val (dataSaverEnabled, onDataSaverEnabledChange) = rememberPreference(
+        key = iad1tya.echo.music.constants.DataSaverEnabledKey,
         defaultValue = false
+    )
+
+    val (enableExportAsMp3, onEnableExportAsMp3Change) = rememberPreference(
+        key = EnableExportAsMp3Key,
+        defaultValue = false
+    )
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val (enableGoogleCast, onEnableGoogleCastChange) = rememberPreference(
+        key = EnableGoogleCastKey,
+        defaultValue = true
     )
 
     val (seekExtraSeconds, onSeekExtraSeconds) = rememberPreference(
@@ -123,122 +177,148 @@ fun PlayerSettings(
         defaultValue = false
     )
 
+    val (autoLoadMore, onAutoLoadMoreChange) = rememberPreference(
+        AutoLoadMoreKey,
+        defaultValue = true
+    )
+    val (disableLoadMoreWhenRepeatAll, onDisableLoadMoreWhenRepeatAllChange) = rememberPreference(
+        DisableLoadMoreWhenRepeatAllKey,
+        defaultValue = false
+    )
     val (autoDownloadOnLike, onAutoDownloadOnLikeChange) = rememberPreference(
         AutoDownloadOnLikeKey,
         defaultValue = false
+    )
+    val (similarContentEnabled, similarContentEnabledChange) = rememberPreference(
+        key = SimilarContent,
+        defaultValue = true
     )
     val (autoSkipNextOnError, onAutoSkipNextOnErrorChange) = rememberPreference(
         AutoSkipNextOnErrorKey,
         defaultValue = false
     )
-    val (pauseOnDeviceMute, onPauseOnDeviceMuteChange) = rememberPreference(
-        PauseOnDeviceMuteKey,
+    val (persistentShuffleAcrossQueues, onPersistentShuffleAcrossQueuesChange) = rememberPreference(
+        PersistentShuffleAcrossQueuesKey,
         defaultValue = false
     )
-    val (autoStartOnBluetooth, onAutoStartOnBluetoothChange) = rememberPreference(
-        AutoStartOnBluetoothKey,
+    val (rememberShuffleAndRepeat, onRememberShuffleAndRepeatChange) = rememberPreference(
+        RememberShuffleAndRepeatKey,
+        defaultValue = true
+    )
+    val (shufflePlaylistFirst, onShufflePlaylistFirstChange) = rememberPreference(
+        ShufflePlaylistFirstKey,
+        defaultValue = false
+    )
+    val (preventDuplicateTracksInQueue, onPreventDuplicateTracksInQueueChange) = rememberPreference(
+        PreventDuplicateTracksInQueueKey,
         defaultValue = false
     )
     val (stopMusicOnTaskClear, onStopMusicOnTaskClearChange) = rememberPreference(
         StopMusicOnTaskClearKey,
+        defaultValue = true
+    )
+    val (pauseOnMute, onPauseOnMuteChange) = rememberPreference(
+        PauseOnMute,
+        defaultValue = false
+    )
+    val (resumeOnBluetoothConnect, onResumeOnBluetoothConnectChange) = rememberPreference(
+        ResumeOnBluetoothConnectKey,
+        defaultValue = false
+    )
+    val (keepScreenOn, onKeepScreenOnChange) = rememberPreference(
+        KeepScreenOn,
         defaultValue = false
     )
     val (historyDuration, onHistoryDurationChange) = rememberPreference(
         HistoryDuration,
-        defaultValue = 30f
+        defaultValue = 1f
     )
 
-    val (audioCrossfadeSeconds, onAudioCrossfadeSecondsChange) = rememberPreference(
-        AudioCrossfadeDurationKey,
-        defaultValue = 0
+    var showAudioQualityDialog by remember { mutableStateOf(false) }
+    var showDownloadQualityDialog by remember { mutableStateOf(false) }
+
+    val (downloadQuality, onDownloadQualityChange) = rememberEnumPreference(
+        iad1tya.echo.music.constants.DownloadQualityKey,
+        defaultValue = iad1tya.echo.music.constants.DownloadQuality.YOUTUBE
     )
 
-    val (artistSeparators, onArtistSeparatorsChange) = rememberPreference(
-        ArtistSeparatorsKey,
-        defaultValue = ",;/&"
-    )
-
-    var showArtistSeparatorsDialog by remember { mutableStateOf(false) }
-    var showTagsManagementDialog by remember { mutableStateOf(false) }
-    var showPlayerStreamClientDialog by remember { mutableStateOf(false) }
-    val database = LocalDatabase.current
-
-    if (showArtistSeparatorsDialog) {
-        ArtistSeparatorsDialog(
-            currentSeparators = artistSeparators,
-            onDismiss = { showArtistSeparatorsDialog = false },
-            onSave = { newSeparators ->
-                onArtistSeparatorsChange(newSeparators)
-                showArtistSeparatorsDialog = false
+    if (showAudioQualityDialog) {
+        EnumDialog(
+            onDismiss = { showAudioQualityDialog = false },
+            onSelect = {
+                onAudioQualityChange(it)
+                showAudioQualityDialog = false
+            },
+            title = stringResource(R.string.audio_quality),
+            current = audioQuality,
+            values = listOf(AudioQuality.OPUS),
+            valueText = {
+                when (it) {
+                    AudioQuality.OPUS -> "Opus"
+                    else -> ""
+                }
+            },
+            valueDescription = {
+                ""
             }
         )
     }
 
-    if (showTagsManagementDialog) {
-        TagsManagementDialog(
-            database = database,
-            onDismiss = { showTagsManagementDialog = false }
-        )
-    }
-
-    if (showPlayerStreamClientDialog) {
-        ListDialog(
-            onDismiss = { showPlayerStreamClientDialog = false },
-            modifier = Modifier.padding(horizontal = 8.dp),
-        ) {
-            items(PlayerStreamClient.entries) { value ->
-                Row(
-                    modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onPlayerStreamClientChange(value)
-                            showPlayerStreamClientDialog = false
-                        }.padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    RadioButton(
-                        selected = value == playerStreamClient,
-                        onClick = null,
-                    )
-
-                    Column(modifier = Modifier.padding(start = 16.dp)) {
-                        Text(
-                            text =
-                            when (value) {
-                                PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
-                                PlayerStreamClient.IOS -> "iOS"
-                                PlayerStreamClient.MOBILE -> "Android"
-                                PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
-                                PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
-                                else -> stringResource(R.string.player_stream_client_web_remix)
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text =
-                            when (value) {
-                                PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr_desc)
-                                PlayerStreamClient.IOS -> "Use the iOS client. Often bypasses bot detection."
-                                PlayerStreamClient.MOBILE -> "Use the Android client .Most efficient,"
-                                PlayerStreamClient.TVHTML5 -> "Use the TV client. Helpful if other clients fail."
-                                PlayerStreamClient.ANDROID_MUSIC -> "Use the Android Music client."
-                                else -> stringResource(R.string.player_stream_client_web_remix_desc)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.secondary,
-                        )
-                    }
+    if (showDownloadQualityDialog) {
+        EnumDialog(
+            onDismiss = { showDownloadQualityDialog = false },
+            onSelect = {
+                onDownloadQualityChange(it)
+                showDownloadQualityDialog = false
+            },
+            title = stringResource(R.string.download_quality_title),
+            current = downloadQuality,
+            values = listOf(iad1tya.echo.music.constants.DownloadQuality.YOUTUBE),
+            valueText = {
+                when (it) {
+                    iad1tya.echo.music.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
+                    else -> ""
                 }
             }
-        }
+        )
     }
 
     Column(
         Modifier
-            .windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(
+                LocalPlayerAwareWindowInsets.current.only(
+                    WindowInsetsSides.Horizontal
+                )
+            )
+            .verticalScroll(scrollState)
+            .padding(horizontal = 16.dp)
     ) {
+        var showCrossfadeBetaDialog by remember { mutableStateOf(false) }
+
+        if (showCrossfadeBetaDialog) {
+            DefaultDialog(
+                onDismiss = { showCrossfadeBetaDialog = false },
+                title = { Text(stringResource(R.string.crossfade_beta_title)) },
+                buttons = {
+                    TextButton(onClick = { showCrossfadeBetaDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                    TextButton(onClick = {
+                        showCrossfadeBetaDialog = false
+                        onCrossfadeEnabledChange(true)
+                    }) {
+                        Text(stringResource(R.string.enable))
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.crossfade_beta_message))
+            }
+        }
+
+
+
+
+
         Spacer(
             Modifier.windowInsetsPadding(
                 LocalPlayerAwareWindowInsets.current.only(
@@ -247,187 +327,783 @@ fun PlayerSettings(
             )
         )
 
-        PreferenceGroupTitle(
-            title = stringResource(R.string.player)
-        )
 
-        EnumListPreference(
-            title = { Text(stringResource(R.string.audio_quality)) },
-            icon = { Icon(painterResource(R.drawable.graphic_eq), null) },
-            selectedValue = audioQuality,
-            onValueSelected = onAudioQualityChange,
-            valueText = {
-                when (it) {
-                    AudioQuality.HIGHEST -> stringResource(R.string.audio_quality_max)
-                    AudioQuality.HIGH -> stringResource(R.string.audio_quality_high)
-                    AudioQuality.AUTO -> stringResource(R.string.audio_quality_auto)
-                    AudioQuality.LOW -> stringResource(R.string.audio_quality_low)
-                }
+
+        Material3SettingsGroup(
+            scrollState = scrollState,
+            title = "Data Saver",
+            items = buildList {
+                add(Material3SettingsItem(
+                    isHighlighted = (highlightKey == "Data Saver Mode (Beta)"),
+                    icon = painterResource(R.drawable.offline),
+                    title = { Text("Data Saver Mode (Beta)") },
+                    description = { Text("Disable lyrics, videos, preloading, background syncs, and force Opus audio to save data.") },
+                    trailingContent = {
+                        Switch(
+                            checked = dataSaverEnabled,
+                            onCheckedChange = onDataSaverEnabledChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (dataSaverEnabled) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onDataSaverEnabledChange(!dataSaverEnabled) }
+                ))
             }
         )
 
-        PreferenceEntry(
-            title = { Text(stringResource(R.string.player_stream_client)) },
-            description =
-            when (playerStreamClient) {
-                PlayerStreamClient.ANDROID_VR -> stringResource(R.string.player_stream_client_android_vr)
-                PlayerStreamClient.IOS -> "iOS"
-                PlayerStreamClient.MOBILE -> "Android"
-                PlayerStreamClient.TVHTML5 -> "TV (HTML5)"
-                PlayerStreamClient.ANDROID_MUSIC -> "Android Music"
-                else -> stringResource(R.string.player_stream_client_web_remix)
-            },
-            icon = { Icon(painterResource(R.drawable.integration), null) },
-            onClick = { showPlayerStreamClientDialog = true }
-        )
+        Material3SettingsGroup(scrollState = scrollState, 
+            title = stringResource(R.string.player),
+            items = buildList {
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.audio_quality)),
+                    icon = painterResource(R.drawable.graphic_eq),
+                    title = { Text(stringResource(R.string.audio_quality)) },
+                    description = {
+                        Text(
+                            when (audioQuality) {
+                                AudioQuality.OPUS -> "Opus"
+                                else -> "Opus"
+                            }
+                        )
+                    },
+                    onClick = { showAudioQualityDialog = true }
+                ))
+                
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.download_quality_title)),
+                    icon = painterResource(R.drawable.download),
+                    title = { Text(stringResource(R.string.download_quality_title)) },
+                    description = {
+                        Text(
+                            when (downloadQuality) {
+                                iad1tya.echo.music.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
+                                else -> "YouTube Music (AAC/Default)"
+                            }
+                        )
+                    },
+                    onClick = { showDownloadQualityDialog = true }
+                ))
 
-        SwitchPreference(
-            title = { Text(stringResource(R.string.network_metered_title)) },
-            description = stringResource(R.string.network_metered_description),
-            icon = { Icon(painterResource(R.drawable.android_cell), null) },
-            checked = networkMetered,
-            onCheckedChange = onNetworkMeteredChange
-        )
 
-        SliderPreference(
-            title = { Text(stringResource(R.string.history_duration)) },
-            icon = { Icon(painterResource(R.drawable.history), null) },
-            value = historyDuration,
-            onValueChange = onHistoryDurationChange,
-        )
-
-        CrossfadeSliderPreference(
-            value = audioCrossfadeSeconds,
-            onValueChange = onAudioCrossfadeSecondsChange,
-            isEnabled = !audioOffload,
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.skip_silence)) },
-            icon = { Icon(painterResource(R.drawable.fast_forward), null) },
-            checked = skipSilence,
-            onCheckedChange = onSkipSilenceChange,
-            isEnabled = !audioOffload,
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.audio_normalization)) },
-            icon = { Icon(painterResource(R.drawable.volume_up), null) },
-            checked = audioNormalization,
-            onCheckedChange = onAudioNormalizationChange
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.audio_offload)) },
-            description = stringResource(R.string.audio_offload_desc),
-            icon = { Icon(painterResource(R.drawable.speed), null) },
-            checked = audioOffload,
-            onCheckedChange = { enabled ->
-                onAudioOffloadChange(enabled)
-                if (enabled) {
-                    onSkipSilenceChange(false)
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.crossfade)),
+                    icon = painterResource(R.drawable.linear_scale),
+                    title = { Text(stringResource(R.string.crossfade)) },
+                    description = { 
+                        Text(stringResource(R.string.crossfade_desc)) 
+                    },
+                    showBadge = true,
+                    trailingContent = {
+                        Switch(
+                            checked = crossfadeEnabled,
+                            onCheckedChange = {
+                                if (!crossfadeEnabled) {
+                                    showCrossfadeBetaDialog = true
+                                } else {
+                                    onCrossfadeEnabledChange(false)
+                                }
+                            },
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (crossfadeEnabled) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = {
+                        if (!crossfadeEnabled) {
+                            showCrossfadeBetaDialog = true
+                        } else {
+                            onCrossfadeEnabledChange(false)
+                        }
+                    }
+                ))
+                if (crossfadeEnabled) {
+                    add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.crossfade_duration)),
+                        icon = painterResource(R.drawable.timer),
+                        title = { Text(stringResource(R.string.crossfade_duration)) },
+                        description = {
+                            Column {
+                                Text(pluralStringResource(R.plurals.seconds, crossfadeDuration.toInt(), crossfadeDuration.toInt()))
+                                Slider(
+                                    value = crossfadeDuration,
+                                    onValueChange = onCrossfadeDurationChange,
+                                    valueRange = 1f..15f,
+                                    steps = 14
+                                )
+                            }
+                        }
+                    ))
+                    add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.crossfade_gapless)),
+                        icon = painterResource(R.drawable.album),
+                        title = { Text(stringResource(R.string.crossfade_gapless)) },
+                        description = { Text(stringResource(R.string.crossfade_gapless_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = crossfadeGapless,
+                                onCheckedChange = onCrossfadeGaplessChange,
+                                thumbContent = {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (crossfadeGapless) R.drawable.check else R.drawable.close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        onClick = { onCrossfadeGaplessChange(!crossfadeGapless) }
+                    ))
+                    add(Material3SettingsItem(
+                        isHighlighted = highlightKey == stringResource(R.string.automix),
+                        icon = painterResource(R.drawable.graphic_eq),
+                        title = { Text(stringResource(R.string.automix)) },
+                        description = { Text(stringResource(R.string.automix_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = automixCrossfade,
+                                onCheckedChange = onAutomixCrossfadeChange,
+                                thumbContent = {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (automixCrossfade) R.drawable.check else R.drawable.close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        onClick = { onAutomixCrossfadeChange(!automixCrossfade) }
+                    ))
+                    if (automixCrossfade) {
+                        add(Material3SettingsItem(
+                            isHighlighted = highlightKey == stringResource(R.string.automix_debug),
+                            icon = painterResource(R.drawable.bug_report),
+                            title = { Text(stringResource(R.string.automix_debug)) },
+                            description = { Text(stringResource(R.string.automix_debug_desc)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = automixDebugOverlay,
+                                    onCheckedChange = onAutomixDebugOverlayChange,
+                                    thumbContent = {
+                                        Icon(
+                                            painter = painterResource(
+                                                id = if (automixDebugOverlay) R.drawable.check else R.drawable.close
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize)
+                                        )
+                                    }
+                                )
+                            },
+                            onClick = { onAutomixDebugOverlayChange(!automixDebugOverlay) }
+                        ))
+                    }
                 }
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.history_duration)),
+                    icon = painterResource(R.drawable.history),
+                    title = { Text(stringResource(R.string.history_duration)) },
+                    description = {
+                        Slider(
+                            value = historyDuration,
+                            onValueChange = { onHistoryDurationChange(it.roundToInt().toFloat()) },
+                            valueRange = 1f..100f,
+                            steps = 9
+                        )
+                    },
+                    trailingContent = {
+                        Text(text = historyDuration.roundToInt().toString())
+                    }
+                ))
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.skip_silence)),
+                    icon = painterResource(R.drawable.fast_forward),
+                    title = { Text(stringResource(R.string.skip_silence)) },
+                    description = { Text(stringResource(R.string.skip_silence_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = skipSilence,
+                            onCheckedChange = onSkipSilenceChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (skipSilence) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onSkipSilenceChange(!skipSilence) }
+                ))
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.skip_silence_instant)),
+                    icon = painterResource(R.drawable.skip_next),
+                    title = { Text(stringResource(R.string.skip_silence_instant)) },
+                    description = { Text(stringResource(R.string.skip_silence_instant_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = skipSilenceInstant,
+                            onCheckedChange = { onSkipSilenceInstantChange(it) },
+                            enabled = skipSilence,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (skipSilenceInstant) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { if (skipSilence) onSkipSilenceInstantChange(!skipSilenceInstant) }
+                ))
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.audio_normalization)),
+                    icon = painterResource(R.drawable.volume_up),
+                    title = { Text(stringResource(R.string.audio_normalization)) },
+                    description = { Text(stringResource(R.string.audio_normalization_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = audioNormalization,
+                            onCheckedChange = onAudioNormalizationChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (audioNormalization) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onAudioNormalizationChange(!audioNormalization) }
+                ))
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.audio_offload)),
+                    icon = painterResource(R.drawable.graphic_eq),
+                    title = { Text(stringResource(R.string.audio_offload)) },
+                    description = {
+                        Text(
+                            if (crossfadeEnabled) stringResource(R.string.audio_offload_disabled_by_crossfade)
+                            else stringResource(R.string.audio_offload_description)
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = if (crossfadeEnabled) false else audioOffload,
+                            onCheckedChange = onAudioOffloadChange,
+                            enabled = !crossfadeEnabled,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (!crossfadeEnabled && audioOffload) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { if (!crossfadeEnabled) onAudioOffloadChange(!audioOffload) }
+                ))
+                
+
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == "Preload Next Song"),
+                    icon = painterResource(R.drawable.skip_next),
+                    title = { Text("Preload Next Song") },
+                    description = { Text("Cache the next song for gapless playback") },
+                    trailingContent = {
+                        Switch(
+                            checked = preloadNextSongEnabled,
+                            onCheckedChange = onPreloadNextSongEnabledChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (preloadNextSongEnabled) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onPreloadNextSongEnabledChange(!preloadNextSongEnabled) }
+                ))
+
+                if (preloadNextSongEnabled) {
+                    add(Material3SettingsItem(
+    isHighlighted = (highlightKey == "Preload Limit"),
+                        icon = painterResource(R.drawable.library_music),
+                        title = { Text("Preload Limit") },
+                        description = {
+                            Slider(
+                                value = preloadNextSongLimit.toFloat(),
+                                onValueChange = { onPreloadNextSongLimitChange(it.roundToInt()) },
+                                valueRange = 1f..10f,
+                                steps = 9
+                            )
+                        },
+                        trailingContent = {
+                            Text(text = preloadNextSongLimit.toString())
+                        }
+                    ))
+                    
+                    add(Material3SettingsItem(
+    isHighlighted = (highlightKey == "Preload Lyrics"),
+                        icon = painterResource(R.drawable.queue_music),
+                        title = { Text("Preload Lyrics") },
+                        description = { Text("Also cache lyrics for the preloaded songs") },
+                        trailingContent = {
+                            Switch(
+                                checked = preloadLyricsEnabled,
+                                onCheckedChange = onPreloadLyricsEnabledChange,
+                                thumbContent = {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (preloadLyricsEnabled) R.drawable.check else R.drawable.close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        onClick = { onPreloadLyricsEnabledChange(!preloadLyricsEnabled) }
+                    ))
+                }
+                
+                if (BuildConfig.CAST_AVAILABLE) {
+                    add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.google_cast)),
+                        icon = painterResource(R.drawable.cast),
+                        title = { Text(stringResource(R.string.google_cast)) },
+                        description = { Text(stringResource(R.string.google_cast_description)) },
+                        trailingContent = {
+                            Switch(
+                                checked = enableGoogleCast,
+                                onCheckedChange = onEnableGoogleCastChange,
+                                thumbContent = {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (enableGoogleCast) R.drawable.check else R.drawable.close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        onClick = { onEnableGoogleCastChange(!enableGoogleCast) }
+                    ))
+                }
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.seek_seconds_addup)),
+                    icon = painterResource(R.drawable.arrow_forward),
+                    title = { Text(stringResource(R.string.seek_seconds_addup)) },
+                    description = { Text(stringResource(R.string.seek_seconds_addup_description)) },
+                    trailingContent = {
+                        Switch(
+                            checked = seekExtraSeconds,
+                            onCheckedChange = onSeekExtraSeconds,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (seekExtraSeconds) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onSeekExtraSeconds(!seekExtraSeconds) }
+                ))
+                add(Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.echo_equalizer)),
+                    icon = painterResource(R.drawable.echoequlizer),
+                    title = { Text(stringResource(R.string.echo_equalizer)) },
+                    description = { Text(stringResource(R.string.echo_equalizer_desc)) },
+                    onClick = { navController.navigate("settings/equalizer") }
+                ))
             }
         )
-        SwitchPreference(
-            title = { Text(stringResource(R.string.data_saver)) },
-            description = stringResource(R.string.data_saver_desc),
-            icon = { Icon(painterResource(R.drawable.data_saver), null) },
-            checked = dataSaverEnabled,
-            onCheckedChange = onDataSaverEnabledChange,
+
+        Spacer(modifier = Modifier.height(27.dp))
+
+        Material3SettingsGroup(scrollState = scrollState, 
+            title = stringResource(R.string.queue),
+            items = listOf(
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.persistent_queue)),
+                    icon = painterResource(R.drawable.queue_music),
+                    title = { Text(stringResource(R.string.persistent_queue)) },
+                    description = { Text(stringResource(R.string.persistent_queue_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = persistentQueue,
+                            onCheckedChange = onPersistentQueueChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (persistentQueue) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onPersistentQueueChange(!persistentQueue) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.auto_load_more)),
+                    icon = painterResource(R.drawable.playlist_add),
+                    title = { Text(stringResource(R.string.auto_load_more)) },
+                    description = { Text(stringResource(R.string.auto_load_more_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = autoLoadMore,
+                            onCheckedChange = onAutoLoadMoreChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (autoLoadMore) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onAutoLoadMoreChange(!autoLoadMore) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.disable_load_more_when_repeat_all)),
+                    icon = painterResource(R.drawable.repeat),
+                    title = { Text(stringResource(R.string.disable_load_more_when_repeat_all)) },
+                    description = { Text(stringResource(R.string.disable_load_more_when_repeat_all_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = disableLoadMoreWhenRepeatAll,
+                            onCheckedChange = onDisableLoadMoreWhenRepeatAllChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (disableLoadMoreWhenRepeatAll) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onDisableLoadMoreWhenRepeatAllChange(!disableLoadMoreWhenRepeatAll) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.auto_download_on_like)),
+                    icon = painterResource(R.drawable.download),
+                    title = { Text(stringResource(R.string.auto_download_on_like)) },
+                    description = { Text(stringResource(R.string.auto_download_on_like_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = autoDownloadOnLike,
+                            onCheckedChange = onAutoDownloadOnLikeChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (autoDownloadOnLike) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onAutoDownloadOnLikeChange(!autoDownloadOnLike) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.enable_similar_content)),
+                    icon = painterResource(R.drawable.similar),
+                    title = { Text(stringResource(R.string.enable_similar_content)) },
+                    description = { Text(stringResource(R.string.similar_content_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = similarContentEnabled,
+                            onCheckedChange = similarContentEnabledChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (similarContentEnabled) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { similarContentEnabledChange(!similarContentEnabled) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.persistent_shuffle_title)),
+                    icon = painterResource(R.drawable.shuffle),
+                    title = { Text(stringResource(R.string.persistent_shuffle_title)) },
+                    description = { Text(stringResource(R.string.persistent_shuffle_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = persistentShuffleAcrossQueues,
+                            onCheckedChange = onPersistentShuffleAcrossQueuesChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (persistentShuffleAcrossQueues) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onPersistentShuffleAcrossQueuesChange(!persistentShuffleAcrossQueues) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.remember_shuffle_and_repeat)),
+                    icon = painterResource(R.drawable.shuffle),
+                    title = { Text(stringResource(R.string.remember_shuffle_and_repeat)) },
+                    description = { Text(stringResource(R.string.remember_shuffle_and_repeat_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = rememberShuffleAndRepeat,
+                            onCheckedChange = onRememberShuffleAndRepeatChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (rememberShuffleAndRepeat) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onRememberShuffleAndRepeatChange(!rememberShuffleAndRepeat) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.shuffle_playlist_first)),
+                    icon = painterResource(R.drawable.shuffle),
+                    title = { Text(stringResource(R.string.shuffle_playlist_first)) },
+                    description = { Text(stringResource(R.string.shuffle_playlist_first_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = shufflePlaylistFirst,
+                            onCheckedChange = onShufflePlaylistFirstChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (shufflePlaylistFirst) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onShufflePlaylistFirstChange(!shufflePlaylistFirst) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.prevent_duplicate_tracks_in_queue)),
+                    icon = painterResource(R.drawable.queue_music),
+                    title = { Text(stringResource(R.string.prevent_duplicate_tracks_in_queue)) },
+                    description = { Text(stringResource(R.string.prevent_duplicate_tracks_in_queue_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = preventDuplicateTracksInQueue,
+                            onCheckedChange = onPreventDuplicateTracksInQueueChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (preventDuplicateTracksInQueue) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onPreventDuplicateTracksInQueueChange(!preventDuplicateTracksInQueue) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.auto_skip_next_on_error)),
+                    icon = painterResource(R.drawable.skip_next),
+                    title = { Text(stringResource(R.string.auto_skip_next_on_error)) },
+                    description = { Text(stringResource(R.string.auto_skip_next_on_error_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = autoSkipNextOnError,
+                            onCheckedChange = onAutoSkipNextOnErrorChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (autoSkipNextOnError) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onAutoSkipNextOnErrorChange(!autoSkipNextOnError) }
+                )
+            )
         )
 
-    PreferenceEntry(
-        title = { Text(stringResource(R.string.parametric_eq)) },
-        description = stringResource(R.string.parametric_eq_desc),
-        icon = { Icon(painterResource(R.drawable.graphic_eq), null) },
-        onClick = { navController.navigate("settings/eq") }
-    )
+        Spacer(modifier = Modifier.height(27.dp))
 
-        SwitchPreference(
-            title = { Text(stringResource(R.string.seek_seconds_addup)) },
-            description = stringResource(R.string.seek_seconds_addup_description),
-            icon = { Icon(painterResource(R.drawable.arrow_forward), null) },
-            checked = seekExtraSeconds,
-            onCheckedChange = onSeekExtraSeconds
+        Material3SettingsGroup(scrollState = scrollState, 
+            title = stringResource(R.string.misc),
+            items = listOf(
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.stop_music_on_task_clear)),
+                    icon = painterResource(R.drawable.clear_all),
+                    title = { Text(stringResource(R.string.stop_music_on_task_clear)) },
+                    description = { Text(stringResource(R.string.stop_music_on_task_clear_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = stopMusicOnTaskClear,
+                            onCheckedChange = onStopMusicOnTaskClearChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (stopMusicOnTaskClear) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onStopMusicOnTaskClearChange(!stopMusicOnTaskClear) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.pause_music_when_media_is_muted)),
+                    icon = painterResource(R.drawable.volume_off_pause),
+                    title = { Text(stringResource(R.string.pause_music_when_media_is_muted)) },
+                    description = { Text(stringResource(R.string.pause_music_when_media_is_muted_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = pauseOnMute,
+                            onCheckedChange = onPauseOnMuteChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (pauseOnMute) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onPauseOnMuteChange(!pauseOnMute) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.resume_on_bluetooth_connect)),
+                    icon = painterResource(R.drawable.bluetooth),
+                    title = { Text(stringResource(R.string.resume_on_bluetooth_connect)) },
+                    description = { Text(stringResource(R.string.resume_on_bluetooth_connect_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = resumeOnBluetoothConnect,
+                            onCheckedChange = onResumeOnBluetoothConnectChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (resumeOnBluetoothConnect) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onResumeOnBluetoothConnectChange(!resumeOnBluetoothConnect) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.keep_screen_on_when_player_is_expanded)),
+                    icon = painterResource(R.drawable.screenshot),
+                    title = { Text(stringResource(R.string.keep_screen_on_when_player_is_expanded)) },
+                    description = { Text(stringResource(R.string.keep_screen_on_when_player_is_expanded_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = keepScreenOn,
+                            onCheckedChange = onKeepScreenOnChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (keepScreenOn) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onKeepScreenOnChange(!keepScreenOn) }
+                ),
+                Material3SettingsItem(
+    isHighlighted = (highlightKey == stringResource(R.string.export_desc)),
+                    icon = painterResource(R.drawable.file_export),
+                    title = { Text(stringResource(R.string.export_desc)) },
+                    description = { Text("Show 'Export as MP3' in menus") },
+                    trailingContent = {
+                        Switch(
+                            checked = enableExportAsMp3,
+                            onCheckedChange = onEnableExportAsMp3Change,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (enableExportAsMp3) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onEnableExportAsMp3Change(!enableExportAsMp3) }
+                ),
+                Material3SettingsItem(
+                    isHighlighted = (highlightKey == stringResource(R.string.youtube_decryption_settings)),
+                    icon = painterResource(R.drawable.settings),
+                    title = { Text(stringResource(R.string.youtube_decryption_settings)) },
+                    description = { Text(stringResource(R.string.youtube_decryption_desc)) },
+                    onClick = { navController.navigate("settings/echo_extractor") }
+                )
+            )
         )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.pause_on_device_mute)) },
-            description = stringResource(R.string.pause_on_device_mute_desc),
-            icon = { Icon(painterResource(R.drawable.volume_off), null) },
-            checked = pauseOnDeviceMute,
-            onCheckedChange = onPauseOnDeviceMuteChange
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.auto_start_on_bluetooth)) },
-            description = stringResource(R.string.auto_start_on_bluetooth_desc),
-            icon = { Icon(painterResource(R.drawable.bluetooth), null) },
-            checked = autoStartOnBluetooth,
-            onCheckedChange = onAutoStartOnBluetoothChange
-        )
-
-        PreferenceGroupTitle(
-            title = stringResource(R.string.queue)
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.persistent_queue)) },
-            description = stringResource(R.string.persistent_queue_desc),
-            icon = { Icon(painterResource(R.drawable.queue_music), null) },
-            checked = persistentQueue,
-            onCheckedChange = onPersistentQueueChange
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.permanent_shuffle)) },
-            description = stringResource(R.string.permanent_shuffle_desc),
-            icon = { Icon(painterResource(R.drawable.shuffle), null) },
-            checked = permanentShuffle,
-            onCheckedChange = onPermanentShuffleChange
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.auto_download_on_like)) },
-            description = stringResource(R.string.auto_download_on_like_desc),
-            icon = { Icon(painterResource(R.drawable.download), null) },
-            checked = autoDownloadOnLike,
-            onCheckedChange = onAutoDownloadOnLikeChange
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.auto_skip_next_on_error)) },
-            description = stringResource(R.string.auto_skip_next_on_error_desc),
-            icon = { Icon(painterResource(R.drawable.skip_next), null) },
-            checked = autoSkipNextOnError,
-            onCheckedChange = onAutoSkipNextOnErrorChange
-        )
-
-        PreferenceGroupTitle(
-            title = stringResource(R.string.misc)
-        )
-
-        SwitchPreference(
-            title = { Text(stringResource(R.string.stop_music_on_task_clear)) },
-            icon = { Icon(painterResource(R.drawable.clear_all), null) },
-            checked = stopMusicOnTaskClear,
-            onCheckedChange = onStopMusicOnTaskClearChange
-        )
-
-        PreferenceEntry(
-            title = { Text(stringResource(R.string.artist_separators)) },
-            description = artistSeparators.map { "\"$it\"" }.joinToString("  "),
-            icon = { Icon(painterResource(R.drawable.artist), null) },
-            onClick = { showArtistSeparatorsDialog = true }
-        )
-
-        PreferenceEntry(
-            title = { Text(stringResource(R.string.manage_playlist_tags)) },
-            description = stringResource(R.string.manage_playlist_tags_desc),
-            icon = { Icon(painterResource(R.drawable.style), null) },
-            onClick = { showTagsManagementDialog = true }
-        )
+        Spacer(modifier = Modifier.height(16.dp))
+    
+        Spacer(Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom)))
     }
 
     TopAppBar(

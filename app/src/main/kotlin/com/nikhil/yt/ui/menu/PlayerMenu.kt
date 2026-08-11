@@ -1,76 +1,49 @@
-/*
- * Velune - by Nikhil
- * Nikhil
- * Licensed Under GPL-3.0
- */
-
 
 
 package com.nikhil.yt.ui.menu
 
-import com.nikhil.yt.ui.component.VeluneLoader
-import android.content.Intent
+import android.content.Context
 import android.content.res.Configuration
-import android.media.audiofx.AudioEffect
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.ListItem
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -82,11 +55,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -94,56 +64,41 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
-import android.widget.Toast
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
-import coil3.compose.AsyncImage
-import com.nikhil.yt.innertube.YouTube
-import com.nikhil.yt.innertube.models.WatchEndpoint
+import com.music.innertube.YouTube
 import com.nikhil.yt.LocalDatabase
 import com.nikhil.yt.LocalDownloadUtil
+import com.nikhil.yt.LocalListenTogetherManager
 import com.nikhil.yt.LocalPlayerConnection
 import com.nikhil.yt.R
-import com.nikhil.yt.constants.ArtistSeparatorsKey
-import com.nikhil.yt.constants.EqualizerBandLevelsMbKey
-import com.nikhil.yt.constants.EqualizerBassBoostEnabledKey
-import com.nikhil.yt.constants.EqualizerBassBoostStrengthKey
-import com.nikhil.yt.constants.EqualizerCustomProfilesJsonKey
-import com.nikhil.yt.constants.EqualizerEnabledKey
-import com.nikhil.yt.constants.EqualizerOutputGainEnabledKey
-import com.nikhil.yt.constants.EqualizerOutputGainMbKey
-import com.nikhil.yt.constants.EqualizerSelectedProfileIdKey
-import com.nikhil.yt.constants.EqualizerVirtualizerEnabledKey
-import com.nikhil.yt.constants.EqualizerVirtualizerStrengthKey
+import com.nikhil.yt.constants.EnableExportAsMp3Key
+import com.nikhil.yt.constants.ExportDirectoryUriKey
+import com.nikhil.yt.constants.ExportedSongIdsKey
+import com.nikhil.yt.constants.ExportingSongIdsKey
 import com.nikhil.yt.constants.ListItemHeight
+import com.nikhil.yt.listentogether.ConnectionState
+import com.nikhil.yt.listentogether.ListenTogetherEvent
 import com.nikhil.yt.models.MediaMetadata
-import com.nikhil.yt.playback.EqCapabilities
-import com.nikhil.yt.playback.EqProfile
-import com.nikhil.yt.playback.EqProfilesPayload
-import com.nikhil.yt.playback.EqualizerJson
 import com.nikhil.yt.playback.ExoDownloadService
-import com.nikhil.yt.playback.queues.YouTubeQueue
 import com.nikhil.yt.ui.component.BottomSheetState
 import com.nikhil.yt.ui.component.ListDialog
-import com.nikhil.yt.ui.component.MenuSurfaceSection
+import com.nikhil.yt.ui.component.Material3MenuGroup
+import com.nikhil.yt.ui.component.Material3MenuItemData
 import com.nikhil.yt.ui.component.NewAction
 import com.nikhil.yt.ui.component.NewActionGrid
-import com.nikhil.yt.ui.component.TextFieldDialog
+import com.nikhil.yt.ui.component.VolumeSlider
 import com.nikhil.yt.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.log2
 import kotlin.math.pow
 import kotlin.math.round
-import kotlin.math.roundToInt
-import java.util.UUID
 
 @Composable
 fun PlayerMenu(
@@ -158,50 +113,76 @@ fun PlayerMenu(
     val context = LocalContext.current
     val database = LocalDatabase.current
     val playerConnection = LocalPlayerConnection.current ?: return
-    val playerVolume = playerConnection.service.playerVolume.collectAsState()
-    val activityResultLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
+    var systemVolume by remember { androidx.compose.runtime.mutableFloatStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat()) }
+    var maxSystemVolume by remember { androidx.compose.runtime.mutableFloatStateOf(audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat()) }
+
+    androidx.compose.runtime.DisposableEffect(context) {
+        val volumeChangeReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: android.content.Intent) {
+                if (intent.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val streamType = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    if (streamType == android.media.AudioManager.STREAM_MUSIC) {
+                        systemVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat()
+                        maxSystemVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat()
+                    }
+                }
+            }
+        }
+        context.registerReceiver(
+            volumeChangeReceiver,
+            android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        )
+        onDispose {
+            context.unregisterReceiver(volumeChangeReceiver)
+        }
+    }
+    
+    val castHandler = remember(playerConnection) {
+        try {
+            playerConnection.service.castConnectionHandler
+        } catch (e: Exception) {
+            null
+        }
+    }
+    val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
+    val castVolume by castHandler?.castVolume?.collectAsState() ?: remember { mutableFloatStateOf(1f) }
+    val castDeviceName by castHandler?.castDeviceName?.collectAsState() ?: remember { mutableStateOf<String?>(null) }
+    
     val librarySong by database.song(mediaMetadata.id).collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
 
     val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id)
         .collectAsState(initial = null)
 
+
+
     val artists =
         remember(mediaMetadata.artists) {
             mediaMetadata.artists.filter { it.id != null }
         }
 
-    // Artist separators for splitting artist names
-    val (artistSeparators) = rememberPreference(ArtistSeparatorsKey, defaultValue = ",;/&")
-
-    // Split artists by configured separators
-    data class SplitArtist(
-        val name: String,
-        val originalArtist: MediaMetadata.Artist?
-    )
-
-    val splitArtists = remember(artists, artistSeparators) {
-        if (artistSeparators.isEmpty()) {
-            artists.map { SplitArtist(it.name, it) }
-        } else {
-            val separatorRegex = "[${Regex.escape(artistSeparators)}]".toRegex()
-            artists.flatMap { artist ->
-                val parts = artist.name.split(separatorRegex).map { it.trim() }.filter { it.isNotEmpty() }
-                if (parts.size > 1) {
-                    parts.mapIndexed { index, name ->
-                        SplitArtist(name, if (index == 0) artist else null)
-                    }
-                } else {
-                    listOf(SplitArtist(artist.name, artist))
-                }
-            }
-        }
-    }
-
     var showChoosePlaylistDialog by rememberSaveable {
         mutableStateOf(false)
     }
+    
+    val (enableExportAsMp3) = rememberPreference(key = EnableExportAsMp3Key, defaultValue = false)
+    val (exportDirectoryUri) = rememberPreference(key = ExportDirectoryUriKey, defaultValue = "")
+    val (exportingSongIds) = rememberPreference(key = ExportingSongIdsKey, defaultValue = "")
+    val (exportedSongIds) = rememberPreference(key = ExportedSongIdsKey, defaultValue = "")
+
+    val isExporting = remember(exportingSongIds, mediaMetadata.id) { exportingSongIds.split(",").contains(mediaMetadata.id) }
+    val isExported = remember(exportedSongIds, mediaMetadata.id) { exportedSongIds.split(",").contains(mediaMetadata.id) }
+    
+    var showListenTogetherDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    val listenTogetherManager = LocalListenTogetherManager.current
+    val ringtoneViewModel = iad1tya.echo.music.LocalRingtoneViewModel.current
+    val isListenTogetherGuest by listenTogetherManager?.guestPlaybackRestricted?.collectAsState(initial = false) ?: remember { mutableStateOf(false) }
+    val pendingSuggestions by listenTogetherManager?.pendingSuggestions?.collectAsState(initial = emptyList()) ?: remember { mutableStateOf(emptyList()) }
 
     AddToPlaylistDialog(
         isVisible = showChoosePlaylistDialog,
@@ -216,14 +197,13 @@ fun PlayerMenu(
         },
         onDismiss = {
             showChoosePlaylistDialog = false
-        },
-        onAddComplete = { songCount, playlistNames ->
-            val message = when {
-                playlistNames.size == 1 -> context.getString(R.string.added_to_playlist, playlistNames.first())
-                else -> context.getString(R.string.added_to_n_playlists, playlistNames.size)
-            }
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        },
+        }
+    )
+
+    ListenTogetherDialog(
+        visible = showListenTogetherDialog,
+        mediaMetadata = mediaMetadata,
+        onDismiss = { showListenTogetherDialog = false }
     )
 
     var showSelectArtistDialog by rememberSaveable {
@@ -234,58 +214,29 @@ fun PlayerMenu(
         ListDialog(
             onDismiss = { showSelectArtistDialog = false },
         ) {
-            items(splitArtists.distinctBy { it.name }) { splitArtist ->
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            text = splitArtist.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    leadingContent = {
-                        val thumbUrl = splitArtist.originalArtist?.thumbnailUrl
-                        if (thumbUrl.isNullOrBlank()) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.music_note),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        } else {
-                            AsyncImage(
-                                model = thumbUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier =
-                                    Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape),
-                            )
-                        }
-                    },
+            items(artists) { artist ->
+                Box(
+                    contentAlignment = Alignment.CenterStart,
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                splitArtist.originalArtist?.let { artist ->
-                                    navController.navigate("artist/${artist.id}")
-                                    showSelectArtistDialog = false
-                                    playerBottomSheetState.collapseSoft()
-                                    onDismiss()
-                                }
-                            },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
+                    Modifier
+                        .fillParentMaxWidth()
+                        .height(ListItemHeight)
+                        .clickable {
+                            navController.navigate("artist/${artist.id}")
+                            showSelectArtistDialog = false
+                            playerBottomSheetState.collapseSoft()
+                            onDismiss()
+                        }
+                        .padding(horizontal = 24.dp),
+                ) {
+                    Text(
+                        text = artist.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -300,125 +251,43 @@ fun PlayerMenu(
         )
     }
 
-    var showEqualizerDialog by rememberSaveable {
-        mutableStateOf(false)
-    }
-
-    if (showEqualizerDialog) {
-        EqualizerDialog(
-            onDismiss = { showEqualizerDialog = false },
-            openSystemEqualizer = {
-                val intent =
-                    Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                        putExtra(
-                            AudioEffect.EXTRA_AUDIO_SESSION,
-                            playerConnection.player.audioSessionId,
-                        )
-                        putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
-                        putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-                    }
-                if (intent.resolveActivity(context.packageManager) != null) {
-                    activityResultLauncher.launch(intent)
-                }
-            },
-        )
-    }
-
-    val nowPlayingTitle =
-        remember(mediaMetadata.title) {
-            mediaMetadata.title.ifBlank { context.getString(R.string.no_title) }
-        }
-
-    val nowPlayingSubtitle =
-        remember(mediaMetadata.artists) {
-            mediaMetadata.artists.joinToString(separator = " • ") { it.name }
-        }
-
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-        ) {
-            val thumb = mediaMetadata.thumbnailUrl
-            if (thumb.isNullOrBlank()) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                    contentAlignment = Alignment.Center,
+    if (isQueueTrigger != true) {
+        if (isCasting && castDeviceName != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 24.dp, bottom = 6.dp),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.music_note),
+                        painter = painterResource(R.drawable.cast),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                }
-            } else {
-                AsyncImage(
-                    model = thumb,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp)),
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.now_playing),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = nowPlayingTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee(),
-                )
-                if (nowPlayingSubtitle.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = nowPlayingSubtitle,
+                        text = stringResource(R.string.casting_to, castDeviceName ?: ""),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee(),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
         }
     }
 
-    if (isQueueTrigger != true) {
-        Spacer(modifier = Modifier.height(12.dp))
-
-        PlayerVolumeCard(
-            volume = playerVolume.value,
-            onVolumeChange = { playerConnection.service.playerVolume.value = it },
-        )
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
 
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
     LazyColumn(
-        userScrollEnabled = !isPortrait,
         contentPadding = PaddingValues(
             start = 0.dp,
             top = 0.dp,
@@ -427,386 +296,498 @@ fun PlayerMenu(
         ),
     ) {
         item {
+            val startingRadioText = stringResource(R.string.starting_radio)
             NewActionGrid(
-                actions = listOf(
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.radio),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(R.string.start_radio),
-                        onClick = {
-                            Toast.makeText(context, context.getString(R.string.starting_radio), Toast.LENGTH_SHORT).show()
-                            playerConnection.startRadioSeamlessly()
-                            onDismiss()
-                        }
-                    ),
+                actions = listOfNotNull(
+                    if (!isListenTogetherGuest) {
+                        NewAction(
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.radio),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            text = stringResource(R.string.start_an_radio),
+                            onClick = {
+                                Toast.makeText(context, startingRadioText, Toast.LENGTH_SHORT).show()
+                                playerConnection.startRadioSeamlessly()
+                                onDismiss()
+                            }
+                        )
+                    } else null,
                     NewAction(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
                                 contentDescription = null,
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
-                        text = stringResource(R.string.add_to_playlist),
+                        text = stringResource(R.string.add_to_an_playlist),
                         onClick = { showChoosePlaylistDialog = true }
                     ),
                     NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.link),
+                                painter = painterResource(R.drawable.share),
                                 contentDescription = null,
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
-                        text = stringResource(R.string.copy_link),
+                        text = stringResource(R.string.share),
                         onClick = {
-                            val clipboard =
-                                context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clip =
-                                android.content.ClipData.newPlainText(
-                                    context.getString(R.string.copy_link),
-                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+                            val intent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                type = "text/plain"
+                                putExtra(
+                                    android.content.Intent.EXTRA_TEXT,
+                                    "https://share.echomusic.fun/watch?v=${mediaMetadata.id}"
                                 )
-                            clipboard.setPrimaryClip(clip)
-                            android.widget.Toast.makeText(context, R.string.link_copied, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            context.startActivity(android.content.Intent.createChooser(intent, null))
                             onDismiss()
-                        }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.fire),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(R.string.music_together, stringResource(R.string.app_name)),
-                        onClick = {
-                            onDismiss()
-                            playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                            navController.navigate("settings/music_together")
                         }
                     )
                 ),
-                modifier = Modifier.padding(vertical = 4.dp)
+                columns = if (isListenTogetherGuest) 2 else 3,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp)
             )
         }
+
         item {
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-        if (splitArtists.isNotEmpty() || mediaMetadata.album != null) {
-            item {
-                MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                    Column {
-                        if (splitArtists.isNotEmpty()) {
-                            ListItem(
-                                headlineContent = { Text(text = stringResource(R.string.view_artist)) },
-                                leadingContent = {
+            Material3MenuGroup(
+                items = buildList {
+                    if (artists.isNotEmpty()) {
+                        add(
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.view_artist)) },
+                                description = {
+                                    Text(
+                                        text = mediaMetadata.artists.joinToString { it.name },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.artist),
                                         contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 },
-                                modifier =
-                                    Modifier.clickable {
-                                        if (splitArtists.size == 1 && splitArtists[0].originalArtist != null) {
-                                            onDismiss()
-                                            playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                                            navController.navigate("artist/${splitArtists[0].originalArtist!!.id}")
-                                        } else {
-                                            showSelectArtistDialog = true
-                                        }
-                                    },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                onClick = {
+                                    if (mediaMetadata.artists.size == 1) {
+                                        navController.navigate("artist/${mediaMetadata.artists[0].id}")
+                                        playerBottomSheetState.collapseSoft()
+                                        onDismiss()
+                                    } else {
+                                        showSelectArtistDialog = true
+                                    }
+                                }
                             )
-                        }
-
-                        if (splitArtists.isNotEmpty() && mediaMetadata.album != null) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 56.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                        }
-
-                        if (mediaMetadata.album != null) {
-                            ListItem(
-                                headlineContent = { Text(text = stringResource(R.string.view_album)) },
-                                leadingContent = {
+                        )
+                    }
+                    if (mediaMetadata.album != null) {
+                        add(
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.view_album)) },
+                                description = {
+                                    Text(
+                                        text = mediaMetadata.album.title,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.album),
                                         contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 },
-                                modifier =
-                                    Modifier.clickable {
-                                        onDismiss()
-                                        playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                                        navController.navigate("album/${mediaMetadata.album.id}")
-                                    },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                onClick = {
+                                    navController.navigate("album/${mediaMetadata.album.id}")
+                                    playerBottomSheetState.collapseSoft()
+                                    onDismiss()
+                                }
                             )
-                        }
-                    }
-                }
-            }
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-        item {
-            when (download?.state) {
-                Download.STATE_COMPLETED -> {
-                    MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                        ListItem(
-                        headlineContent = {
-                            Text(
-                                text = stringResource(R.string.remove_download),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        },
-                        leadingContent = {
-                            Icon(
-                                painter = painterResource(R.drawable.offline),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            DownloadService.sendRemoveDownload(
-                                context,
-                                ExoDownloadService::class.java,
-                                mediaMetadata.id,
-                                false,
-                            )
-                        }
-                        , colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
                     }
-                }
-                Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> {
-                    MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                        ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.downloading)) },
-                        leadingContent = {
-                            VeluneLoader(size = 24.dp)
-                        },
-                        modifier = Modifier.clickable {
-                            DownloadService.sendRemoveDownload(
-                                context,
-                                ExoDownloadService::class.java,
-                                mediaMetadata.id,
-                                false,
-                            )
-                        }
-                        , colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-                    }
-                }
-                else -> {
-                    MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                        ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.action_download)) },
-                        leadingContent = {
-                            Icon(
-                                painter = painterResource(R.drawable.download),
-                                contentDescription = null,
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            database.transaction {
-                                insert(mediaMetadata)
+                    
+                    val isInLibrary = librarySong?.song?.inLibrary != null
+                    add(
+                        Material3MenuItemData(
+                            title = { 
+                                Text(
+                                    text = stringResource(
+                                        if (isInLibrary) R.string.remove_from_library
+                                        else R.string.add_to_library
+                                    )
+                                )
+                            },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(
+                                        if (isInLibrary) R.drawable.library_add_check
+                                        else R.drawable.library_add
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            onClick = {
+                                playerConnection.toggleLibrary()
+                                onDismiss()
                             }
-                            val downloadRequest =
-                                DownloadRequest
-                                    .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
-                                    .setCustomCacheKey(mediaMetadata.id)
-                                    .setData(mediaMetadata.title.toByteArray())
-                                    .build()
-                            DownloadService.sendAddDownload(
-                                context,
-                                ExoDownloadService::class.java,
-                                downloadRequest,
-                                false,
+                        )
+                    )
+                    add(
+                        Material3MenuItemData(
+                            customComposable = {
+                                iad1tya.echo.music.ui.component.CastButton(asMenuItem = true)
+                            }
+                        )
+                    )
+                    
+                    add(
+                        Material3MenuItemData(
+                            title = { Text(text = "Ambient Mode") },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.fullscreen),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            onClick = {
+                                navController.navigate("ambient_mode")
+                                playerBottomSheetState.collapseSoft()
+                                onDismiss()
+                            }
+                        )
+                    )
+                }
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        item {
+            Material3MenuGroup(
+                items = listOf(
+                    when (download?.state) {
+                        Download.STATE_COMPLETED -> {
+                            Material3MenuItemData(
+                                title = {
+                                    Text(
+                                        text = stringResource(R.string.remove_download)
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.offline),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                onClick = {
+                                    DownloadService.sendRemoveDownload(
+                                        context,
+                                        ExoDownloadService::class.java,
+                                        mediaMetadata.id,
+                                        false,
+                                    )
+                                }
                             )
                         }
-                        , colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+
+                        Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> {
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.downloading)) },
+                                icon = {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                },
+                                onClick = {
+                                    DownloadService.sendRemoveDownload(
+                                        context,
+                                        ExoDownloadService::class.java,
+                                        mediaMetadata.id,
+                                        false,
+                                    )
+                                }
+                            )
+                        }
+
+                        else -> {
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.action_download)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.download),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                onClick = {
+                                    database.transaction {
+                                        insert(mediaMetadata)
+                                    }
+                                    val downloadRequest =
+                                        DownloadRequest
+                                            .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
+                                            .setCustomCacheKey(mediaMetadata.id)
+                                            .setData(mediaMetadata.title.toByteArray())
+                                            .build()
+                                    DownloadService.sendAddDownload(
+                                        context,
+                                        ExoDownloadService::class.java,
+                                        downloadRequest,
+                                        false,
+                                    )
+                                }
+                            )
+                        }
+                    }
+                )
+            )
+        }
+
+        if (enableExportAsMp3) {
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+            item {
+                Material3MenuGroup(
+                    items = listOf(
+                        when {
+                            isExporting -> Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.exporting)) },
+                                icon = {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                },
+                                onClick = {}
+                            )
+                            isExported -> Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.action_exported)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.folder_managed),
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {}
+                            )
+                            else -> Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.action_export)) },
+                                description = { Text(text = stringResource(R.string.export_desc)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.file_export),
+                                        contentDescription = null,
+                                    )
+                                },
+                                onClick = {
+                                    if (exportDirectoryUri.isBlank()) {
+                                        android.widget.Toast.makeText(context, context.getString(R.string.export_directory_not_set), android.widget.Toast.LENGTH_SHORT).show()
+                                        onDismiss()
+                                    } else {
+                                        onDismiss()
+                                        iad1tya.echo.music.playback.AudioExportService.start(
+                                            context = context,
+                                            songId = mediaMetadata.id,
+                                            songTitle = mediaMetadata.title,
+                                            songArtist = artists.joinToString(", ") { it.name },
+                                            songAlbum = mediaMetadata.album?.title ?: "",
+                                            artworkUrl = mediaMetadata.thumbnailUrl ?: "",
+                                            targetDirectoryUri = exportDirectoryUri
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    )
+                )
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        item {
+            Material3MenuGroup(
+                items = listOf(
+                    Material3MenuItemData(
+                        title = { Text(text = "Set as Ringtone") },
+                        icon = {
+                            Icon(
+                                painter = painterResource(R.drawable.notification),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        onClick = {
+                            if (ringtoneViewModel.hasSettingsPermission(context)) {
+                                ringtoneViewModel.showTrimmer(
+                                    mediaMetadata.id,
+                                    mediaMetadata.title,
+                                    mediaMetadata.artists.joinToString { it.name },
+                                    mediaMetadata.duration
+                                )
+                            } else {
+                                ringtoneViewModel.requestSettingsPermission(context)
+                            }
+                            onDismiss()
+                        }
+                    )
+                )
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        item {
+            Material3MenuGroup(
+                items = buildList {
+                    add(
+                        Material3MenuItemData(
+                            title = { Text(text = stringResource(R.string.listen_together)) },
+                            icon = {
+                                
+                                Box {
+                                    Icon(
+                                        painter = painterResource(R.drawable.group),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    if (pendingSuggestions.isNotEmpty()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .offset(x = 8.dp, y = (-6).dp)
+                                                .align(Alignment.TopEnd)
+                                        ) {
+                                            Text(
+                                                text = pendingSuggestions.size.toString(),
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            onClick = { showListenTogetherDialog = true }
+                        )
+                    )
+                    if (isListenTogetherGuest) {
+                        add(
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.resync)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.replay),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                onClick = {
+                                    listenTogetherManager?.requestSync()
+                                    onDismiss()
+                                }
+                            )
                         )
                     }
                 }
-            }
+            )
         }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
         item {
-            MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                Column {
-                    ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.details)) },
-                        leadingContent = {
-                            Icon(
-                                painter = painterResource(R.drawable.info),
-                                contentDescription = null,
-                            )
-                        },
-                        modifier =
-                            Modifier.clickable {
+            Material3MenuGroup(
+                items = buildList {
+                    add(
+                        Material3MenuItemData(
+                            title = { Text(text = stringResource(R.string.details)) },
+                            description = { Text(text = stringResource(R.string.details_desc)) },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.info),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            onClick = {
                                 onShowDetailsDialog()
                                 onDismiss()
-                            },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            }
+                        )
                     )
 
                     if (isQueueTrigger != true) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 56.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant,
+                        add(
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.equalizer)) },
+                                description = { Text(text = stringResource(R.string.equalizer_desc)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.equalizer),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                onClick = {
+                                    navController.navigate("equalizer")
+                                    onDismiss()
+                                }
+                            )
                         )
-
-                        // Equalizer removed — accessible via player top-right icon
-
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.tempo_and_pitch)) },
-                            leadingContent = {
-                                Icon(
-                                    painter = painterResource(R.drawable.speed),
-                                    contentDescription = null,
-                                )
-                            },
-                            supportingContent = {
-                                val playbackParameters by playerConnection.playbackParameters.collectAsState()
-                                Text(
-                                    text = "x${formatMultiplier(playbackParameters.speed)} • x${formatMultiplier(playbackParameters.pitch)}",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            modifier = Modifier.clickable { showPitchTempoDialog = true },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        add(
+                            Material3MenuItemData(
+                                title = { Text(text = stringResource(R.string.advanced)) },
+                                description = { Text(text = stringResource(R.string.advanced_desc)) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.tune),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showPitchTempoDialog = true
+                                }
+                            )
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerVolumeCard(
-    volume: Float,
-    onVolumeChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val safeVolume = volume.coerceIn(0f, 1f)
-
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.volume),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
-
-                Text(
-                    text = "${(safeVolume * 100).roundToInt()}%",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            VolumeSliderL(
-                value = safeVolume,
-                onValueChange = onVolumeChange,
-                modifier = Modifier.fillMaxWidth(),
             )
-
         }
     }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun VolumeSliderL(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val safeValue = value.coerceIn(0f, 1f)
-    var sliderValue by remember { mutableFloatStateOf(safeValue) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    LaunchedEffect(safeValue) {
-        if (!isDragging) sliderValue = safeValue
-    }
-
-    val insetIcon = if (sliderValue <= 0f) R.drawable.volume_off else R.drawable.volume_up
-
-        Slider(
-            value = sliderValue,
-            onValueChange = { updated ->
-                isDragging = true
-                val coerced = updated.coerceIn(0f, 1f)
-                sliderValue = coerced
-                onValueChange(coerced)
-            },
-            onValueChangeFinished = { isDragging = false },
-            valueRange = 0f..1f,
-            modifier = Modifier.height(56.dp),
-            thumb = {
-                Icon(
-                    painter = painterResource(insetIcon),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            colors = SliderDefaults.colors(),
-        )
 }
 
 @Composable
 fun TempoPitchDialog(onDismiss: () -> Unit) {
     val playerConnection = LocalPlayerConnection.current ?: return
-    val initialSpeed = remember { playerConnection.player.playbackParameters.speed }
-    val initialPitch = remember { playerConnection.player.playbackParameters.pitch }
-
     var tempo by remember {
-        mutableFloatStateOf(initialSpeed.safeCoerceIn(TempoMin, TempoMax, fallback = 1f))
+        mutableFloatStateOf(playerConnection.player.playbackParameters.speed)
     }
-
-    var pitch by remember {
-        mutableFloatStateOf(initialPitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f))
+    var transposeValue by remember {
+        mutableIntStateOf(round(12 * log2(playerConnection.player.playbackParameters.pitch)).toInt())
     }
-
-    var pitchMode by rememberSaveable {
-        mutableStateOf(
-            if (isPitchSemitoneAligned(pitch)) PitchMode.Semitones else PitchMode.Multiplier
-        )
-    }
-
-    val applyPlaybackParameters: (Float, Float) -> Unit = { speed, pitchMultiplier ->
+    val updatePlaybackParameters = {
         playerConnection.player.playbackParameters =
-            PlaybackParameters(
-                speed.coerceIn(TempoMin, TempoMax),
-                pitchMultiplier.coerceIn(PitchMin, PitchMax),
-            )
+            PlaybackParameters(tempo, 2f.pow(transposeValue.toFloat() / 12))
     }
+    val listenTogetherManager = iad1tya.echo.music.LocalListenTogetherManager.current
+    val isInRoom = listenTogetherManager?.isInRoom ?: false
 
     AlertDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -818,8 +799,8 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
             TextButton(
                 onClick = {
                     tempo = 1f
-                    pitch = 1f
-                    applyPlaybackParameters(tempo, pitch)
+                    transposeValue = 0
+                    updatePlaybackParameters()
                 },
             ) {
                 Text(stringResource(R.string.reset))
@@ -833,1079 +814,1213 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
             }
         },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.speed),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                    )
-
-                    Text(
-                        text = stringResource(R.string.tempo),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    Text(
-                        text = "x${formatMultiplier(tempo)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.End,
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    IconButton(
-                        enabled = tempo > TempoMin,
-                        onClick = {
-                            tempo = (tempo - 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
-                            applyPlaybackParameters(tempo, pitch)
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.remove),
-                            contentDescription = null,
-                        )
-                    }
-
-                    Slider(
-                        value = multiplierToSlider(tempo),
-                        onValueChange = { slider ->
-                            val updated = sliderToMultiplier(slider).quantize(0.01f)
-                            if (abs(updated - tempo) >= 0.005f) {
-                                tempo = updated
-                                applyPlaybackParameters(tempo, pitch)
-                            }
+            Column {
+                if (!isInRoom) {
+                    ValueAdjuster(
+                        icon = R.drawable.speed,
+                        currentValue = tempo,
+                        values = (0..35).map { round((0.25f + it * 0.05f) * 100) / 100 },
+                        onValueUpdate = {
+                            tempo = it
+                            updatePlaybackParameters()
                         },
-                        valueRange = 0f..1f,
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(),
-                    )
-
-                    IconButton(
-                        enabled = tempo < TempoMax,
-                        onClick = {
-                            tempo = (tempo + 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
-                            applyPlaybackParameters(tempo, pitch)
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.add),
-                            contentDescription = null,
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                    presets.forEach { preset ->
-                        val selected = abs(tempo - preset) < 0.005f
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                tempo = preset
-                                applyPlaybackParameters(tempo, pitch)
-                            },
-                            label = { Text("x${formatMultiplier(preset)}") },
-                        )
-                    }
-                }
-
-                HorizontalDivider()
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.discover_tune),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                    )
-
-                    Text(
-                        text = stringResource(R.string.pitch),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    Text(
-                        text =
-                        when (pitchMode) {
-                            PitchMode.Semitones -> {
-                                val semitones = pitchToSemitones(pitch)
-                                "${if (semitones > 0) "+" else ""}$semitones"
-                            }
-
-                            PitchMode.Multiplier -> "x${formatMultiplier(pitch)}"
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.End,
+                        valueText = { "x$it" },
+                        modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    FilterChip(
-                        selected = pitchMode == PitchMode.Semitones,
-                        onClick = { pitchMode = PitchMode.Semitones },
-                        label = { Text(stringResource(R.string.pitch_mode_semitones_short)) },
-                    )
-                    FilterChip(
-                        selected = pitchMode == PitchMode.Multiplier,
-                        onClick = { pitchMode = PitchMode.Multiplier },
-                        label = { Text(stringResource(R.string.pitch_mode_multiplier_short)) },
-                    )
-                }
-
-                when (pitchMode) {
-                    PitchMode.Semitones -> {
-                        val currentSemitones = pitchToSemitones(pitch)
-                        Slider(
-                            value = currentSemitones.toFloat(),
-                            onValueChange = { slider ->
-                                val semitones = slider.roundToInt().coerceIn(-12, 12)
-                                val updated = semitonesToPitch(semitones)
-                                if (abs(updated - pitch) >= 0.0005f) {
-                                    pitch = updated
-                                    applyPlaybackParameters(tempo, pitch)
-                                }
-                            },
-                            valueRange = -12f..12f,
-                            steps = 23,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = SliderDefaults.colors(),
-                        )
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                        ) {
-                            val presets = listOf(-12, -7, -5, 0, 5, 7, 12)
-                            presets.forEach { preset ->
-                                val selected = currentSemitones == preset
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        pitch = semitonesToPitch(preset)
-                                        applyPlaybackParameters(tempo, pitch)
-                                    },
-                                    label = { Text("${if (preset > 0) "+" else ""}$preset") },
-                                )
-                            }
-                        }
-                    }
-
-                    PitchMode.Multiplier -> {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            IconButton(
-                                enabled = pitch > PitchMin,
-                                onClick = {
-                                    pitch = (pitch - 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
-                                    applyPlaybackParameters(tempo, pitch)
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.remove),
-                                    contentDescription = null,
-                                )
-                            }
-
-                            Slider(
-                                value = multiplierToSlider(pitch),
-                                onValueChange = { slider ->
-                                    val updated = sliderToMultiplier(slider).quantize(0.01f)
-                                    if (abs(updated - pitch) >= 0.005f) {
-                                        pitch = updated
-                                        applyPlaybackParameters(tempo, pitch)
-                                    }
-                                },
-                                valueRange = 0f..1f,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(),
-                            )
-
-                            IconButton(
-                                enabled = pitch < PitchMax,
-                                onClick = {
-                                    pitch = (pitch + 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
-                                    applyPlaybackParameters(tempo, pitch)
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.add),
-                                    contentDescription = null,
-                                )
-                            }
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                        ) {
-                            val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                            presets.forEach { preset ->
-                                val selected = abs(pitch - preset) < 0.005f
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        pitch = preset
-                                        applyPlaybackParameters(tempo, pitch)
-                                    },
-                                    label = { Text("x${formatMultiplier(preset)}") },
-                                )
-                            }
-                        }
-                    }
-                }
+                ValueAdjuster(
+                    icon = R.drawable.discover_tune,
+                    currentValue = transposeValue,
+                    values = (-12..12).toList(),
+                    onValueUpdate = {
+                        transposeValue = it
+                        updatePlaybackParameters()
+                    },
+                    valueText = { "${if (it > 0) "+" else ""}$it" },
+                )
             }
         },
     )
 }
 
-private enum class PitchMode {
-    Semitones,
-    Multiplier
-}
-
-private const val TempoMin = 0.25f
-private const val TempoMax = 2f
-private const val PitchMin = 0.25f
-private const val PitchMax = 2f
-
-private fun Float.safeCoerceIn(min: Float, max: Float, fallback: Float): Float {
-    val safe = if (this.isFinite()) this else fallback
-    return safe.coerceIn(min, max)
-}
-
-private fun Float.quantize(step: Float): Float {
-    if (step <= 0f) return this
-    return (round(this / step) * step).coerceAtLeast(0f)
-}
-
-private fun pitchToSemitones(pitch: Float): Int {
-    val safePitch = pitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f).coerceAtLeast(0.0001f)
-    return (12f * log2(safePitch)).roundToInt().coerceIn(-12, 12)
-}
-
-private fun semitonesToPitch(semitones: Int): Float {
-    return 2f.pow(semitones.toFloat() / 12f).coerceIn(PitchMin, PitchMax)
-}
-
-private fun isPitchSemitoneAligned(pitch: Float): Boolean {
-    val safePitch = pitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f).coerceAtLeast(0.0001f)
-    val semitones = (12f * log2(safePitch)).roundToInt()
-    val reconstructed = 2f.pow(semitones.toFloat() / 12f)
-    return abs(reconstructed - pitch) < 0.0015f
-}
-
-private fun formatMultiplier(multiplier: Float): String {
-    return String.format("%.2f", multiplier)
-}
-
-private fun sliderToMultiplier(slider: Float): Float {
-    val t = slider.coerceIn(0f, 1f)
-    val y = (t - 0.5f) * 2f
-    val curve = 2.2f
-    val absY = abs(y).pow(curve)
-    val shaped = when {
-        y > 0f -> absY
-        y < 0f -> -absY
-        else -> 0f
-    }
-    val exponent = if (y < 0f) 2f * shaped else shaped
-    return 2f.pow(exponent).coerceIn(TempoMin, TempoMax)
-}
-
-private fun multiplierToSlider(multiplier: Float): Float {
-    val m = multiplier.coerceIn(TempoMin, TempoMax)
-    val log = log2(m)
-    val curve = 2.2f
-    val shaped = if (m < 1f) (log / 2f) else log
-    val absShaped = abs(shaped).pow(1f / curve)
-    val y = when {
-        shaped > 0f -> absShaped
-        shaped < 0f -> -absShaped
-        else -> 0f
-    }
-    return (0.5f + y / 2f).coerceIn(0f, 1f)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EqualizerDialog(
-    onDismiss: () -> Unit,
-    openSystemEqualizer: () -> Unit,
-) {
-    val context = LocalContext.current
-    val playerConnection = LocalPlayerConnection.current ?: return
-    val eqCapabilities by playerConnection.service.eqCapabilities.collectAsState()
-
-    val (eqEnabled, setEqEnabled) = rememberPreference(EqualizerEnabledKey, defaultValue = false)
-    val (selectedProfileId, setSelectedProfileId) = rememberPreference(EqualizerSelectedProfileIdKey, defaultValue = "flat")
-    val (bandLevelsRaw, setBandLevelsRaw) = rememberPreference(EqualizerBandLevelsMbKey, defaultValue = "")
-
-    val (outputGainEnabled, setOutputGainEnabled) = rememberPreference(EqualizerOutputGainEnabledKey, defaultValue = false)
-    val (outputGainMb, setOutputGainMb) = rememberPreference(EqualizerOutputGainMbKey, defaultValue = 0)
-
-    val (bassBoostEnabled, setBassBoostEnabled) = rememberPreference(EqualizerBassBoostEnabledKey, defaultValue = false)
-    val (bassBoostStrength, setBassBoostStrength) = rememberPreference(EqualizerBassBoostStrengthKey, defaultValue = 0)
-
-    val (virtualizerEnabled, setVirtualizerEnabled) = rememberPreference(EqualizerVirtualizerEnabledKey, defaultValue = false)
-    val (virtualizerStrength, setVirtualizerStrength) = rememberPreference(EqualizerVirtualizerStrengthKey, defaultValue = 0)
-
-    val (customProfilesJson, setCustomProfilesJson) = rememberPreference(EqualizerCustomProfilesJsonKey, defaultValue = "")
-
-    val caps = eqCapabilities
-    val bandCount = caps?.bandCount ?: 0
-    val minMb = caps?.minBandLevelMb ?: -1500
-    val maxMb = caps?.maxBandLevelMb ?: 1500
-
-    var outputGainLocal by rememberSaveable { mutableIntStateOf(outputGainMb) }
-    LaunchedEffect(outputGainMb) { outputGainLocal = outputGainMb }
-
-    var bassBoostStrengthLocal by rememberSaveable { mutableIntStateOf(bassBoostStrength) }
-    LaunchedEffect(bassBoostStrength) { bassBoostStrengthLocal = bassBoostStrength }
-
-    var virtualizerStrengthLocal by rememberSaveable { mutableIntStateOf(virtualizerStrength) }
-    LaunchedEffect(virtualizerStrength) { virtualizerStrengthLocal = virtualizerStrength }
-
-    var bandLevelsMb by remember { mutableStateOf<List<Int>>(emptyList()) }
-    LaunchedEffect(bandLevelsRaw, bandCount) {
-        bandLevelsMb = resampleLevelsByIndex(decodeBandLevelsMb(bandLevelsRaw), bandCount)
-    }
-
-    val profiles = remember(customProfilesJson) { decodeProfilesPayload(customProfilesJson).profiles }
-    val activeProfileId = selectedProfileId.removePrefix("profile:").takeIf { selectedProfileId.startsWith("profile:") }
-    val activeProfile = remember(profiles, activeProfileId) { profiles.firstOrNull { it.id == activeProfileId } }
-
-    var showSaveProfileDialog by rememberSaveable { mutableStateOf(false) }
-    var showManageProfilesDialog by rememberSaveable { mutableStateOf(false) }
-    var showImportProfilesDialog by rememberSaveable { mutableStateOf(false) }
-
-    if (showSaveProfileDialog) {
-        TextFieldDialog(
-            title = { Text(text = stringResource(R.string.eq_save_profile)) },
-            placeholder = { Text(text = stringResource(R.string.eq_profile_name)) },
-            onDone = { name ->
-                val trimmed = name.trim()
-                if (trimmed.isNotBlank()) {
-                    val newProfile =
-                        EqProfile(
-                            id = UUID.randomUUID().toString(),
-                            name = trimmed,
-                            bandCenterFreqHz = caps?.centerFreqHz.orEmpty(),
-                            bandLevelsMb = bandLevelsMb,
-                            outputGainMb = outputGainMb,
-                            bassBoostStrength = bassBoostStrength,
-                            virtualizerStrength = virtualizerStrength,
-                        )
-
-                    val updatedPayload =
-                        EqProfilesPayload(
-                            profiles =
-                                (profiles + newProfile)
-                                    .distinctBy { it.id }
-                                    .sortedBy { it.name.lowercase() },
-                        )
-
-                    setCustomProfilesJson(encodeProfilesPayload(updatedPayload))
-                    setSelectedProfileId("profile:${newProfile.id}")
-                }
-            },
-            onDismiss = { showSaveProfileDialog = false },
-        )
-    }
-
-    if (showImportProfilesDialog) {
-        TextFieldDialog(
-            title = { Text(text = stringResource(R.string.eq_import_profiles)) },
-            placeholder = { Text(text = stringResource(R.string.eq_import_profiles_placeholder)) },
-            singleLine = false,
-            maxLines = 10,
-            isInputValid = { it.trim().isNotBlank() },
-            onDone = { raw ->
-                val trimmed = raw.trim()
-                val payload =
-                    decodeProfilesPayload(trimmed).takeIf { it.profiles.isNotEmpty() }
-                        ?: runCatching {
-                            EqProfilesPayload(EqualizerJson.json.decodeFromString<List<EqProfile>>(trimmed))
-                        }.getOrNull()
-                        ?: EqProfilesPayload()
-
-                if (payload.profiles.isEmpty()) {
-                    Toast
-                        .makeText(context, context.getString(R.string.eq_import_failed), Toast.LENGTH_SHORT)
-                        .show()
-                    return@TextFieldDialog
-                }
-
-                val existingIds = profiles.map { it.id }.toMutableSet()
-                val normalizedImported =
-                    payload.profiles
-                        .map { p ->
-                            val baseName = p.name.trim().ifBlank { context.getString(R.string.eq_imported_profile) }
-                            val incomingId = p.id.trim()
-                            val finalId =
-                                if (incomingId.isBlank() || !existingIds.add(incomingId)) {
-                                    generateSequence { UUID.randomUUID().toString() }
-                                        .first { existingIds.add(it) }
-                                } else {
-                                    incomingId
-                                }
-
-                            p.copy(
-                                id = finalId,
-                                name = baseName,
-                            )
-                        }
-
-                val updatedPayload =
-                    EqProfilesPayload(
-                        profiles =
-                            (profiles + normalizedImported)
-                                .distinctBy { it.id }
-                                .sortedBy { it.name.lowercase() },
-                    )
-
-                setCustomProfilesJson(encodeProfilesPayload(updatedPayload))
-                val firstImportedId = normalizedImported.firstOrNull()?.id
-                if (firstImportedId != null) {
-                    setSelectedProfileId("profile:$firstImportedId")
-                }
-
-                Toast
-                    .makeText(
-                        context,
-                        context.getString(R.string.eq_import_success, normalizedImported.size),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-            },
-            onDismiss = { showImportProfilesDialog = false },
-        )
-    }
-
-    if (showManageProfilesDialog) {
-        ListDialog(
-            onDismiss = { showManageProfilesDialog = false },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            items(
-                items = profiles,
-                key = { it.id },
-            ) { profile ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                setEqEnabled(true)
-                                setBandLevelsRaw(encodeBandLevelsMb(profile.bandLevelsMb))
-                                setOutputGainMb(profile.outputGainMb)
-                                setOutputGainEnabled(profile.outputGainMb != 0)
-                                setBassBoostStrength(profile.bassBoostStrength)
-                                setBassBoostEnabled(profile.bassBoostStrength != 0)
-                                setVirtualizerStrength(profile.virtualizerStrength)
-                                setVirtualizerEnabled(profile.virtualizerStrength != 0)
-                                setSelectedProfileId("profile:${profile.id}")
-                                showManageProfilesDialog = false
-                            }.padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = profile.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = stringResource(R.string.eq_custom_profile),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            val updatedPayload =
-                                EqProfilesPayload(
-                                    profiles = profiles.filterNot { it.id == profile.id },
-                                )
-                            setCustomProfilesJson(encodeProfilesPayload(updatedPayload))
-                            if (selectedProfileId == "profile:${profile.id}") {
-                                setSelectedProfileId("manual")
-                            }
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.delete),
-                            contentDescription = null,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                TopAppBar(
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = stringResource(R.string.equalizer))
-                Spacer(Modifier.weight(1f))
-                Box(
-                    modifier = Modifier
-                        .width(80.dp)
-                        .height(24.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
-                ) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "spectrum")
-                    val barHeights = List(8) { index ->
-                        infiniteTransition.animateFloat(
-                            initialValue = 0.2f, targetValue = 0.8f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(500 + index * 100, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ), label = "bar$index"
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        barHeights.forEach { height ->
-                            Box(
-                                modifier = Modifier.width(6.dp).fillMaxHeight(height.value)
-                                    .background(
-                                        if (eqEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(2.dp)
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
-        },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    actions = {
-                        Switch(
-                            checked = eqEnabled,
-                            onCheckedChange = {
-                                setEqEnabled(it)
-                                if (it && selectedProfileId.isBlank()) setSelectedProfileId("manual")
-                            },
-                            thumbContent = {
-                                Icon(
-                                    painter = painterResource(id = if (eqEnabled) R.drawable.check else R.drawable.close),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize),
-                                )
-                            },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                )
-
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 24.dp),
-                ) {
-                    Spacer(Modifier.height(12.dp))
-
-                    if (caps == null || bandCount <= 0) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(24.dp),
-                            ) {
-                                VeluneLoader()
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    text = stringResource(R.string.eq_waiting_for_audio_session),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Button(onClick = openSystemEqualizer) {
-                                    Text(text = stringResource(R.string.eq_open_system_equalizer))
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(24.dp))
-                        return@Column
-                    }
-
-                    EqSection(
-                        title = stringResource(R.string.eq_presets),
-                        trailing = {
-                            TextButton(onClick = openSystemEqualizer) {
-                                Text(text = stringResource(R.string.eq_system))
-                            }
-                        },
-                    ) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp)
-                                    .horizontalScroll(rememberScrollState()),
-                        ) {
-                            FilterChip(
-                                selected = selectedProfileId == "flat",
-                                onClick = {
-                                    playerConnection.service.applyEqFlatPreset()
-                                    setSelectedProfileId("flat")
-                                },
-                                label = { Text(text = stringResource(R.string.eq_flat)) },
-                                colors =
-                                    FilterChipDefaults.filterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    ),
-                                border = null,
-                            )
-
-                            Spacer(Modifier.width(8.dp))
-
-                            caps.systemPresets.forEachIndexed { index, name ->
-                                FilterChip(
-                                    selected = selectedProfileId == "system:$index",
-                                    onClick = {
-                                        playerConnection.service.applySystemEqPreset(index)
-                                        setSelectedProfileId("system:$index")
-                                    },
-                                    label = {
-                                        Text(
-                                            text = name,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    },
-                                    colors =
-                                        FilterChipDefaults.filterChipColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        ),
-                                    border = null,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    EqSection(
-                        title = stringResource(R.string.eq_profiles),
-                        trailing = {
-                            TextButton(onClick = { showManageProfilesDialog = true }) {
-                                Text(text = stringResource(R.string.eq_manage))
-                            }
-                        },
-                    ) {
-                        val subtitle =
-                            when {
-                                selectedProfileId == "flat" -> stringResource(R.string.eq_flat)
-                                selectedProfileId.startsWith("system:") -> stringResource(R.string.eq_system_preset)
-                                activeProfile != null -> activeProfile.name
-                                else -> stringResource(R.string.eq_manual)
-                            }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp),
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = subtitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = stringResource(R.string.eq_profile_hint),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            TextButton(onClick = { showSaveProfileDialog = true }) {
-                                Text(text = stringResource(R.string.eq_save))
-                            }
-                            TextButton(onClick = { showImportProfilesDialog = true }) {
-                                Text(text = stringResource(R.string.eq_import))
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // ─── Frequency Response Curve ─────────────────────────────────
-                    val bandLabels = caps.centerFreqHz.map { formatHz(it) }
-                    val barCount = bandLevelsMb.size.coerceAtLeast(bandCount)
-                    val positiveBarColor = MaterialTheme.colorScheme.primary
-                    val zeroLineColor = MaterialTheme.colorScheme.outline
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        val barWidth = size.width / barCount * 0.6f
-                        val gap = size.width / barCount * 0.4f
-                        val zeroY = size.height / 2f
-                        val maxH = size.height / 2f - 4f
-
-                        for (i in 0 until barCount) {
-                            val level = bandLevelsMb.getOrNull(i) ?: 0
-                            val normalized = (level.toFloat() - minMb) / (maxMb - minMb).toFloat()
-                            val barH = normalized * maxH * 2 - maxH
-                            val x = i * (barWidth + gap) + gap / 2
-                            val color = when {
-                                level > 500 -> Color(0xFFE57373)
-                                level < -500 -> Color(0xFF64B5F6)
-                                else -> positiveBarColor
-                            }
-                            drawRoundRect(
-                                color = color.copy(alpha = 0.8f),
-                                topLeft = androidx.compose.ui.geometry.Offset(x, if (barH >= 0) zeroY - barH else zeroY),
-                                size = androidx.compose.ui.geometry.Size(barWidth, kotlin.math.abs(barH)),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f)
-                            )
-                        }
-                        // Zero line
-                        drawLine(
-                            color = zeroLineColor.copy(alpha = 0.5f),
-                            start = androidx.compose.ui.geometry.Offset(0f, zeroY),
-                            end = androidx.compose.ui.geometry.Offset(size.width, zeroY),
-                            strokeWidth = 1f
-                        )
-                    }
-
-                    EqSection(
-                        title = stringResource(R.string.eq_bands),
-                        trailing = {
-                            TextButton(
-                                onClick = {
-                                    setSelectedProfileId("manual")
-                                    setBandLevelsRaw(encodeBandLevelsMb(List(bandCount) { 0 }))
-                                },
-                            ) {
-                                Text(text = stringResource(R.string.reset))
-                            }
-                        },
-                    ) {
-                        caps.centerFreqHz.forEachIndexed { band, hz ->
-                            val label = formatHz(hz)
-                            val value = bandLevelsMb.getOrNull(band) ?: 0
-                            val valueDb = (value / 100f).coerceIn(-24f, 24f)
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier.width(64.dp),
-                                )
-
-                                Slider(
-                                    value = value.toFloat().coerceIn(minMb.toFloat(), maxMb.toFloat()),
-                                    onValueChange = { newValue ->
-                                        val coerced = newValue.toInt().coerceIn(minMb, maxMb)
-                                        bandLevelsMb =
-                                            bandLevelsMb.toMutableList().apply {
-                                                while (size < bandCount) add(0)
-                                                set(band, coerced)
-                                            }
-                                    },
-                                    onValueChangeFinished = {
-                                        setSelectedProfileId("manual")
-                                        setBandLevelsRaw(encodeBandLevelsMb(bandLevelsMb))
-                                    },
-                                    valueRange = minMb.toFloat()..maxMb.toFloat(),
-                                    colors =
-                                        SliderDefaults.colors(
-                                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        ),
-                                    modifier = Modifier.weight(1f),
-                                )
-
-                                Text(
-                                    text = formatDb(valueDb),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.width(64.dp),
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    EqSection(title = stringResource(R.string.eq_output_gain)) {
-                        EqToggleSliderRow(
-                            enabled = outputGainEnabled,
-                            onEnabledChange = {
-                                setSelectedProfileId("manual")
-                                setOutputGainEnabled(it)
-                            },
-                            value = outputGainLocal,
-                            onValueChange = { outputGainLocal = it },
-                            valueRange = -1500..1500,
-                            formatValue = { formatDb(it / 100f) },
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            onValueChangeFinished = {
-                                setSelectedProfileId("manual")
-                                setOutputGainMb(outputGainLocal)
-                            },
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    EqSection(title = stringResource(R.string.eq_bass_boost)) {
-                        EqToggleSliderRow(
-                            enabled = bassBoostEnabled,
-                            onEnabledChange = {
-                                setSelectedProfileId("manual")
-                                setBassBoostEnabled(it)
-                            },
-                            value = bassBoostStrengthLocal,
-                            onValueChange = { bassBoostStrengthLocal = it },
-                            valueRange = 0..1000,
-                            formatValue = { "${it / 10}%" },
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            onValueChangeFinished = {
-                                setSelectedProfileId("manual")
-                                setBassBoostStrength(bassBoostStrengthLocal)
-                            },
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    EqSection(title = stringResource(R.string.eq_virtualizer)) {
-                        EqToggleSliderRow(
-                            enabled = virtualizerEnabled,
-                            onEnabledChange = {
-                                setSelectedProfileId("manual")
-                                setVirtualizerEnabled(it)
-                            },
-                            value = virtualizerStrengthLocal,
-                            onValueChange = { virtualizerStrengthLocal = it },
-                            valueRange = 0..1000,
-                            formatValue = { "${it / 10}%" },
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            onValueChangeFinished = {
-                                setSelectedProfileId("manual")
-                                setVirtualizerStrength(virtualizerStrengthLocal)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EqSection(
-    title: String,
-    trailing: @Composable (() -> Unit)? = null,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(vertical = 16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                trailing?.invoke()
-            }
-            content()
-        }
-    }
-}
-
-@Composable
-private fun EqToggleSliderRow(
-    enabled: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    valueRange: IntRange,
-    formatValue: (Int) -> String,
+fun <T> ValueAdjuster(
+    @DrawableRes icon: Int,
+    currentValue: T,
+    values: List<T>,
+    onValueUpdate: (T) -> Unit,
+    valueText: (T) -> String,
     modifier: Modifier = Modifier,
-    onValueChangeFinished: (() -> Unit)? = null,
 ) {
     Row(
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = modifier,
     ) {
-        Switch(
-            checked = enabled,
-            onCheckedChange = onEnabledChange,
-            thumbContent = {
-                Icon(
-                    painter = painterResource(id = if (enabled) R.drawable.check else R.drawable.close),
-                    contentDescription = null,
-                    modifier = Modifier.size(SwitchDefaults.IconSize),
-                )
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+        )
+
+        IconButton(
+            enabled = currentValue != values.first(),
+            onClick = {
+                onValueUpdate(values[values.indexOf(currentValue) - 1])
             },
-        )
-
-        Spacer(Modifier.width(12.dp))
-
-        Slider(
-            value = value.toFloat().coerceIn(valueRange.first.toFloat(), valueRange.last.toFloat()),
-            onValueChange = { onValueChange(it.toInt().coerceIn(valueRange.first, valueRange.last)) },
-            onValueChangeFinished = { onValueChangeFinished?.invoke() },
-            valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-            enabled = enabled,
-            colors =
-                SliderDefaults.colors(
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-            modifier = Modifier.weight(1f),
-        )
-
-        Spacer(Modifier.width(12.dp))
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.remove),
+                contentDescription = null,
+            )
+        }
 
         Text(
-            text = formatValue(value),
-            style = MaterialTheme.typography.labelLarge,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(72.dp),
+            text = valueText(currentValue),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(80.dp),
         )
+
+        IconButton(
+            enabled = currentValue != values.last(),
+            onClick = {
+                onValueUpdate(values[values.indexOf(currentValue) + 1])
+            },
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.add),
+                contentDescription = null,
+            )
+        }
     }
 }
 
-private fun decodeBandLevelsMb(raw: String?): List<Int> {
-    if (raw.isNullOrBlank()) return emptyList()
-    return runCatching { EqualizerJson.json.decodeFromString<List<Int>>(raw) }.getOrNull() ?: emptyList()
-}
-
-private fun encodeBandLevelsMb(levelsMb: List<Int>): String {
-    return runCatching { EqualizerJson.json.encodeToString(levelsMb) }.getOrNull().orEmpty()
-}
-
-private fun decodeProfilesPayload(raw: String?): EqProfilesPayload {
-    if (raw.isNullOrBlank()) return EqProfilesPayload()
-    return runCatching { EqualizerJson.json.decodeFromString<EqProfilesPayload>(raw) }.getOrNull() ?: EqProfilesPayload()
-}
-
-private fun encodeProfilesPayload(payload: EqProfilesPayload): String {
-    return runCatching { EqualizerJson.json.encodeToString(payload) }.getOrNull().orEmpty()
-}
-
-private fun resampleLevelsByIndex(levelsMb: List<Int>, targetCount: Int): List<Int> {
-    if (targetCount <= 0) return emptyList()
-    if (levelsMb.isEmpty()) return List(targetCount) { 0 }
-    if (levelsMb.size == targetCount) return levelsMb
-    if (targetCount == 1) return listOf(levelsMb.sum() / levelsMb.size)
-
-    val lastIndex = levelsMb.lastIndex.toFloat().coerceAtLeast(1f)
-    return List(targetCount) { i ->
-        val pos = i.toFloat() * lastIndex / (targetCount - 1).toFloat()
-        val lo = kotlin.math.floor(pos).toInt().coerceIn(0, levelsMb.lastIndex)
-        val hi = kotlin.math.ceil(pos).toInt().coerceIn(0, levelsMb.lastIndex)
-        val t = (pos - lo.toFloat()).coerceIn(0f, 1f)
-        val a = levelsMb[lo]
-        val b = levelsMb[hi]
-        (a + ((b - a) * t)).toInt()
+@Composable
+fun ListenTogetherDialog(
+    visible: Boolean,
+    mediaMetadata: MediaMetadata?,
+    onDismiss: () -> Unit
+) {
+    if (!visible) return
+    
+    val context = LocalContext.current
+    val listenTogetherManager = iad1tya.echo.music.LocalListenTogetherManager.current
+    
+    
+    if (listenTogetherManager == null) {
+        ListDialog(onDismiss = onDismiss) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.group),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.listen_together),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.listen_together_not_configured),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(stringResource(android.R.string.ok))
+                    }
+                }
+            }
+        }
+        return
     }
-}
+    
+    val connectionState by listenTogetherManager.connectionState.collectAsState()
+    val roomState by listenTogetherManager.roomState.collectAsState()
+    val userId by listenTogetherManager.userId.collectAsState()
+    val pendingJoinRequests by listenTogetherManager.pendingJoinRequests.collectAsState()
+    val pendingSuggestions by listenTogetherManager.pendingSuggestions.collectAsState()
+    
+    
+    var savedUsername by rememberPreference(iad1tya.echo.music.constants.ListenTogetherUsernameKey, "")
+    var roomCodeInput by rememberSaveable { mutableStateOf("") }
+    var usernameInput by rememberSaveable { mutableStateOf(savedUsername) }
 
-private fun formatHz(hz: Int): String {
-    if (hz <= 0) return ""
-    return if (hz >= 1000) "${(hz / 1000f).let { round(it * 10f) / 10f }}k" else hz.toString()
-}
+    
+    var isCreatingRoom by rememberSaveable { mutableStateOf(false) }
+    var isJoiningRoom by rememberSaveable { mutableStateOf(false) }
+    var joinErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    
+    
+    var selectedUserForMenu by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedUsername by rememberSaveable { mutableStateOf<String?>(null) }
+    
+    
+    val waitingForApprovalText = stringResource(R.string.waiting_for_approval)
+    val invalidRoomCodeText = stringResource(R.string.invalid_room_code)
+    val joinRequestDeniedText = stringResource(R.string.join_request_denied)
 
-private fun formatDb(db: Float): String {
-    val rounded = round(db * 10f) / 10f
-    return "${if (rounded > 0f) "+" else ""}$rounded dB"
+    
+    if (selectedUserForMenu != null && selectedUsername != null) {
+        ListDialog(
+            onDismiss = {
+                selectedUserForMenu = null
+                selectedUsername = null
+            }
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.group),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.manage_user),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = selectedUsername ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+            
+            
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .clickable {
+                            selectedUserForMenu?.let {
+                                listenTogetherManager.kickUser(it, "Removed by host")
+                            }
+                            selectedUserForMenu = null
+                            selectedUsername = null
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.close),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.kick_user),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = stringResource(R.string.kick_user_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+            
+            
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .clickable {
+                            selectedUserForMenu?.let { userId ->
+                                selectedUsername?.let { username ->
+                                    listenTogetherManager.blockUser(username)
+                                    listenTogetherManager.kickUser(userId, R.string.user_blocked_by_host.toString())
+                                }
+                            }
+                            selectedUserForMenu = null
+                            selectedUsername = null
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.close),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.permanently_kick_user),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.permanently_kick_user_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+            
+            
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .clickable {
+                            selectedUserForMenu?.let {
+                                listenTogetherManager.transferHost(it)
+                            }
+                            selectedUserForMenu = null
+                            selectedUsername = null
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.crown),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.transfer_ownership),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = stringResource(R.string.transfer_ownership_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+        return
+    }
+
+    
+    LaunchedEffect(savedUsername) {
+        if (usernameInput.isBlank() && savedUsername.isNotBlank()) {
+            usernameInput = savedUsername
+        }
+    }
+
+    
+    LaunchedEffect(listenTogetherManager) {
+        listenTogetherManager.events.collect { event ->
+            when (event) {
+                is ListenTogetherEvent.JoinRejected -> {
+                    val reason = event.reason
+                    joinErrorMessage = when {
+                        reason.isNullOrBlank() -> joinRequestDeniedText
+                        reason.contains("invalid", ignoreCase = true) == true -> invalidRoomCodeText
+                        else -> "$joinRequestDeniedText: $reason"
+                    }
+                    isJoiningRoom = false
+                    isCreatingRoom = false
+                }
+
+                is ListenTogetherEvent.JoinApproved -> {
+                    isJoiningRoom = false
+                    joinErrorMessage = null
+                }
+
+                is ListenTogetherEvent.RoomCreated -> {
+                    isCreatingRoom = false
+                    val clipboard =
+                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("ListenTogetherRoom", event.roomCode)
+                    clipboard.setPrimaryClip(clip)
+                }
+
+                else -> {  }
+            }
+        }
+    }
+
+    
+    val isInRoom = listenTogetherManager.isInRoom
+    val isHost = roomState?.hostId == userId
+    
+    ListDialog(onDismiss = onDismiss) {
+        
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.group),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = if (isInRoom) {
+                        if (isHost) stringResource(R.string.hosting_room) else stringResource(R.string.in_room)
+                    } else {
+                        stringResource(R.string.listen_together)
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        
+        
+        item {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = when (connectionState) {
+                    ConnectionState.CONNECTED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                    ConnectionState.ERROR -> MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                    ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    color = when (connectionState) {
+                                        ConnectionState.CONNECTED -> MaterialTheme.colorScheme.primary
+                                        ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> MaterialTheme.colorScheme.secondary
+                                        ConnectionState.ERROR -> MaterialTheme.colorScheme.error
+                                        ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.outline
+                                    },
+                                    shape = RoundedCornerShape(50)
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when (connectionState) {
+                                ConnectionState.CONNECTED -> stringResource(R.string.listen_together_connected)
+                                ConnectionState.CONNECTING -> stringResource(R.string.listen_together_connecting)
+                                ConnectionState.RECONNECTING -> stringResource(R.string.listen_together_reconnecting)
+                                ConnectionState.ERROR -> stringResource(R.string.listen_together_error)
+                                ConnectionState.DISCONNECTED -> stringResource(R.string.listen_together_disconnected)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = when (connectionState) {
+                                ConnectionState.CONNECTED -> MaterialTheme.colorScheme.primary
+                                ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> MaterialTheme.colorScheme.secondary
+                                ConnectionState.ERROR -> MaterialTheme.colorScheme.error
+                                ConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                    
+                    if (connectionState == ConnectionState.CONNECTING || connectionState == ConnectionState.RECONNECTING) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (connectionState == ConnectionState.DISCONNECTED || connectionState == ConnectionState.ERROR) {
+                            Button(
+                                onClick = { listenTogetherManager.connect() },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(stringResource(R.string.connect), fontWeight = FontWeight.SemiBold)
+                            }
+                        } else {
+                            Button(
+                                onClick = { listenTogetherManager.disconnect() },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(stringResource(R.string.disconnect), fontWeight = FontWeight.SemiBold)
+                            }
+                            FilledTonalButton(
+                                onClick = { listenTogetherManager.forceReconnect() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Reconnect", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+        
+        if (connectionState == ConnectionState.CONNECTED && !isInRoom) {
+            item {
+                Text(
+                    text = stringResource(R.string.listen_together_background_disconnect_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+
+        if (isInRoom) {
+            
+            roomState?.let { room ->
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.room_code),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = room.roomCode,
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 6.sp
+                                )
+                            }
+                            if (isHost) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                val inviteLink = remember(room.roomCode) {
+                                    "https://echomusic-listen-together.onrender.com/listen?code=${room.roomCode}"
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("Listen Together Link", inviteLink)
+                                            clipboard.setPrimaryClip(clip)
+                                            Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.link),
+                                            contentDescription = stringResource(R.string.copy_link),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(stringResource(R.string.copy_link))
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    FilledTonalButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("Room Code", room.roomCode)
+                                            clipboard.setPrimaryClip(clip)
+                                            Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.content_copy),
+                                            contentDescription = stringResource(R.string.copy_code),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(stringResource(R.string.copy_code))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+                
+                
+                val connectedUsers = room.users.filter { it.isConnected }
+                
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.connected_users, connectedUsers.size),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            connectedUsers.forEach { user ->
+                                
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .width(72.dp)
+                                        .clickable(
+                                            enabled = isHost && user.userId != userId,
+                                            onClick = {
+                                                selectedUserForMenu = user.userId
+                                                selectedUsername = user.username
+                                            }
+                                        )
+                                ) {
+                                    
+                                    Box(
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.size(52.dp),
+                                            shape = RoundedCornerShape(50),
+                                            color = if (user.isHost) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else if (user.userId == userId) {
+                                                MaterialTheme.colorScheme.secondary
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant
+                                            }
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = user.username.take(1).uppercase(),
+                                                    style = MaterialTheme.typography.titleLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (user.isHost) {
+                                                        MaterialTheme.colorScheme.onPrimary
+                                                    } else if (user.userId == userId) {
+                                                        MaterialTheme.colorScheme.onSecondary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        
+                                        
+                                        if (user.isHost || user.userId == userId) {
+                                            Surface(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .offset(x = 4.dp, y = 4.dp)
+                                                    .size(18.dp),
+                                                shape = RoundedCornerShape(50),
+                                                color = if (user.isHost) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                            ) {
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(
+                                                            if (user.isHost) R.drawable.crown else R.drawable.person
+                                                        ),
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    
+                                    
+                                    Text(
+                                        text = user.username,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (user.userId == userId) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (user.isHost) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    
+                                    
+                                    if (user.isHost) {
+                                        Text(
+                                            text = stringResource(R.string.host_label),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                        )
+                                    } else if (user.userId == userId) {
+                                        Text(
+                                            text = stringResource(R.string.you_label),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                
+                if (isHost && pendingJoinRequests.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.pending_requests),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    items(pendingJoinRequests) { request ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.secondary
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            Text(
+                                                text = request.username.take(1).uppercase(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSecondary
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = request.username,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(
+                                        onClick = { listenTogetherManager.approveJoin(request.userId) }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.check),
+                                            contentDescription = stringResource(R.string.approve),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { listenTogetherManager.rejectJoin(request.userId, "Rejected by host") }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.close),
+                                            contentDescription = stringResource(R.string.reject),
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                
+                if (isHost && pendingSuggestions.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.pending_suggestions),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    items(pendingSuggestions) { suggestion ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.queue_music),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = suggestion.trackInfo.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = suggestion.fromUsername,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(
+                                        onClick = { listenTogetherManager.approveSuggestion(suggestion.suggestionId) }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.check),
+                                            contentDescription = stringResource(R.string.approve),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { listenTogetherManager.rejectSuggestion(suggestion.suggestionId, "Rejected by host") }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.close),
+                                            contentDescription = stringResource(R.string.reject),
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                stringResource(R.string.cancel),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                listenTogetherManager.leaveRoom()
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.logout),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.leave_room), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        } else {
+            
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.listen_together_description),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        OutlinedTextField(
+                            value = usernameInput,
+                            onValueChange = { usernameInput = it },
+                            label = { Text(stringResource(R.string.username)) },
+                            placeholder = { Text(stringResource(R.string.enter_username)) },
+                            leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.person),
+                                    null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            trailingIcon = {
+                                if (usernameInput.isNotBlank()) {
+                                    IconButton(onClick = { usernameInput = "" }) {
+                                        Icon(painterResource(R.drawable.close), null)
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        HorizontalDivider()
+                        
+                        Text(
+                            text = stringResource(R.string.join_existing_room),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        OutlinedTextField(
+                            value = roomCodeInput,
+                            onValueChange = { roomCodeInput = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(8) },
+                            label = { Text(stringResource(R.string.room_code)) },
+                            placeholder = { Text("ABCD1234") },
+                            supportingText = {
+                                Text(
+                                    text = "${roomCodeInput.length}/8",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.token),
+                                    null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        
+                        if (isJoiningRoom) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = waitingForApprovalText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                        
+                        joinErrorMessage?.let { msg ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    Icon(
+                                        painterResource(R.drawable.error),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = msg,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        
+                        Button(
+                            onClick = {
+                                val username = usernameInput.takeIf { it.isNotBlank() } ?: savedUsername
+                                val finalUsername = username.trim()
+                                if (finalUsername.isNotBlank()) {
+                                    savedUsername = finalUsername
+                                    Toast.makeText(context, R.string.creating_room, Toast.LENGTH_SHORT).show()
+                                    isCreatingRoom = true
+                                    isJoiningRoom = false
+                                    joinErrorMessage = null
+                                    listenTogetherManager.connect()
+                                    listenTogetherManager.createRoom(finalUsername)
+                                } else {
+                                    Toast.makeText(context, R.string.error_username_empty, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = (usernameInput.trim().isNotBlank() || savedUsername.isNotBlank()),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.add),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.create_room), fontWeight = FontWeight.SemiBold)
+                        }
+                        
+                        
+                        if (roomCodeInput.length == 8) {
+                            Button(
+                                onClick = {
+                                    val username = usernameInput.takeIf { it.isNotBlank() } ?: savedUsername
+                                    val finalUsername = username.trim()
+                                    if (finalUsername.isNotBlank()) {
+                                        savedUsername = finalUsername
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.joining_room, roomCodeInput),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        isJoiningRoom = true
+                                        isCreatingRoom = false
+                                        joinErrorMessage = null
+                                        listenTogetherManager.connect()
+                                        listenTogetherManager.joinRoom(roomCodeInput, finalUsername)
+                                    } else {
+                                        Toast.makeText(context, R.string.error_username_empty, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = (usernameInput.trim().isNotBlank() || savedUsername.isNotBlank()),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.login),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.join_room), fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.cancel),
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
 }

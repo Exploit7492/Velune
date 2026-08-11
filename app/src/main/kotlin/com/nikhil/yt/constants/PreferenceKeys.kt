@@ -601,5 +601,29 @@ enum class UpdateChannel {
     STABLE,
     NIGHTLY,
 }
-
-
+val AutomixDuckEnabledKey = booleanPreferencesKey("automixDuckEnabled")
+val SilenceSkipEnabledKey = booleanPreferencesKey("silenceSkipEnabled")
+val BeatAnalysisEnabledKey = booleanPreferencesKey("beatAnalysisEnabled")
+val BeatAnalysisSensitivityKey = floatPreferencesKey("beatAnalysisSensitivity")
+val SilenceSkipThresholdDbKey = floatPreferencesKey("silenceSkipThresholdDb")
+val SleepTimerMinutesKey = intPreferencesKey("sleepTimerMinutes")
+val SleepTimerFadeOutKey = booleanPreferencesKey("sleepTimerFadeOut")
+val MonoAudioEnabledKey = booleanPreferencesKey("monoAudioEnabled")
+val LastAudioDeviceIdKey = stringPreferencesKey("lastAudioDeviceId")
+val AxionEqEnabledKey = booleanPreferencesKey("axionEqEnabled")
+val AmbientModeEnabledKey = booleanPreferencesKey("ambientModeEnabled")
+val FloatingMiniPlayerEnabledKey = booleanPreferencesKey("floatingMiniPlayerEnabled")
+val CanvasArtworkInPlayerKey = booleanPreferencesKey("canvasArtworkInPlayer")
+val FloatingNavBarEnabledKey = booleanPreferencesKey("floatingNavBarEnabled")
+val SponsorBlockEnabledKey = booleanPreferencesKey("sponsorBlockEnabled")
+val SponsorBlockCategoriesKey = stringPreferencesKey("sponsorBlockCategories")
+val CommentsEnabledKey = booleanPreferencesKey("commentsEnabled")
+val AiPlaylistEnabledKey = booleanPreferencesKey("aiPlaylistEnabled")
+val AiRecommendationEnabledKey = booleanPreferencesKey("aiRecommendationEnabled")
+val CastEnabledKey = booleanPreferencesKey("castEnabled")
+val AutoUpdateEnabledKey = booleanPreferencesKey("autoUpdateEnabled")
+val SpotifyConnectedKey = booleanPreferencesKey("spotifyConnected")
+val SpotifyTokenKey = stringPreferencesKey("spotifyToken")
+val RomanizationEnabledKey = booleanPreferencesKey("romanizationEnabled")
+val RingtoneTrimStartKey = longPreferencesKey("ringtoneTrimStart")
+val RingtoneTrimEndKey = longPreferencesKey("ringtoneTrimEnd")
