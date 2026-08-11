@@ -713,4 +713,36 @@ object TTMLParser {
             0.0
         }
     }
+    /**
+     * Converts parsed TTML lines into Velune's enhanced-LRC format:
+     *   [mm:ss.cc]{marker}line text
+     *   <word:start:end|word:start:end|...>
+     * Matches the convention used by Paxsenix/YouLyPlus providers.
+     */
+    fun toLRC(lines: List<ParsedLine>): String {
+        return buildString {
+            lines.forEach { line ->
+                val timeMs = (line.startTime * 1000).toLong()
+                val minutes = timeMs / 60000
+                val seconds = (timeMs % 60000) / 1000
+                val centis = (timeMs % 1000) / 10
+
+                val marker = when {
+                    line.isBackground -> "{bg}"
+                    !line.agent.isNullOrEmpty() -> "{agent:${line.agent}}"
+                    else -> ""
+                }
+
+                appendLine(String.format("[%02d:%02d.%02d]%s%s", minutes, seconds, centis, marker, line.text))
+
+                if (line.words.isNotEmpty()) {
+                    val wordsData = line.words.joinToString("|") { word ->
+                        "${word.text}:${word.startTime}:${word.endTime}"
+                    }
+                    appendLine("<$wordsData>")
+                }
+            }
+        }
+    }
+
 }

@@ -1,7 +1,7 @@
 [versions]
 retrofit = "2.9.0"
 adaptive = "1.1.0"
-ffmpegKit = "6.0-2"
+ffmpegKit = "6.0.1"
 documentfile = "1.0.1"
 appcompat = "1.7.1"
 androidGradlePlugin = "9.1.1"
@@ -50,7 +50,7 @@ retrofit-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref 
 androidx-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "adaptive" }
 androidx-adaptive-layout = { module = "androidx.compose.material3.adaptive:adaptive-layout", version.ref = "adaptive" }
 androidx-adaptive-navigation = { module = "androidx.compose.material3.adaptive:adaptive-navigation", version.ref = "adaptive" }
-ffmpeg-kit = { module = "com.arthenica:ffmpeg-kit-audio", version.ref = "ffmpegKit" }
+ffmpeg-kit = { module = "io.github.maxrave-dev:ffmpeg-kit-audio", version.ref = "ffmpegKit" }
 documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
