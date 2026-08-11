@@ -88,6 +88,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.material3.Icon
 import com.nikhil.yt.LocalPlayerConnection
 import com.nikhil.yt.R
+import com.nikhil.yt.canvas.CanvasProviderRegistry
 import com.nikhil.yt.canvas.VeluneCanvas
 import com.nikhil.yt.canvas.CanvasArtwork
 import com.nikhil.yt.constants.PlayerBackgroundStyle
@@ -96,6 +97,7 @@ import com.nikhil.yt.constants.PlayerHorizontalPadding
 import com.nikhil.yt.constants.SeekExtraSeconds
 import com.nikhil.yt.constants.SwipeThumbnailKey
 import com.nikhil.yt.constants.VeluneCanvasKey
+import com.nikhil.yt.constants.CanvasProviderKey
 import com.nikhil.yt.constants.MaxCanvasCacheSizeKey
 import com.nikhil.yt.constants.ThumbnailCornerRadiusKey
 import com.nikhil.yt.constants.CropThumbnailToSquareKey
@@ -273,6 +275,7 @@ fun Thumbnail(
     val swipeThumbnail by rememberPreference(SwipeThumbnailKey, true)
     val hidePlayerThumbnail by rememberPreference(HidePlayerThumbnailKey, false)
     val veluneCanvasEnabled by rememberPreference(VeluneCanvasKey, false)
+    val canvasProvider by rememberPreference(CanvasProviderKey, "auto")
     val (maxCanvasCacheSize, _) = rememberPreference(
         key = MaxCanvasCacheSizeKey,
         defaultValue = 256,
@@ -547,8 +550,12 @@ fun Thumbnail(
                                             }
 
                                         candidates.firstNotNullOfOrNull { (song, artist) ->
-                                            VeluneCanvas
+                                                                                        CanvasProviderRegistry
                                                 .getBySongArtist(
+                                                    item.title,
+                                                    item.artists.firstOrNull()?.name.orEmpty(),
+                                                    provider = CanvasProviderRegistry.Provider.valueOf(canvasProvider.uppercase()),
+                                                )
                                                     song = song,
                                                     artist = artist,
                                                     storefront = storefront,

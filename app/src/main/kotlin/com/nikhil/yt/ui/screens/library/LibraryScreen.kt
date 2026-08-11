@@ -61,6 +61,7 @@ import com.nikhil.yt.ui.screens.library.components.LocalMusicPermissionGate
 import com.nikhil.yt.ui.screens.library.components.PermissionDeniedScreen
 import com.nikhil.yt.viewmodels.LocalLibraryViewModel
 import com.nikhil.yt.extensions.toMediaItem
+import com.nikhil.yt.ui.component.RecognizeMusicFab
 
 @Composable
 fun LibraryScreen(navController: NavController) {
@@ -153,6 +154,7 @@ fun LibraryScreen(navController: NavController) {
 
     @Composable
     fun LibraryListPane(modifier: Modifier = Modifier) {
+        Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = modifier.then(
                 Modifier
@@ -226,6 +228,12 @@ fun LibraryScreen(navController: NavController) {
                 }
             }
         }
+        RecognizeMusicFab(
+            onClick = { navController.navigate("recognition") },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
+        }
+
     }
 
     if (isExpanded && selectedFolder != null) {

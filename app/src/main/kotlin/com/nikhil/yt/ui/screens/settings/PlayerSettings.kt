@@ -109,6 +109,10 @@ fun PlayerSettings(
         AudioNormalizationKey,
         defaultValue = true
     )
+    val (dataSaverEnabled, onDataSaverEnabledChange) = rememberPreference(
+        DataSaverEnabledKey,
+        defaultValue = false
+    )
     val (audioOffload, onAudioOffloadChange) = rememberPreference(
         AudioOffload,
         defaultValue = false
@@ -324,6 +328,13 @@ fun PlayerSettings(
                     onSkipSilenceChange(false)
                 }
             }
+        )
+        SwitchPreference(
+            title = { Text(stringResource(R.string.data_saver)) },
+            description = stringResource(R.string.data_saver_desc),
+            icon = { Icon(painterResource(R.drawable.data_saver), null) },
+            checked = dataSaverEnabled,
+            onCheckedChange = onDataSaverEnabledChange,
         )
 
     PreferenceEntry(

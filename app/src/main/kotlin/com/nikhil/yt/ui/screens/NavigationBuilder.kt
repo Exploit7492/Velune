@@ -74,6 +74,7 @@ import com.nikhil.yt.ui.screens.settings.ContentSettings
 import com.nikhil.yt.ui.screens.settings.AiSettings
 import com.nikhil.yt.ui.screens.recognition.RecognitionScreen
 import com.nikhil.yt.ui.screens.recognition.RecognitionHistoryScreen
+import com.nikhil.yt.ui.screens.spotifyimport.SpotifyImportScreen
 import com.nikhil.yt.ui.screens.equalizer.EqScreen
 import com.nikhil.yt.ui.screens.settings.GlassEffectSettings
 import com.nikhil.yt.ui.screens.settings.DarkMode
@@ -336,6 +337,9 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("recognition_history") {
         RecognitionHistoryScreen(navController, scrollBehavior)
+    }
+    composable("spotifyimport") {
+        SpotifyImportScreen(navController, scrollBehavior)
     }
     composable("settings/player") {
         PlayerSettings(navController, scrollBehavior)

@@ -98,6 +98,7 @@ import com.nikhil.yt.constants.SwipeSensitivityKey
 import com.nikhil.yt.constants.SwipeToSongKey
 import com.nikhil.yt.constants.HidePlayerThumbnailKey
 import com.nikhil.yt.constants.VeluneCanvasKey
+import com.nikhil.yt.constants.CanvasProviderKey
 import com.nikhil.yt.constants.ThumbnailCornerRadiusKey
 import com.nikhil.yt.constants.CropThumbnailToSquareKey
 import com.nikhil.yt.constants.DisableBlurKey
@@ -155,6 +156,10 @@ fun AppearanceSettings(
     val (veluneCanvasEnabled, onVeluneCanvasEnabledChange) = rememberPreference(
         VeluneCanvasKey,
         defaultValue = false
+    )
+    val (canvasProvider, onCanvasProviderChange) = rememberPreference(
+        CanvasProviderKey,
+        defaultValue = "auto",
     )
     val (thumbnailCornerRadius, onThumbnailCornerRadiusChange) = rememberPreference(
         key = ThumbnailCornerRadiusKey,
@@ -478,6 +483,29 @@ fun AppearanceSettings(
             checked = veluneCanvasEnabled,
             onCheckedChange = onVeluneCanvasEnabledChange
         )
+
+        AnimatedVisibility(visible = veluneCanvasEnabled) {
+            var showProviderDialog by remember { mutableStateOf(false) }
+            if (showProviderDialog) {
+                EnumDialog(
+                    onDismiss = { showProviderDialog = false },
+                    onSelect = {
+                        onCanvasProviderChange(it.name.lowercase())
+                        showProviderDialog = false
+                    },
+                    title = "Canvas Provider",
+                    current = CanvasProviderRegistry.Provider.valueOf(canvasProvider.uppercase()),
+                    values = CanvasProviderRegistry.Provider.entries.toList(),
+                    valueText = { it.name.replace("_", " ") },
+                )
+            }
+            PreferenceEntry(
+                title = { Text("Canvas Provider") },
+                description = { Text(CanvasProviderRegistry.Provider.valueOf(canvasProvider.uppercase()).name.replace("_", " ")) },
+                icon = { Icon(painterResource(R.drawable.palette), null) },
+                onClick = { showProviderDialog = true },
+            )
+        }
       
 
         ThumbnailCornerRadiusSelectorButton(

@@ -89,6 +89,7 @@ import com.nikhil.yt.constants.AudioCrossfadeDurationKey
 import com.nikhil.yt.constants.AudioNormalizationKey
 import com.nikhil.yt.constants.AudioOffload
 import com.nikhil.yt.constants.AudioQualityKey
+import com.nikhil.yt.constants.DataSaverEnabledKey
 import com.nikhil.yt.constants.AutoDownloadOnLikeKey
 import com.nikhil.yt.constants.AutoLoadMoreKey
 import com.nikhil.yt.constants.AutoSkipNextOnErrorKey
@@ -268,6 +269,11 @@ class MusicService :
         this,
         AudioQualityKey,
         com.nikhil.yt.constants.AudioQuality.AUTO
+    private val dataSaverEnabled by booleanPreference(
+        this,
+        DataSaverEnabledKey,
+        false
+    )
     )
     private val preferredStreamClient by enumPreference(
         this,
@@ -645,7 +651,7 @@ class MusicService :
 
         combine(
             currentMediaMetadata.distinctUntilChangedBy { it?.id },
-            dataStore.data.map { it[ShowLyricsKey] ?: false }.distinctUntilChanged(),
+            dataStore.data.map { (it[ShowLyricsKey] ?: false) && !it[DataSaverEnabledKey] }.distinctUntilChanged(),
         ) { mediaMetadata, showLyrics ->
             mediaMetadata to showLyrics
         }.collectLatest(ioScope) { (mediaMetadata, showLyrics) ->
@@ -1409,7 +1415,7 @@ class MusicService :
                     withContext(Dispatchers.IO) {
                         queue.getInitialStatus()
                             .filterExplicit(dataStore.get(HideExplicitKey, false))
-                            .filterVideo(dataStore.get(HideVideoKey, false))
+                            .filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
                     }
 
                 val targetItem =
@@ -1478,7 +1484,7 @@ class MusicService :
         scope.launch(SilentHandler) {
             val initialStatus =
                 withContext(Dispatchers.IO) {
-                    queue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false))
+                    queue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
                 }
             if (initialStatus.title != null) {
                 queueTitle = initialStatus.title
@@ -1582,7 +1588,7 @@ class MusicService :
                 endpoint = WatchEndpoint(videoId = currentMediaId)
             )
             val initialStatus = withContext(Dispatchers.IO) {
-                radioQueue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false))
+                radioQueue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
             }
 
             if (initialStatus.title != null) {
@@ -1695,7 +1701,7 @@ class MusicService :
         automixSeedMediaId = seedMediaId
 
         val hideExplicit = dataStore.get(HideExplicitKey, false)
-        val hideVideo = dataStore.get(HideVideoKey, false)
+        val hideVideo = dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false)
 
         automixJob = scope.launch {
             try {
@@ -1834,7 +1840,7 @@ class MusicService :
         automixSeedMediaId = currentMeta.id.trim().ifBlank { null }
 
         val hideExplicit = dataStore.get(HideExplicitKey, false)
-        val hideVideo = dataStore.get(HideVideoKey, false)
+        val hideVideo = dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false)
 
         automixJob = scope.launch {
             try {
@@ -3386,7 +3392,7 @@ class MusicService :
 
     val currentIndex = player.currentMediaItemIndex
     val queue = player.mediaItems.mapNotNull { it.metadata }
-    if (queue.isNotEmpty()) {
+    if (queue.isNotEmpty() && !dataSaverEnabled) {
         lyricsPreloadManager?.onSongChanged(currentIndex, queue)
     }
 
@@ -3456,7 +3462,7 @@ class MusicService :
     ) {
         scope.launch(SilentHandler) {
             val mediaItems =
-                currentQueue.nextPage().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false))
+                currentQueue.nextPage().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
             if (player.playbackState != STATE_IDLE) {
                 player.addMediaItems(mediaItems.drop(1))
             } else {
@@ -3573,7 +3579,7 @@ class MusicService :
                     }.onSuccess { nextResult ->
                         if (suppressAutoPlayback || player.playbackState == STATE_IDLE || player.mediaItemCount == 0) return@onSuccess
                         val hideExplicit = dataStore.get(HideExplicitKey, false)
-                        val hideVideo = dataStore.get(HideVideoKey, false)
+                        val hideVideo = dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false)
                         val radioItems = nextResult.items
                             .map { it.toMediaItem() }
                             .filter { it.mediaId != lastMediaMetadata.id }
@@ -4129,7 +4135,7 @@ class MusicService :
             val playbackData = runBlocking(Dispatchers.IO) {
                 YTPlayerUtils.playerResponseForPlayback(
                     mediaId,
-                    audioQuality = audioQuality,
+                    audioQuality = if (dataSaverEnabled) com.nikhil.yt.constants.AudioQuality.LOW else audioQuality,
                     connectivityManager = connectivityManager,
                     preferredStreamClient = preferredStreamClient,
                     avoidCodecs = avoidStreamCodecs,

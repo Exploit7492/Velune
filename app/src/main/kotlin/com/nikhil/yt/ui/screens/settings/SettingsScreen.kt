@@ -427,6 +427,20 @@ fun SettingsScreen(
                         onClick = { navController.navigate("recognition") },
                     ),
                     PremiumSettingsItem(
+                        icon = painterResource(R.drawable.music_note),
+                        title = stringResource(R.string.spotify_import),
+                        subtitle = stringResource(R.string.spotify_import_desc),
+                        accentColor = MaterialTheme.colorScheme.primary,
+                        keywords = listOf(
+                            "spotify",
+                            "import",
+                            "playlist",
+                            "transfer",
+                            "migrate",
+                        ),
+                        onClick = { navController.navigate("spotifyimport") },
+                    ),
+                    PremiumSettingsItem(
                         icon = painterResource(R.drawable.token),
                         title = stringResource(R.string.po_token_generation),
                         subtitle = stringResource(R.string.po_token_generation_subtitle),

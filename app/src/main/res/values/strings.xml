@@ -851,4 +851,19 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="no_match_found">No match found</string>
     <string name="try_again">Try Again</string>
     <string name="save_to_history">Save to History</string>
+    <string name="spotify_import">Spotify Import</string>
+    <string name="spotify_import_title">Import from Spotify</string>
+    <string name="spotify_import_desc">Bring your Spotify playlists and liked songs into Velune</string>
+    <string name="login_with_spotify">Log in with Spotify</string>
+    <string name="spotify_logged_in">Logged in to Spotify</string>
+    <string name="load_playlists">Load Playlists</string>
+    <string name="logout">Log Out</string>
+    <string name="your_playlists">Your Playlists</string>
+    <string name="liked_songs">Liked Songs</string>
+    <string name="refresh">Refresh</string>
+    <string name="play_imported">Play All</string>
+    <string name="import_failed">Import Failed</string>
+    <string name="close">Close</string>
+    <string name="data_saver">Data Saver</string>
+    <string name="data_saver_desc">Reduce streaming quality, disable background fetches, and suppress metadata lookups</string>
 </resources>
