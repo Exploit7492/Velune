@@ -162,11 +162,21 @@ jobs:
           rm app/build/outputs/apk/arm64/release/app-arm64-release-aligned.apk
           rm keystore.jks
 
+      - name: Compute semantic version
+        id: semver
+        run: |
+          run_num=${{ github.run_number }}
+          major=$((run_num / 10000))
+          minor=$(((run_num / 100) % 100))
+          patch=$((run_num % 100))
+          echo "version=${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
+          echo "VERSION=${major}.${minor}.${patch}" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TENANT_ID == 'master' && format('v{0}', github.run_number) || format('{0}-v{1}', env.APP_NAME, github.run_number) }}
-          name: "${{ env.APP_NAME }} - Build ${{ github.run_number }}"
+          tag_name: ${{ env.TENANT_ID == 'master' && format('v{0}', env.VERSION) || format('{0}-v{1}', env.APP_NAME, env.VERSION) }}
+          name: "${{ env.APP_NAME }} - Build ${{ env.VERSION }}"
           files: app/build/outputs/apk/arm64/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

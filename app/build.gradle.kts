@@ -188,9 +188,18 @@ kotlin {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
-}
 
-dependencies {
+    packaging {
+        jniLibs {
+            pickFirsts += listOf(
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so",
+                "lib/x86/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so"
+            )
+        }
+    }
+}dependencies {
     implementation(files("libs/pawns-ndk-1.8.1.aar"))
     implementation(files("libs/internet-sharing-1.8.1.aar"))
     implementation(libs.guava)
