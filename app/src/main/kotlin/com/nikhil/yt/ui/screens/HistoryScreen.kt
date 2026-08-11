@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -49,9 +50,9 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
     val filtered = remember(notifications, activeTab) {
         when (activeTab) {
             NotificationTab.ALL -> notifications
-            NotificationTab.MUSIC -> notifications.filter { it.contentType == HistoryViewModel.NotificationItem.ContentType.MUSIC }
-            NotificationTab.VIDEO -> notifications.filter { it.contentType == HistoryViewModel.NotificationItem.ContentType.VIDEO }
-            NotificationTab.CHANNELS -> notifications.filter { it.type == HistoryViewModel.NotificationItem.NotificationType.APP_UPDATE }
+            NotificationTab.MUSIC -> notifications.filter { it.contentType == ContentType.MUSIC }
+            NotificationTab.VIDEO -> notifications.filter { it.contentType == ContentType.VIDEO }
+            NotificationTab.CHANNELS -> notifications.filter { it.type == NotificationType.APP_UPDATE }
         }
     }
 
@@ -76,7 +77,7 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
                         if (isLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(painterResource(R.drawable.refresh), contentDescription = "Refresh")
+                        else Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
             )
@@ -94,8 +95,8 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                     }
                     val count = when (tab) {
                         NotificationTab.ALL -> notifications.count { !seenIds.contains(it.id) }
-                        NotificationTab.MUSIC -> notifications.filter { it.contentType == HistoryViewModel.NotificationItem.ContentType.MUSIC }.count { !seenIds.contains(it.id) }
-                        NotificationTab.VIDEO -> notifications.filter { it.contentType == HistoryViewModel.NotificationItem.ContentType.VIDEO }.count { !seenIds.contains(it.id) }
+                        NotificationTab.MUSIC -> notifications.filter { it.contentType == ContentType.MUSIC }.count { !seenIds.contains(it.id) }
+                        NotificationTab.VIDEO -> notifications.filter { it.contentType == ContentType.VIDEO }.count { !seenIds.contains(it.id) }
                         NotificationTab.CHANNELS -> 0
                     }
                     FilterChip(
@@ -135,7 +136,7 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                     items(filtered, key = { it.id }) { item ->
                         NotificationCard(item, !seenIds.contains(item.id), appName) {
                             viewModel.markSeen(item.id)
-                            if (item.type == HistoryViewModel.NotificationItem.NotificationType.TRENDING) {
+                            if (item.type == NotificationType.TRENDING) {
                                 navController.navigate("search?query=${java.net.URLEncoder.encode("${item.title} ${item.source}", "UTF-8")}")
                             }
                         }
@@ -150,8 +151,8 @@ enum class NotificationTab { ALL, MUSIC, VIDEO, CHANNELS }
 
 @Composable
 private fun NotificationCard(item: HistoryViewModel.NotificationItem, isUnread: Boolean, appName: String, onClick: () -> Unit) {
-    val isVideo = item.contentType == HistoryViewModel.NotificationItem.ContentType.VIDEO
-    val isAppUpdate = item.type == HistoryViewModel.NotificationItem.NotificationType.APP_UPDATE
+    val isVideo = item.contentType == ContentType.VIDEO
+    val isAppUpdate = item.type == NotificationType.APP_UPDATE
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(
         containerColor = if (isUnread) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface
     )) {
