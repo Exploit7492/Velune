@@ -19,13 +19,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.nikhil.yt.R
-import com.nikhil.yt.ui.component.TopAppBar
 import com.nikhil.yt.viewmodels.HistoryViewModel
+import com.nikhil.yt.viewmodels.HistoryViewModel.ContentType
+import com.nikhil.yt.viewmodels.HistoryViewModel.NotificationType
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -179,7 +183,7 @@ private fun NotificationCard(item: HistoryViewModel.NotificationItem, isUnread: 
                 }
                 Text(item.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
             }
-            Icon(painterResource(if (isAppUpdate) R.drawable.chevron_right else R.drawable.play_circle), null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Icon(if (isAppUpdate) Icons.Default.ChevronRight else Icons.Default.PlayCircle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }

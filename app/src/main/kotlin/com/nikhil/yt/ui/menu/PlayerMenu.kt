@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -1610,6 +1611,8 @@ fun EqualizerDialog(
                     // ─── Frequency Response Curve ─────────────────────────────────
                     val bandLabels = caps.centerFreqHz.map { formatHz(it) }
                     val barCount = bandLevelsMb.size.coerceAtLeast(bandCount)
+                    val positiveBarColor = MaterialTheme.colorScheme.primary
+                    val zeroLineColor = MaterialTheme.colorScheme.outline
                     Canvas(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1629,7 +1632,7 @@ fun EqualizerDialog(
                             val color = when {
                                 level > 500 -> Color(0xFFE57373)
                                 level < -500 -> Color(0xFF64B5F6)
-                                else -> MaterialTheme.colorScheme.primary
+                                else -> positiveBarColor
                             }
                             drawRoundRect(
                                 color = color.copy(alpha = 0.8f),
@@ -1640,7 +1643,7 @@ fun EqualizerDialog(
                         }
                         // Zero line
                         drawLine(
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            color = zeroLineColor.copy(alpha = 0.5f),
                             start = androidx.compose.ui.geometry.Offset(0f, zeroY),
                             end = androidx.compose.ui.geometry.Offset(size.width, zeroY),
                             strokeWidth = 1f

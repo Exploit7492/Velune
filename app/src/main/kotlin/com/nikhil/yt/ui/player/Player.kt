@@ -213,7 +213,7 @@ fun BottomSheetPlayer(
         )
     }
 
-    val toggleVideo = {
+    val toggleVideo: () -> Unit = {
         val targetVideoMode = !isVideoMode
         if (targetVideoMode) {
             val videoId = mediaMetadata?.id
