@@ -267,7 +267,7 @@
             android:foregroundServiceType="microphone" />
 
         <activity
-            android:name=".com/nikhil/yt/ui/screens/CrashActivity"
+            android:name=".ui.screens.CrashActivity"
             android:process=":error_activity"
             android:enabled="true"
             android:exported="false"
@@ -277,7 +277,7 @@
             android:theme="@style/Theme.Velune" />
     
         <service
-            android:name=".'com/nikhil/yt'/quicksettings/MusicRecognizerTileService"
+            android:name=".quicksettings.MusicRecognizerTileService"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
@@ -287,7 +287,7 @@
 
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
-            android:value=".'com/nikhil/yt'/cast/CastOptionsProvider" />
+            android:value=".cast.CastOptionsProvider" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"
