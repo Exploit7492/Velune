@@ -227,6 +227,11 @@ import javax.inject.Inject
 @Suppress("DEPRECATION", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val ACTION_RECOGNITION = "com.nikhil.yt.action.RECOGNITION"
+        const val EXTRA_AUTO_START_RECOGNITION = "auto_start_recognition"
+        const val EXTRA_RECOGNITION_RESULT = "recognition_result"
+    }
     @Inject
     lateinit var database: MusicDatabase
 

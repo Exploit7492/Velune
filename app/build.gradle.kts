@@ -218,6 +218,9 @@ dependencies {
     implementation(libs.appcompat)
 
     implementation(libs.material3)
+    implementation(libs.androidx.adaptive)
+    implementation(libs.androidx.adaptive.layout)
+    implementation(libs.androidx.adaptive.navigation)
     implementation(libs.material.icons.core)
     implementation(libs.material.icons.extended)
     implementation(libs.palette)

@@ -72,6 +72,10 @@ import com.nikhil.yt.ui.screens.settings.VeluneAccountSettingsScreen
 import com.nikhil.yt.ui.screens.settings.ChangelogScreen
 import com.nikhil.yt.ui.screens.settings.ContentSettings
 import com.nikhil.yt.ui.screens.settings.AiSettings
+import com.nikhil.yt.ui.screens.recognition.RecognitionScreen
+import com.nikhil.yt.ui.screens.recognition.RecognitionHistoryScreen
+import com.nikhil.yt.ui.screens.equalizer.EqScreen
+import com.nikhil.yt.ui.screens.settings.GlassEffectSettings
 import com.nikhil.yt.ui.screens.settings.DarkMode
 import com.nikhil.yt.ui.screens.settings.DiscordLoginScreen
 import com.nikhil.yt.ui.screens.settings.DiscordSettings
@@ -315,11 +319,23 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/appearance/theme_creator") {
         ThemeCreatorScreen(navController)
     }
+    composable("settings/appearance/glass_effects") {
+        GlassEffectSettings(navController, scrollBehavior)
+    }
     composable("settings/content") {
         ContentSettings(navController, scrollBehavior)
     }
     composable("settings/ai") {
         AiSettings(navController, scrollBehavior)
+    }
+    composable("settings/eq") {
+        EqScreen(navController, scrollBehavior)
+    }
+    composable("recognition") {
+        RecognitionScreen(navController, scrollBehavior)
+    }
+    composable("recognition_history") {
+        RecognitionHistoryScreen(navController, scrollBehavior)
     }
     composable("settings/player") {
         PlayerSettings(navController, scrollBehavior)

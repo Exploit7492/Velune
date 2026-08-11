@@ -118,19 +118,46 @@ object GlassEffectDefaults {
         backgroundDimColor = Color.Black,
     )
 
-    fun navigationBarStyle(isDark: Boolean, isPureBlack: Boolean): GlassSurfaceStyle {
-        return when {
+    fun navigationBarStyle(
+        isDark: Boolean,
+        isPureBlack: Boolean,
+        blurIntensity: Float = 1f,
+        vibrancyEnabled: Boolean = true,
+        lensEnabled: Boolean = true,
+    ): GlassSurfaceStyle {
+        val base = when {
             isPureBlack -> NavigationBarPureBlack
             isDark -> NavigationBarDark
             else -> NavigationBarLight
         }
+        return base.applyOverrides(blurIntensity, vibrancyEnabled, lensEnabled)
     }
 
-    fun miniPlayerStyle(isDark: Boolean, isPureBlack: Boolean): GlassSurfaceStyle {
-        return when {
+    fun miniPlayerStyle(
+        isDark: Boolean,
+        isPureBlack: Boolean,
+        blurIntensity: Float = 1f,
+        vibrancyEnabled: Boolean = true,
+        lensEnabled: Boolean = true,
+    ): GlassSurfaceStyle {
+        val base = when {
             isPureBlack -> MiniPlayerPureBlack
             isDark -> MiniPlayerDark
             else -> MiniPlayerLight
         }
+        return base.applyOverrides(blurIntensity, vibrancyEnabled, lensEnabled)
+    }
+
+    private fun GlassSurfaceStyle.applyOverrides(
+        blurIntensity: Float,
+        vibrancyEnabled: Boolean,
+        lensEnabled: Boolean,
+    ): GlassSurfaceStyle {
+        if (blurIntensity == 1f && vibrancyEnabled && lensEnabled) return this
+        return copy(
+            blurRadius = (blurRadius * blurIntensity.coerceIn(0.3f, 1.6f)),
+            useVibrancy = useVibrancy && vibrancyEnabled,
+            useLens = useLens && lensEnabled,
+        )
     }
 }

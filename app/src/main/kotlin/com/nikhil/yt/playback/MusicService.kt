@@ -171,6 +171,7 @@ import com.nikhil.yt.playback.queues.Queue
 import com.nikhil.yt.playback.queues.YouTubeQueue
 import com.nikhil.yt.playback.queues.filterExplicit
 import com.nikhil.yt.playback.queues.filterVideo
+import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.ui.screens.settings.DiscordPresenceManager
 import com.nikhil.yt.ui.screens.settings.ListenBrainzManager
 import com.nikhil.yt.utils.CoilBitmapLoader
@@ -761,6 +762,21 @@ class MusicService :
             .collectLatest(scope) { settings ->
                 desiredEqSettings.value = settings
                 applyEqSettingsToEffects(settings)
+            }
+
+        // Parametric EQ (software DSP) — load saved profile and enable state
+        dataStore.data
+            .map { prefs ->
+                val enabled = prefs[ParametricEQEnabledKey] ?: false
+                val profileId = prefs[ParametricEQSelectedProfileIdKey] ?: "flat"
+                enabled to profileId
+            }
+            .distinctUntilChanged()
+            .collectLatest(scope) { (enabled, profileId) ->
+                val repo = com.nikhil.yt.eq.data.EQProfileRepository(this@MusicService)
+                val profile = repo.getProfile(profileId) ?: repo.getProfile("flat")
+                EqualizerService.setProfile(profile)
+                EqualizerService.setEnabled(enabled)
             }
 
         combine(
@@ -4298,6 +4314,7 @@ class MusicService :
                             150.toShort(),
                         ),
                         SonicAudioProcessor(),
+                    EqualizerService.audioProcessor,
                     ),
                 ).build()
         }

@@ -326,6 +326,13 @@ fun PlayerSettings(
             }
         )
 
+    PreferenceEntry(
+        title = { Text(stringResource(R.string.parametric_eq)) },
+        description = stringResource(R.string.parametric_eq_desc),
+        icon = { Icon(painterResource(R.drawable.graphic_eq), null) },
+        onClick = { navController.navigate("settings/eq") }
+    )
+
         SwitchPreference(
             title = { Text(stringResource(R.string.seek_seconds_addup)) },
             description = stringResource(R.string.seek_seconds_addup_description),

@@ -412,6 +412,21 @@ fun SettingsScreen(
                         onClick = { navController.navigate("settings/ai") },
                     ),
                     PremiumSettingsItem(
+                        icon = painterResource(R.drawable.hearing),
+                        title = stringResource(R.string.recognize_music),
+                        subtitle = stringResource(R.string.recognize_music_desc),
+                        accentColor = MaterialTheme.colorScheme.primary,
+                        keywords = listOf(
+                            "recognize",
+                            "shazam",
+                            "identify",
+                            "music",
+                            "song",
+                            "find",
+                        ),
+                        onClick = { navController.navigate("recognition") },
+                    ),
+                    PremiumSettingsItem(
                         icon = painterResource(R.drawable.token),
                         title = stringResource(R.string.po_token_generation),
                         subtitle = stringResource(R.string.po_token_generation_subtitle),

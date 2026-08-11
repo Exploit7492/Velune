@@ -352,6 +352,13 @@ fun AppearanceSettings(
             )
         }
 
+        PreferenceEntry(
+            title = { Text(stringResource(R.string.glass_effects)) },
+            description = stringResource(R.string.glass_effects_subtitle),
+            icon = { Icon(painterResource(R.drawable.blur_on), null) },
+            onClick = { navController.navigate("settings/appearance/glass_effects") }
+        )
+
         EnumListPreference(
             title = { Text(stringResource(R.string.dark_theme)) },
             icon = { Icon(painterResource(R.drawable.dark_mode), null) },

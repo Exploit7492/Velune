@@ -557,5 +557,9 @@ fun HomeScreen(
                     .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues()),
             )
         }
+        RecognizeMusicFab(
+            onClick = { navController.navigate("recognition") },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
     }
 }

@@ -49,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.window.core.layout.WindowSizeClass
 import androidx.navigation.NavController
 import com.nikhil.yt.LocalPlayerConnection
 import com.nikhil.yt.constants.LibraryMode
@@ -116,7 +118,11 @@ fun LibraryScreen(navController: NavController) {
         return
     }
 
-    if (selectedFolder != null) {
+    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
+    val isExpanded = windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
+
+    @Composable
+    fun FolderDetailPane() {
         FolderDetailScreen(
             viewModel = viewModel,
             onBack = { viewModel.clearSelectedFolder() },
@@ -138,82 +144,102 @@ fun LibraryScreen(navController: NavController) {
             },
             currentTrackId = playerConnection?.player?.currentMediaItem?.mediaId,
         )
+    }
+
+    if (selectedFolder != null && !isExpanded) {
+        FolderDetailPane()
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = com.nikhil.yt.constants.AppBarHeight + 8.dp)
-            .pointerInput(libraryMode) {
-                var totalDrag = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { totalDrag = 0f },
-                    onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
-                    onDragEnd = {
-                        val threshold = 120f
-                        when {
-                            totalDrag < -threshold -> showSidebar = true
-                            totalDrag > threshold && !showSidebar ->
-                                viewModel.setLibraryMode(
-                                    if (libraryMode == LibraryMode.BROWSE) LibraryMode.LOCAL else LibraryMode.BROWSE
-                                )
-                        }
+    @Composable
+    fun LibraryListPane(modifier: Modifier = Modifier) {
+        Column(
+            modifier = modifier.then(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = com.nikhil.yt.constants.AppBarHeight + 8.dp)
+                    .pointerInput(libraryMode) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                            onDragEnd = {
+                                val threshold = 120f
+                                when {
+                                    totalDrag < -threshold -> showSidebar = true
+                                    totalDrag > threshold && !showSidebar ->
+                                        viewModel.setLibraryMode(
+                                            if (libraryMode == LibraryMode.BROWSE) LibraryMode.LOCAL else LibraryMode.BROWSE
+                                        )
+                                }
+                            },
+                        )
                     },
+            )
+        ) {
+            if (!selectionMode) {
+                LibraryModeHeader(
+                    mode = libraryMode,
+                    onModeChange = { viewModel.setLibraryMode(it) },
+                    onAddClick = { showFolderBrowser = true },
+                    onMenuClick = { showSidebar = true },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-            },
-    ) {
-        if (!selectionMode) {
-            LibraryModeHeader(
-                mode = libraryMode,
-                onModeChange = { viewModel.setLibraryMode(it) },
-                onAddClick = { showFolderBrowser = true },
-                onMenuClick = { showSidebar = true },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            SelectionHeader(
-                selectedCount = selectedCount,
-                onClear = { viewModel.exitSelectionMode() },
-                onSelectAll = { viewModel.selectAll(viewModel.watchedFolders.value.map { it.id }) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+            } else {
+                SelectionHeader(
+                    selectedCount = selectedCount,
+                    onClear = { viewModel.exitSelectionMode() },
+                    onSelectAll = { viewModel.selectAll(viewModel.watchedFolders.value.map { it.id }) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-        AnimatedContent(
-            targetState = libraryMode,
-            transitionSpec = {
-                if (targetState == LibraryMode.LOCAL) {
-                    (slideInHorizontally { it } + fadeIn()).togetherWith(
-                        slideOutHorizontally { -it } + fadeOut()
-                    )
-                } else {
-                    (slideInHorizontally { -it } + fadeIn()).togetherWith(
-                        slideOutHorizontally { it } + fadeOut()
-                    )
-                }
-            },
-            label = "library_mode",
-        ) { mode ->
-            when (mode) {
-                LibraryMode.BROWSE -> {
-                    BrowseLibraryContent(
-                        navController = navController,
-                        onShowFolderBrowser = { showFolderBrowser = true },
-                    )
-                }
-                LibraryMode.LOCAL -> {
-                    LocalLibraryContent(
-                        navController = navController,
-                        viewModel = viewModel,
-                        onShowFolderBrowser = { showFolderBrowser = true },
-                    )
+            AnimatedContent(
+                targetState = libraryMode,
+                transitionSpec = {
+                    if (targetState == LibraryMode.LOCAL) {
+                        (slideInHorizontally { it } + fadeIn()).togetherWith(
+                            slideOutHorizontally { -it } + fadeOut()
+                        )
+                    } else {
+                        (slideInHorizontally { -it } + fadeIn()).togetherWith(
+                            slideOutHorizontally { it } + fadeOut()
+                        )
+                    }
+                },
+                label = "library_mode",
+            ) { mode ->
+                when (mode) {
+                    LibraryMode.BROWSE -> {
+                        BrowseLibraryContent(
+                            navController = navController,
+                            onShowFolderBrowser = { showFolderBrowser = true },
+                        )
+                    }
+                    LibraryMode.LOCAL -> {
+                        LocalLibraryContent(
+                            navController = navController,
+                            viewModel = viewModel,
+                            onShowFolderBrowser = { showFolderBrowser = true },
+                        )
+                    }
                 }
             }
         }
     }
 
-    FolderBrowserDialog(
+    if (isExpanded && selectedFolder != null) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            LibraryListPane(modifier = Modifier.weight(0.4f))
+            Box(modifier = Modifier.weight(0.6f)) {
+                FolderDetailPane()
+            }
+        }
+    } else {
+        LibraryListPane()
+    }
+
+        FolderBrowserDialog(
         visible = showFolderBrowser,
         onDismiss = { showFolderBrowser = false },
         viewModel = viewModel,

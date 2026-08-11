@@ -50,6 +50,10 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.nikhil.yt.constants.NavigationBarHeight
 import com.nikhil.yt.constants.SlimNavBarHeight
+import com.nikhil.yt.constants.GlassBlurIntensityKey
+import com.nikhil.yt.constants.GlassVibrancyEnabledKey
+import com.nikhil.yt.constants.GlassLensEnabledKey
+import com.nikhil.yt.utils.rememberPreference
 import com.nikhil.yt.ui.screens.Screens
 
 @Composable
@@ -66,7 +70,16 @@ fun GlassNavigationBar(
     modifier: Modifier = Modifier,
 ) {
     val isDark = pureBlack || MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val glassStyle = GlassEffectDefaults.navigationBarStyle(isDark, pureBlack)
+    val glassBlurIntensity by rememberPreference(GlassBlurIntensityKey, 1f)
+    val glassVibrancyEnabled by rememberPreference(GlassVibrancyEnabledKey, true)
+    val glassLensEnabled by rememberPreference(GlassLensEnabledKey, true)
+    val glassStyle = GlassEffectDefaults.navigationBarStyle(
+        isDark,
+        pureBlack,
+        blurIntensity = glassBlurIntensity,
+        vibrancyEnabled = glassVibrancyEnabled,
+        lensEnabled = glassLensEnabled,
+    )
     val navBarHeight = if (slimNav) SlimNavBarHeight else NavigationBarHeight
     val totalHeight = bottomInset + bottomPadding + navBarHeight
     val glassShape = RoundedCornerShape(28.dp)

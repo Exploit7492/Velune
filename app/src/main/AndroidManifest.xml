@@ -254,6 +254,18 @@
             <service android:name=".playback.AudioExportService"
             android:exported="false" />
 
+            <activity
+            android:name=".recognition.RecognitionLaunchActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <service
+            android:name=".recognition.RecognitionForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
     </application>
 
 </manifest>

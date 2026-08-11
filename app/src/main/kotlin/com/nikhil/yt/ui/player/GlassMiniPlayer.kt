@@ -35,6 +35,9 @@ import com.nikhil.yt.constants.MiniPlayerHeight
 import com.nikhil.yt.constants.SwipeSensitivityKey
 import com.nikhil.yt.ui.component.GlassEffectDefaults
 import com.nikhil.yt.utils.rememberPreference
+import com.nikhil.yt.constants.GlassBlurIntensityKey
+import com.nikhil.yt.constants.GlassVibrancyEnabledKey
+import com.nikhil.yt.constants.GlassLensEnabledKey
 import kotlin.math.roundToInt
 
 @Composable
@@ -51,7 +54,16 @@ fun GlassMiniPlayer(
     val swipeThumbnail by rememberPreference(com.nikhil.yt.constants.SwipeThumbnailKey, true)
 
     val isDark = pureBlack || MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val glassStyle = GlassEffectDefaults.miniPlayerStyle(isDark, pureBlack)
+    val glassBlurIntensity by rememberPreference(GlassBlurIntensityKey, 1f)
+    val glassVibrancyEnabled by rememberPreference(GlassVibrancyEnabledKey, true)
+    val glassLensEnabled by rememberPreference(GlassLensEnabledKey, true)
+    val glassStyle = GlassEffectDefaults.miniPlayerStyle(
+        isDark,
+        pureBlack,
+        blurIntensity = glassBlurIntensity,
+        vibrancyEnabled = glassVibrancyEnabled,
+        lensEnabled = glassLensEnabled,
+    )
     val pillShape = RoundedCornerShape(32.dp)
     val supportsBackdrop = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val supportsLens = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
