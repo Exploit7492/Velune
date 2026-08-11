@@ -52,6 +52,7 @@ import com.nikhil.yt.db.entities.SortedSongAlbumMap
 import com.nikhil.yt.db.entities.SortedSongArtistMap
 import com.nikhil.yt.db.entities.TagEntity
 import com.nikhil.yt.db.entities.PlaylistTagMap
+import com.nikhil.yt.db.entities.SongSkipEntity
 import com.nikhil.yt.extensions.toSQLiteQuery
 import java.time.Instant
 import java.time.LocalDateTime
@@ -131,7 +132,7 @@ class MusicDatabase(
         PlayCountEntity::class,
         TagEntity::class,
         PlaylistTagMap::class,
-        com.nikhil.yt.db.entities.SongSkipEntity::class,
+        SongSkipEntity::class,
         LocalTrackEntity::class,
         LocalFolderEntity::class,
     ],
