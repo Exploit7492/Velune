@@ -436,6 +436,10 @@ enum class LyricsAnimationStyle {
     SLIDE,
     KARAOKE,
     APPLE,
+    APPLE_V2,
+    echomusic_1,
+    LYRICS_V2,
+    METRO_LYRICS,
 }
 
 val LyricsTextSizeKey = floatPreferencesKey("lyricsTextSize")
@@ -665,6 +669,17 @@ val CrossfadeDurationKey = floatPreferencesKey("crossfadeDuration")
 val CrossfadeEnabledKey = booleanPreferencesKey("crossfadeEnabled")
 val CrossfadeGaplessKey = booleanPreferencesKey("crossfadeGapless")
 val DensityScaleKey = floatPreferencesKey("densityScale")
+enum class DensityScale(val value: Float, val label: String) {
+    COMPACT(0.85f, "Compact"),
+    DEFAULT(1.0f, "Default"),
+    COMFORTABLE(1.15f, "Comfortable"),
+    LARGE(1.3f, "Large");
+
+    companion object {
+        fun fromValue(value: Float): DensityScale =
+            entries.minByOrNull { kotlin.math.abs(it.value - value) } ?: DEFAULT
+    }
+}
 val DisableLoadMoreWhenRepeatAllKey = booleanPreferencesKey("disableLoadMoreWhenRepeatAll")
 val EnableDynamicIconKey = booleanPreferencesKey("enableDynamicIcon")
 val EnableExportAsMp3Key = booleanPreferencesKey("enableExportAsMp3")
@@ -723,6 +738,19 @@ val ShufflePlaylistFirstKey = booleanPreferencesKey("shufflePlaylistFirst")
 val SkipSilenceInstantKey = booleanPreferencesKey("skipSilenceInstant")
 val SquigglySliderKey = booleanPreferencesKey("squigglySlider")
 val SuggestionRegionKey = stringPreferencesKey("suggestionRegion")
+val SuggestionRegionSlugToName =
+    mapOf(
+        "system" to "System Default",
+        "zeitgeist_global" to "Global Charts",
+        "zeitgeist_us" to "United States",
+        "zeitgeist_gb" to "United Kingdom",
+        "zeitgeist_jp" to "Japan",
+        "zeitgeist_kr" to "South Korea",
+        "zeitgeist_in" to "India",
+        "zeitgeist_br" to "Brazil",
+        "zeitgeist_de" to "Germany",
+        "zeitgeist_fr" to "France",
+    )
 val SwipeLyricsKey = booleanPreferencesKey("swipeLyrics")
 val SwipeToRemoveSongKey = booleanPreferencesKey("swipeToRemoveSong")
 val UseFloatingNavBarKey = booleanPreferencesKey("useFloatingNavBar")

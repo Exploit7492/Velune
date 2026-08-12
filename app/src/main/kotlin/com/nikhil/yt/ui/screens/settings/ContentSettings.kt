@@ -112,7 +112,7 @@ import com.nikhil.yt.ui.component.DraggableLyricsProviderItem
 import com.nikhil.yt.ui.component.DraggableLyricsProviderList
 import androidx.compose.runtime.mutableStateListOf
 import com.nikhil.yt.utils.PlaybackLogManager
-import com.nikhil.yt.ui.component.PlaybackLogsDialog
+import com.nikhil.yt.utils.PlaybackLogsDialog
 import androidx.compose.runtime.collectAsState
 import java.net.Proxy
 
