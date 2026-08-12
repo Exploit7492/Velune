@@ -101,7 +101,7 @@ fun echomusicLyricsLine(
 
     
     val wordData = remember(entry.text, entry.words, activeDuration) {
-        val isHindiText = iad1tya.echo.music.lyrics.LyricsUtils.isHindi(entry.text)
+        val isHindiText = com.nikhil.yt.lyrics.LyricsUtils.isHindi(entry.text)
         if (!isHindiText && entry.words != null && entry.words.isNotEmpty()) {
             
             entry.words.mapIndexed { index, word ->

@@ -108,6 +108,7 @@ val AudioQualityKey = stringPreferencesKey("audioQuality")
 val NetworkMeteredKey = booleanPreferencesKey("networkMetered")
 
 enum class AudioQuality {
+    OPUS,
     AUTO,
     HIGH,
     HIGHEST,

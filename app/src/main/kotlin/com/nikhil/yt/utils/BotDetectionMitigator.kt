@@ -1,7 +1,7 @@
 import com.nikhil.yt.extensions.dataStore
 
 
-package iad1tya.echo.music.utils
+package com.nikhil.yt.utils
 
 import androidx.datastore.preferences.core.edit
 import com.nikhil.yt.innertube.YouTube
@@ -75,19 +75,17 @@ object BotDetectionMitigator {
             
             YouTube.visitorData = null
             
-            YouTube.visitorData = YouTube.generateVisitorData().onSuccess { newData ->
+            YouTube.visitorData = YouTube.visitorData().onSuccess { newData ->
+            YouTube.visitorData().onSuccess { newData ->
                 Timber.tag(TAG).i("New visitorData obtained successfully for region ${currentLocale.gl}.")
-                
-                
+                YouTube.visitorData = newData
                 CipherDeobfuscator.appContext?.dataStore?.edit { settings ->
                     settings[VisitorDataKey] = newData
                 }
             }.onFailure { e ->
                 Timber.tag(TAG).e(e, "Failed to refresh visitorData during rotation")
-                
                 YouTube.locale = currentLocale
             }
-        }
         
         failureCount.set(0)
     }

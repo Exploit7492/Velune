@@ -1,4 +1,4 @@
-package com.nikhil.yt.echomusic.updater.downloadmanager
+package com.nikhil.yt.updater.downloadmanager
 
 import android.app.Notification
 import android.content.Context

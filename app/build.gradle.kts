@@ -212,6 +212,7 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
+    implementation(libs.smooth.corner.rect)
     implementation(libs.compose.ui.util)
     compileOnly("androidx.compose.ui:ui-tooling-preview:${libs.versions.compose.get()}")
     debugImplementation("androidx.compose.ui:ui-tooling-preview:${libs.versions.compose.get()}")
@@ -229,6 +230,7 @@ dependencies {
     implementation(libs.androidx.adaptive.navigation)
     implementation(libs.material.icons.core)
     implementation(libs.material.icons.extended)
+    implementation(libs.smooth.corner.rect)
     implementation(libs.palette)
     implementation(libs.multiplatform.markdown)
 

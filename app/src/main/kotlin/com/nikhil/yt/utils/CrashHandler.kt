@@ -1,6 +1,6 @@
 
 
-package iad1tya.echo.music.utils
+package com.nikhil.yt.utils
 
 import android.content.Context
 import android.content.Intent

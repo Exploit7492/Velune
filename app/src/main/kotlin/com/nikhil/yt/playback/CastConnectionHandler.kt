@@ -48,7 +48,7 @@ class CastConnectionHandler(
     fun isCastAvailable(): Boolean = false
     fun disconnect() {}
     fun loadCurrentMedia() {}
-    fun loadMedia(metadata: iad1tya.echo.music.models.MediaMetadata) {}
+    fun loadMedia(metadata: com.nikhil.yt.models.MediaMetadata) {}
     fun play() {}
     fun pause() {}
     fun seekTo(position: Long) {}

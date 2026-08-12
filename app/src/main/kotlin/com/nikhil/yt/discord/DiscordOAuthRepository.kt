@@ -1,6 +1,6 @@
 
 
-package com.music.echo.discord
+package com.nikhil.yt.discord
 
 import android.content.Context
 import android.net.Uri

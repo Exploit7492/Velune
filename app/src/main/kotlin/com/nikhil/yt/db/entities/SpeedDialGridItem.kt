@@ -1,4 +1,4 @@
-package com.nikhil.yt.ui.component
+package com.nikhil.yt.db.entities
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box

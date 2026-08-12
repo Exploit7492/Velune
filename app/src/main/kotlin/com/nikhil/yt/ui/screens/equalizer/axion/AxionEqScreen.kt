@@ -52,7 +52,7 @@ fun AxionEqScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.echo_equalizer)) },
                 navigationIcon = {
-                    iad1tya.echo.music.ui.component.IconButton(
+                    com.nikhil.yt.ui.component.IconButton(
                         onClick = onBackClick,
                         onLongClick = {}
                     ) {

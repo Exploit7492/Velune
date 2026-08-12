@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import com.nikhil.yt.R
 import com.nikhil.yt.utils.PlaybackLogEntry
 import com.nikhil.yt.utils.PlaybackLogLevel
+import com.nikhil.yt.ui.component.DefaultDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 
 @Composable
 fun PlaybackLogsDialog(
@@ -55,7 +58,7 @@ fun PlaybackLogsDialog(
 
     DefaultDialog(
         onDismiss = onDismiss,
-        icon = { Icon(painterResource(R.drawable.bug_report), contentDescription = null) },
+        icon = { Icon(Icons.Default.BugReport, contentDescription = null) },
         title = { Text(stringResource(R.string.playback_logs_title)) },
         buttons = {
             TextButton(

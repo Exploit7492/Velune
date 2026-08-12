@@ -1,6 +1,6 @@
 
 
-package com.nikhil.yt.echomusic.component
+package com.nikhil.yt.updater
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

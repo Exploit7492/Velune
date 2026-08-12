@@ -1,4 +1,4 @@
-package com.nikhil.yt.echomusic.updater.downloadmanager
+package com.nikhil.yt.updater.downloadmanager
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -208,7 +208,7 @@ object DownloadNotificationManager {
             .setProgress(100)
 
         val builder = Notification.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.drawable.updated) 
+            .setSmallIcon(R.drawable.ic_launcher_foreground) 
             .setContentTitle(appContext.getString(R.string.update_ready))
             .setContentText(appContext.getString(R.string.tap_to_install_version, version))
             .setAutoCancel(true)
@@ -267,7 +267,7 @@ object DownloadNotificationManager {
 
     private fun buildDownloadProgressLegacy(progress: Int, version: String): Notification {
         return NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher) 
+            .setSmallIcon(R.drawable.ic_launcher_foreground) 
             .setContentTitle(appContext.getString(R.string.downloading_update))
             .setContentText(appContext.getString(R.string.version_progress, version, progress))
             .setProgress(100, progress, false)
@@ -301,7 +301,7 @@ object DownloadNotificationManager {
         )
 
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.drawable.updated) 
+            .setSmallIcon(R.drawable.ic_launcher_foreground) 
             .setContentTitle(appContext.getString(R.string.update_ready))
             .setContentText(appContext.getString(R.string.tap_to_install_version, version))
             .setProgress(0, 0, false)

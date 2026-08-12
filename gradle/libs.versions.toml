@@ -1,4 +1,6 @@
 [versions]
+smoothCornerRect = "v1.0.0"
+smoothCornerRect = "v1.0.0"
 retrofit = "2.9.0"
 adaptive = "1.1.0"
 ffmpegKit = "6.0.1"
@@ -45,6 +47,8 @@ rhino = "1.9.1"
 multiplatformMarkdown = "0.39.2"
 
 [libraries]
+smooth-corner-rect = { module = "com.github.racra:smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
+smooth-corner-rect = { module = "com.github.racra:smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
 androidx-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "adaptive" }

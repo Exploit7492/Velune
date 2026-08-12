@@ -156,7 +156,7 @@ highlightKey: String? = null) {
     )
 
     val (dataSaverEnabled, onDataSaverEnabledChange) = rememberPreference(
-        key = iad1tya.echo.music.constants.DataSaverEnabledKey,
+        key = com.nikhil.yt.constants.DataSaverEnabledKey,
         defaultValue = false
     )
 
@@ -238,8 +238,8 @@ highlightKey: String? = null) {
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
 
     val (downloadQuality, onDownloadQualityChange) = rememberEnumPreference(
-        iad1tya.echo.music.constants.DownloadQualityKey,
-        defaultValue = iad1tya.echo.music.constants.DownloadQuality.YOUTUBE
+        com.nikhil.yt.constants.DownloadQualityKey,
+        defaultValue = com.nikhil.yt.constants.DownloadQuality.YOUTUBE
     )
 
     if (showAudioQualityDialog) {
@@ -273,10 +273,10 @@ highlightKey: String? = null) {
             },
             title = stringResource(R.string.download_quality_title),
             current = downloadQuality,
-            values = listOf(iad1tya.echo.music.constants.DownloadQuality.YOUTUBE),
+            values = listOf(com.nikhil.yt.constants.DownloadQuality.YOUTUBE),
             valueText = {
                 when (it) {
-                    iad1tya.echo.music.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
+                    com.nikhil.yt.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
                     else -> ""
                 }
             }
@@ -383,7 +383,7 @@ highlightKey: String? = null) {
                     description = {
                         Text(
                             when (downloadQuality) {
-                                iad1tya.echo.music.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
+                                com.nikhil.yt.constants.DownloadQuality.YOUTUBE -> "YouTube Music (AAC/Default)"
                                 else -> "YouTube Music (AAC/Default)"
                             }
                         )

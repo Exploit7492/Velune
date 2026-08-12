@@ -144,15 +144,15 @@ highlightKey: String? = null) {
         defaultValue = true
     )
     val (enableLegacyIcon, onEnableLegacyIconChange) = rememberPreference(
-        iad1tya.echo.music.constants.EnableLegacyIconKey,
+        com.nikhil.yt.constants.EnableLegacyIconKey,
         defaultValue = false
     )
     val (enableHighRefreshRate, onEnableHighRefreshRateChange) = rememberPreference(
-        iad1tya.echo.music.constants.EnableHighRefreshRateKey,
+        com.nikhil.yt.constants.EnableHighRefreshRateKey,
         defaultValue = true
     )
     val (enableHaptics, onEnableHapticsChange) = rememberPreference(
-        iad1tya.echo.music.constants.EnableHapticsKey,
+        com.nikhil.yt.constants.EnableHapticsKey,
         defaultValue = false
     )
     val (selectedThemeColorInt) = rememberPreference(
@@ -188,11 +188,11 @@ highlightKey: String? = null) {
         defaultValue = true
     )
     val (showCodecOnPlayer, onShowCodecOnPlayerChange) = rememberPreference(
-        iad1tya.echo.music.constants.ShowCodecOnPlayerKey,
+        com.nikhil.yt.constants.ShowCodecOnPlayerKey,
         defaultValue = false
     )
     val (hidePlayerSlider, onHidePlayerSliderChange) = rememberPreference(
-        iad1tya.echo.music.constants.HidePlayerSliderKey,
+        com.nikhil.yt.constants.HidePlayerSliderKey,
         defaultValue = false
     )
     val (hidePlayerThumbnail, onHidePlayerThumbnailChange) = rememberPreference(

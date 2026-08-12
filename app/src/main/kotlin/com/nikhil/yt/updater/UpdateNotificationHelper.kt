@@ -1,4 +1,4 @@
-package com.nikhil.yt.echomusic
+package com.nikhil.yt.updater
 
 import android.Manifest
 import android.app.NotificationChannel
