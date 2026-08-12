@@ -9,11 +9,15 @@ package com.nikhil.yt.ui.screens.equalizer
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nikhil.yt.di.EqEntryPoint
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
-import com.nikhil.yt.eq.data.ParametricEQ
-import com.nikhil.yt.eq.data.ParametricEQ
 import com.nikhil.yt.eq.data.FilterType
+import com.nikhil.yt.eq.data.ParametricEQ
+import com.nikhil.yt.eq.data.ParametricEQBand
+import com.nikhil.yt.eq.data.ParametricEQParser
+import com.nikhil.yt.eq.data.SavedEQProfile
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,7 +31,15 @@ import com.nikhil.yt.utils.dataStore
 
 class EQViewModel(private val context: Context) : ViewModel() {
 
-    private val repository = EQProfileRepository(context)
+    // Fetch the app-wide Hilt singletons instead of constructing new, disconnected
+    // instances — EqualizerService() would hold its own empty audioProcessors list
+    // that never reaches the processor chain MusicService actually wired up.
+    private val eqEntryPoint = EntryPointAccessors.fromApplication(
+        context.applicationContext,
+        EqEntryPoint::class.java,
+    )
+    private val repository = eqEntryPoint.eqProfileRepository()
+    private val equalizerService = eqEntryPoint.equalizerService()
 
     private val _state = MutableStateFlow(EQState())
     val state: StateFlow<EQState> = _state.asStateFlow()
@@ -40,23 +52,22 @@ class EQViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             val profiles = repository.getAllProfiles()
-            val currentProfile = EqualizerService.currentProfile.value
-            val enabled = EqualizerService.enabled.value
+            val activeProfile = repository.getActiveProfile()
             _state.update {
                 it.copy(
                     isLoading = false,
                     profiles = profiles,
-                    selectedProfile = currentProfile ?: profiles.firstOrNull(),
-                    enabled = enabled,
+                    selectedProfile = activeProfile ?: profiles.firstOrNull(),
                 )
             }
         }
     }
 
-    fun selectProfile(profile: ParametricEQ?) {
+    fun selectProfile(profile: SavedEQProfile?) {
         _state.update { it.copy(selectedProfile = profile) }
-        EqualizerService.setProfile(profile)
+        applyCurrentProfile()
         viewModelScope.launch {
+            repository.setActiveProfile(profile?.id)
             context.dataStore.edit { prefs ->
                 prefs[ParametricEQSelectedProfileIdKey] = profile?.id ?: "flat"
             }
@@ -65,7 +76,11 @@ class EQViewModel(private val context: Context) : ViewModel() {
 
     fun setEnabled(enabled: Boolean) {
         _state.update { it.copy(enabled = enabled) }
-        EqualizerService.setEnabled(enabled)
+        if (enabled) {
+            applyCurrentProfile()
+        } else {
+            equalizerService.disable()
+        }
         viewModelScope.launch {
             context.dataStore.edit { prefs ->
                 prefs[ParametricEQEnabledKey] = enabled
@@ -75,7 +90,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
 
     fun updatePreamp(preamp: Float) {
         _state.update { current ->
-            val updated = current.selectedProfile?.copy(preamp = preamp) ?: return
+            val updated = current.selectedProfile?.copy(preamp = preamp.toDouble()) ?: return
             current.copy(selectedProfile = updated)
         }
         applyCurrentProfile()
@@ -86,7 +101,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
             val profile = current.selectedProfile ?: return
             val bands = profile.bands.toMutableList()
             if (index in bands.indices) {
-                bands[index] = bands[index].copy(gain = gain)
+                bands[index] = bands[index].copy(gain = gain.toDouble())
             }
             current.copy(selectedProfile = profile.copy(bands = bands))
         }
@@ -98,7 +113,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
             val profile = current.selectedProfile ?: return
             val bands = profile.bands.toMutableList()
             if (index in bands.indices) {
-                bands[index] = bands[index].copy(frequency = frequency)
+                bands[index] = bands[index].copy(frequency = frequency.toDouble())
             }
             current.copy(selectedProfile = profile.copy(bands = bands))
         }
@@ -110,7 +125,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
             val profile = current.selectedProfile ?: return
             val bands = profile.bands.toMutableList()
             if (index in bands.indices) {
-                bands[index] = bands[index].copy(q = q.coerceAtLeast(0.1f))
+                bands[index] = bands[index].copy(q = q.coerceAtLeast(0.1f).toDouble())
             }
             current.copy(selectedProfile = profile.copy(bands = bands))
         }
@@ -120,11 +135,11 @@ class EQViewModel(private val context: Context) : ViewModel() {
     fun addBand() {
         _state.update { current ->
             val profile = current.selectedProfile ?: return
-            val newBand = ParametricEQ(
-                frequency = 1000f,
-                gain = 0f,
-                q = 1.0f,
-                filterType = FilterType.PEAK,
+            val newBand = ParametricEQBand(
+                frequency = 1000.0,
+                gain = 0.0,
+                q = 1.0,
+                filterType = FilterType.PK,
             )
             current.copy(selectedProfile = profile.copy(bands = profile.bands + newBand))
         }
@@ -143,21 +158,27 @@ class EQViewModel(private val context: Context) : ViewModel() {
 
     fun importFromJson(json: String, format: ImportFormat) {
         viewModelScope.launch {
-            val profile = when (format) {
-                ImportFormat.AUTO_EQ -> repository.importFromAutoEq(json)
-                ImportFormat.WAVELET -> repository.importFromWavelet(json)
+            val parsed: ParametricEQ? = try {
+                when (format) {
+                    ImportFormat.AUTO_EQ, ImportFormat.WAVELET -> ParametricEQParser.parseText(json)
+                }
+            } catch (e: Exception) {
+                null
             }
-            if (profile != null) {
-                repository.saveUserProfile(profile)
+            if (parsed != null) {
+                val name = "Imported ${System.currentTimeMillis()}"
+                repository.importCustomProfile(name, parsed)
+                val profiles = repository.getAllProfiles()
+                val saved = profiles.firstOrNull { it.name == name } ?: profiles.firstOrNull()
                 _state.update {
                     it.copy(
-                        profiles = repository.getAllProfiles(),
-                        selectedProfile = profile,
+                        profiles = profiles,
+                        selectedProfile = saved,
                         showImportDialog = false,
                         importError = null,
                     )
                 }
-                EqualizerService.setProfile(profile)
+                selectProfile(saved)
             } else {
                 _state.update { it.copy(importError = "Failed to parse profile") }
             }
@@ -170,8 +191,9 @@ class EQViewModel(private val context: Context) : ViewModel() {
             val profile = current.copy(
                 id = "user_${UUID.randomUUID().toString().take(8)}",
                 name = name,
+                isCustom = true,
             )
-            repository.saveUserProfile(profile)
+            repository.saveProfile(profile)
             _state.update {
                 it.copy(
                     profiles = repository.getAllProfiles(),
@@ -182,9 +204,9 @@ class EQViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun deleteProfile(profile: ParametricEQ) {
+    fun deleteProfile(profile: SavedEQProfile) {
         viewModelScope.launch {
-            repository.deleteUserProfile(profile.id)
+            repository.deleteProfile(profile.id)
             val profiles = repository.getAllProfiles()
             val selected = if (_state.value.selectedProfile?.id == profile.id) {
                 profiles.firstOrNull()
@@ -198,7 +220,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
                     showDeleteConfirm = false,
                 )
             }
-            EqualizerService.setProfile(selected)
+            selectProfile(selected)
         }
     }
 
@@ -228,7 +250,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
 
     private fun applyCurrentProfile() {
         val profile = _state.value.selectedProfile ?: return
-        EqualizerService.setProfile(profile)
+        equalizerService.applyProfile(profile)
     }
 
     enum class ImportFormat {

@@ -23,7 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.nikhil.yt.ui.component.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -172,7 +172,7 @@ fun EqScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                     Slider(
-                        value = profile.preamp,
+                        value = profile.preamp.toFloat(),
                         onValueChange = { viewModel.updatePreamp(it) },
                         valueRange = -12f..12f,
                         steps = 48,
@@ -213,7 +213,7 @@ fun EqScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Slider(
-                                value = band.frequency,
+                                value = band.frequency.toFloat(),
                                 onValueChange = { viewModel.updateBandFrequency(index, it) },
                                 valueRange = 20f..20000f,
                                 steps = 199,
@@ -224,7 +224,7 @@ fun EqScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Slider(
-                                value = band.gain,
+                                value = band.gain.toFloat(),
                                 onValueChange = { viewModel.updateBandGain(index, it) },
                                 valueRange = -12f..12f,
                                 steps = 48,
@@ -235,7 +235,7 @@ fun EqScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Slider(
-                                value = band.q,
+                                value = band.q.toFloat(),
                                 onValueChange = { viewModel.updateBandQ(index, it) },
                                 valueRange = 0.1f..10f,
                                 steps = 99,

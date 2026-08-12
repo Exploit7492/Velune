@@ -384,6 +384,7 @@ fun SongListItem(
     song: Song,
     modifier: Modifier = Modifier,
     albumIndex: Int? = null,
+    viewCountText: String? = null,
     showLikedIcon: Boolean = true,
     showInLibraryIcon: Boolean = false,
     showDownloadIcon: Boolean = true,
@@ -422,6 +423,7 @@ fun SongListItem(
             subtitle = joinByBullet(
                 song.artists.joinToString { it.name },
                 makeTimeString(song.song.duration * 1000L),
+                viewCountText,
                 if (showSize && song.format?.contentLength != null) {
                     android.text.format.Formatter.formatFileSize(LocalContext.current, song.format.contentLength)
                 } else null

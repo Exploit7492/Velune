@@ -245,6 +245,18 @@ class MusicService :
     @Inject
     lateinit var mediaLibrarySessionCallback: MediaLibrarySessionCallback
 
+    @Inject
+    lateinit var equalizerService: EqualizerService
+
+    @Inject
+    lateinit var eqProfileRepository: com.nikhil.yt.eq.data.EQProfileRepository
+
+    private val customEqAudioProcessor by lazy {
+        com.nikhil.yt.eq.audio.CustomEqualizerAudioProcessor().also {
+            equalizerService.addAudioProcessor(it)
+        }
+    }
+
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
     private var lastAudioFocusState = AudioManager.AUDIOFOCUS_NONE
@@ -779,10 +791,12 @@ class MusicService :
             }
             .distinctUntilChanged()
             .collectLatest(scope) { (enabled, profileId) ->
-                val repo = com.nikhil.yt.eq.data.EQProfileRepository(this@MusicService)
-                val profile = repo.getProfile(profileId) ?: repo.getProfile("flat")
-                EqualizerService.setProfile(profile)
-                EqualizerService.setEnabled(enabled)
+                val saved = eqProfileRepository.getAllProfiles().find { it.id == profileId }
+                if (enabled && saved != null) {
+                    equalizerService.applyProfile(saved)
+                } else {
+                    equalizerService.disable()
+                }
             }
 
         combine(
@@ -4320,7 +4334,7 @@ class MusicService :
                             150.toShort(),
                         ),
                         SonicAudioProcessor(),
-                    EqualizerService.audioProcessor,
+                    customEqAudioProcessor,
                     ),
                 ).build()
         }
@@ -4552,6 +4566,9 @@ class MusicService :
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            equalizerService.removeAudioProcessor(customEqAudioProcessor)
+        } catch (_: Exception) {}
         unregisterBluetoothReceiver()
         try {
             scope.launch { stopTogetherInternal() }

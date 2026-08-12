@@ -97,6 +97,7 @@ fun YouTubePlaylistMenu(
     onDismiss: () -> Unit,
     selectAction: () -> Unit = {},
     canSelect: Boolean = false,
+    snackbarHostState: androidx.compose.material3.SnackbarHostState? = null,
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
