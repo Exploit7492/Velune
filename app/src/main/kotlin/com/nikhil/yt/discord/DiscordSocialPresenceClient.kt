@@ -2,6 +2,9 @@
 
 package com.nikhil.yt.discord
 
+import com.nikhil.yt.discord.DiscordPresenceActivity
+import com.nikhil.yt.discord.DiscordOnlineStatus
+
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

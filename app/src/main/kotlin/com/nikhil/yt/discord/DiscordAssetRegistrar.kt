@@ -2,6 +2,8 @@
 
 package com.nikhil.yt.discord
 
+import com.nikhil.yt.discord.DISCORD_APPLICATION_ID
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -201,7 +203,7 @@ object DiscordAssetRegistrar {
         val request =
             Request
                 .Builder()
-                .url("$API_BASE/applications/${BuildConfig.DISCORD_APPLICATION_ID}/external-assets")
+                .url("$API_BASE/applications/${DISCORD_APPLICATION_ID}/external-assets")
                 .addHeader("Authorization", authHeader)
                 .post(body)
                 .build()
@@ -236,7 +238,7 @@ object DiscordAssetRegistrar {
             val request =
                 Request
                     .Builder()
-                    .url("$API_BASE/applications/${BuildConfig.DISCORD_APPLICATION_ID}/external-assets")
+                    .url("$API_BASE/applications/${DISCORD_APPLICATION_ID}/external-assets")
                     .addHeader("Authorization", authHeader)
                     .post(body)
                     .build()

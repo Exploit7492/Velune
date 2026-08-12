@@ -550,16 +550,12 @@ fun Thumbnail(
                                             }
 
                                         candidates.firstNotNullOfOrNull { (song, artist) ->
-                                                                                        CanvasProviderRegistry
-                                                .getBySongArtist(
-                                                    item.title,
-                                                    item.artists.firstOrNull()?.name.orEmpty(),
-                                                    provider = CanvasProviderRegistry.Provider.valueOf(canvasProvider.uppercase()),
-                                                )
-                                                    song = song,
-                                                    artist = artist,
-                                                    storefront = storefront,
-                                                )?.takeIf { !it.preferredAnimationUrl.isNullOrBlank() }
+                                            CanvasProviderRegistry.getBySongArtist(
+                                                song = song,
+                                                artist = artist,
+                                                provider = CanvasProviderRegistry.Provider.valueOf(canvasProvider.uppercase()),
+                                                storefront = storefront,
+                                            )?.takeIf { !it.preferredAnimationUrl.isNullOrBlank() }
                                         }
                                     }
                                 canvasArtwork = fetched

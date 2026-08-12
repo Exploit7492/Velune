@@ -640,3 +640,6 @@ val OpenRouterApiKey = stringPreferencesKey("openRouterApiKey")
 val OpenRouterBaseUrlKey = stringPreferencesKey("openRouterBaseUrl")
 val OpenRouterModelKey = stringPreferencesKey("openRouterModel")
 val DeeplApiKey = stringPreferencesKey("deeplApiKey")
+val DownloadQualityKey = stringPreferencesKey("downloadQuality")
+enum class DownloadQuality { AUTO, HIGH, HIGHEST, LOW }
+val PreferredAudioDeviceIdKey = stringPreferencesKey("preferredAudioDeviceId")

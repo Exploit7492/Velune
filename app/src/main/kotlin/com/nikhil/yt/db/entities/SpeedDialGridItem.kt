@@ -28,6 +28,7 @@ import com.nikhil.yt.innertube.models.SongItem
 import com.nikhil.yt.innertube.models.YTItem
 import com.nikhil.yt.R
 import com.nikhil.yt.constants.ThumbnailCornerRadius
+import com.nikhil.yt.ui.component.ItemThumbnail
 
 @Composable
 fun SpeedDialGridItem(

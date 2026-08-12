@@ -5,12 +5,12 @@
 
 package com.nikhil.yt.ui.screens.equalizer
 
-import com.nikhil.yt.eq.data.ParametricEQProfile
+import com.nikhil.yt.eq.data.ParametricEQ
 
 data class EQState(
     val isLoading: Boolean = false,
-    val profiles: List<ParametricEQProfile> = emptyList(),
-    val selectedProfile: ParametricEQProfile? = null,
+    val profiles: List<ParametricEQ> = emptyList(),
+    val selectedProfile: ParametricEQ? = null,
     val enabled: Boolean = false,
     val errorMessage: String? = null,
     val showImportDialog: Boolean = false,

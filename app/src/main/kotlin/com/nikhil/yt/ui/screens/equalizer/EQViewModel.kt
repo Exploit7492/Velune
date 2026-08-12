@@ -12,7 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
 import com.nikhil.yt.eq.data.ParametricEQ
-import com.nikhil.yt.eq.data.ParametricEQProfile
+import com.nikhil.yt.eq.data.ParametricEQ
 import com.nikhil.yt.eq.data.FilterType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,7 +53,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun selectProfile(profile: ParametricEQProfile?) {
+    fun selectProfile(profile: ParametricEQ?) {
         _state.update { it.copy(selectedProfile = profile) }
         EqualizerService.setProfile(profile)
         viewModelScope.launch {
@@ -182,7 +182,7 @@ class EQViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun deleteProfile(profile: ParametricEQProfile) {
+    fun deleteProfile(profile: ParametricEQ) {
         viewModelScope.launch {
             repository.deleteUserProfile(profile.id)
             val profiles = repository.getAllProfiles()

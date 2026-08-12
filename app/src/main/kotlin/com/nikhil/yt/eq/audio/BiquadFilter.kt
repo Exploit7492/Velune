@@ -12,7 +12,7 @@ class BiquadFilter(
     private val frequency: Double,
     private val gain: Double,
     private val q: Double = 1.41,
-    private val filterType: FilterType = FilterType.PEAK
+    private val filterType: FilterType = FilterType.FilterType.PK
 ) {
     private var a0 = 1.0
     private var a1 = 0.0
@@ -43,14 +43,14 @@ class BiquadFilter(
         val alpha = sinOmega / (2.0 * q)
 
         when (filterType) {
-            FilterType.PEAK -> calculatePeakingCoefficients(A, cosOmega, alpha)
-            FilterType.LOW_SHELF -> calculateLowShelfCoefficients(A, cosOmega, sinOmega)
-            FilterType.HIGH_SHELF -> calculateHighShelfCoefficients(A, cosOmega, sinOmega)
-            FilterType.LOW_PASS -> calculateLowPassCoefficients(cosOmega, alpha)
-            FilterType.HIGH_PASS -> calculateHighPassCoefficients(cosOmega, alpha)
-            FilterType.BAND_PASS -> calculateBandPassCoefficients(alpha, cosOmega)
-            FilterType.NOTCH -> calculateNotchCoefficients(cosOmega, alpha)
-            FilterType.ALL_PASS -> calculateAllPassCoefficients(cosOmega, alpha)
+            FilterType.FilterType.PK -> calculatePeakingCoefficients(A, cosOmega, alpha)
+            FilterType.FilterType.LSC -> calculateLowShelfCoefficients(A, cosOmega, sinOmega)
+            FilterType.FilterType.HSC -> calculateHighShelfCoefficients(A, cosOmega, sinOmega)
+            FilterType.FilterType.LPQ -> calculateLowPassCoefficients(cosOmega, alpha)
+            FilterType.FilterType.HPQ -> calculateHighPassCoefficients(cosOmega, alpha)
+            FilterType.FilterType.PK -> calculateBandPassCoefficients(alpha, cosOmega)
+            FilterType.FilterType.PK -> calculateNotchCoefficients(cosOmega, alpha)
+            FilterType.FilterType.PK -> calculateAllPassCoefficients(cosOmega, alpha)
             else -> calculatePeakingCoefficients(A, cosOmega, alpha)
         }
     }

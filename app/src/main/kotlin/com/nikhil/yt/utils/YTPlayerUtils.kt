@@ -526,6 +526,7 @@ object YTPlayerUtils {
                 AudioQuality.HIGH -> 160_000
                 AudioQuality.HIGHEST -> 320_000
                 AudioQuality.AUTO -> null
+                AudioQuality.OPUS -> null
             }
 
         val preferHigher =

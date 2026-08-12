@@ -1280,4 +1280,9 @@ Velune will only extract your token, and everything else is stored locally.</str
 <string name="discord_activity_content">Activity Content</string>
 <string name="text_fields">Text Fields</string>
 <string name="ic_pause_white">Pause</string>
+    <string name="bluetooth_permission_required">Bluetooth permission required</string>
+    <string name="audio_devices">Audio Devices</string>
+    <string name="this_phone">This Phone</string>
+    <string name="audio_quality_title">Audio Quality</string>
+    <string name="download_quality_title">Download Quality</string>
 </resources>

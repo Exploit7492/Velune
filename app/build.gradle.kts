@@ -70,6 +70,19 @@ android {
                 ?: System.getenv("TOGETHER_BEARER_TOKEN")
                 ?: ""
         buildConfigField("String", "TOGETHER_BEARER_TOKEN", "\"$togetherBearerToken\"")
+
+        val discordApplicationId =
+            localProperties.getProperty("DISCORD_APPLICATION_ID")
+                ?: System.getenv("DISCORD_APPLICATION_ID")
+                ?: "1165706613961789445"
+        buildConfigField("String", "DISCORD_APPLICATION_ID", "\"$discordApplicationId\"")
+        buildConfigField("long", "DISCORD_APPLICATION_ID_LONG", "${discordApplicationId}L")
+
+        val discordRedirectScheme =
+            localProperties.getProperty("DISCORD_REDIRECT_SCHEME")
+                ?: System.getenv("DISCORD_REDIRECT_SCHEME")
+                ?: "velune"
+        buildConfigField("String", "DISCORD_REDIRECT_SCHEME", "\"$discordRedirectScheme\"")
     }
 
     flavorDimensions += "abi"

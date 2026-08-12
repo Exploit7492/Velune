@@ -2,6 +2,10 @@
 
 package com.nikhil.yt.discord
 
+import com.nikhil.yt.discord.DISCORD_APPLICATION_ID
+import com.nikhil.yt.discord.DISCORD_APPLICATION_ID_LONG
+import com.nikhil.yt.discord.DISCORD_REDIRECT_SCHEME
+
 import android.content.Context
 import android.net.Uri
 import androidx.datastore.preferences.core.edit
@@ -12,7 +16,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import com.nikhil.yt.BuildConfig
 import com.nikhil.yt.constants.DiscordAvatarUrlKey
 import com.nikhil.yt.constants.DiscordNameKey
 import com.nikhil.yt.constants.DiscordRefreshTokenKey
@@ -71,10 +74,10 @@ object DiscordOAuthRepository {
     private val secureRandom = SecureRandom()
 
     val applicationId: Long
-        get() = BuildConfig.DISCORD_APPLICATION_ID_LONG
+        get() = DISCORD_APPLICATION_ID_LONG
 
     val redirectUri: String
-        get() = "${BuildConfig.DISCORD_REDIRECT_SCHEME}://authorize/callback"
+        get() = "${DISCORD_REDIRECT_SCHEME}://authorize/callback"
 
     fun createAuthorizationSession(): DiscordAuthorizationSession {
         val state = randomUrlSafeString(byteCount = 32)
@@ -90,7 +93,7 @@ object DiscordOAuthRepository {
             Uri
                 .parse(AUTHORIZATION_ENDPOINT)
                 .buildUpon()
-                .appendQueryParameter("client_id", BuildConfig.DISCORD_APPLICATION_ID)
+                .appendQueryParameter("client_id", DISCORD_APPLICATION_ID)
                 .appendQueryParameter("response_type", "code")
                 .appendQueryParameter("redirect_uri", redirectUri)
                 .appendQueryParameter("scope", scopes)
@@ -113,7 +116,7 @@ object DiscordOAuthRepository {
     ): Result<DiscordAuthSession> =
         withContext(Dispatchers.IO) {
             runCatching {
-                require(redirect.scheme == BuildConfig.DISCORD_REDIRECT_SCHEME) {
+                require(redirect.scheme == DISCORD_REDIRECT_SCHEME) {
                     "Unexpected Discord redirect scheme"
                 }
                 require(redirect.path == "/authorize/callback" || (redirect.host == "authorize" && redirect.path == "/callback")) {
@@ -225,7 +228,7 @@ object DiscordOAuthRepository {
                         url = TOKEN_ENDPOINT,
                         params =
                             mapOf(
-                                "client_id" to BuildConfig.DISCORD_APPLICATION_ID,
+                                "client_id" to DISCORD_APPLICATION_ID,
                                 "grant_type" to "refresh_token",
                                 "refresh_token" to refreshToken,
                             ),
@@ -246,7 +249,7 @@ object DiscordOAuthRepository {
             url = TOKEN_ENDPOINT,
             params =
                 mapOf(
-                    "client_id" to BuildConfig.DISCORD_APPLICATION_ID,
+                    "client_id" to DISCORD_APPLICATION_ID,
                     "grant_type" to "authorization_code",
                     "code" to code,
                     "redirect_uri" to redirectUri,

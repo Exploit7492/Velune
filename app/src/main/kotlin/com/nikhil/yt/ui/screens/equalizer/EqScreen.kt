@@ -49,7 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.R
-import com.nikhil.yt.eq.data.ParametricEQProfile
+import com.nikhil.yt.eq.data.ParametricEQ
 import com.nikhil.yt.ui.component.EnumDialog
 import com.nikhil.yt.ui.component.PreferenceEntry
 import com.nikhil.yt.ui.component.PreferenceGroupTitle

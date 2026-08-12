@@ -2,6 +2,15 @@
 
 package com.nikhil.yt.discord
 
+import com.nikhil.yt.discord.GatewaySessionState
+import com.nikhil.yt.discord.GatewayReadyEvent
+import com.nikhil.yt.discord.GatewayCloseInfo
+import com.nikhil.yt.discord.GatewayDefaults
+import com.nikhil.yt.discord.GatewayOp
+import com.nikhil.yt.discord.GatewayCapabilitiesFlags
+import com.nikhil.yt.discord.IntentsFlags
+import com.nikhil.yt.discord.NON_RESUMABLE_CLOSE_CODES
+
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import okhttp3.*
