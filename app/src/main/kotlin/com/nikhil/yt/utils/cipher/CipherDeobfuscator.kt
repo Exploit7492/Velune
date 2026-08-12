@@ -9,6 +9,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import com.nikhil.yt.playback.FunctionNameExtractor
+import com.nikhil.yt.playback.PlayerJsFetcher
+import com.nikhil.yt.playback.PlayerConfigStore
 
 object CipherDeobfuscator {
     private const val TAG = "echomusic_CipherDeobfusc"
