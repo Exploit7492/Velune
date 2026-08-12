@@ -1,4 +1,3 @@
-import com.nikhil.yt.db.entities.SpeedDialItem
 /*
  * Velune - by Nikhil
  * Nikhil
@@ -31,6 +30,7 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import com.nikhil.yt.db.entities.AlbumArtistMap
+import com.nikhil.yt.db.entities.SpeedDialItem
 import com.nikhil.yt.db.entities.AlbumEntity
 import com.nikhil.yt.db.entities.ArtistEntity
 import com.nikhil.yt.db.entities.Event
