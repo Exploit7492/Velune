@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 
-package com.nikhil.yt.echomusic
+package com.nikhil.yt.ui.component
 
 import android.Manifest
 import android.annotation.SuppressLint

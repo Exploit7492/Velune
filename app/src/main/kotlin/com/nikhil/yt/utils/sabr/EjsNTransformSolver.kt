@@ -7,7 +7,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import com.nikhil.yt.utils.cipher.CipherDeobfuscator
-import com.nikhil.yt.utils.cipher.PlayerJsFetcher
+import com.nikhil.yt.playback.PlayerJsFetcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.suspendCancellableCoroutine

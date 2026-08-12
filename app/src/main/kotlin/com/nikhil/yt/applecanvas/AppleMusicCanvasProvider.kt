@@ -1,4 +1,4 @@
-package com.nikhil.yt.canvas.providers
+package com.nikhil.yt.applecanvas
 
 import com.nikhil.yt.canvas.CanvasArtwork
 import io.ktor.client.HttpClient
@@ -6,7 +6,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.cache.HttpCache
-import io.ktor.client.plugins.compression.ContentEncoding
+import io.ktor.client.plugins.contentencoding.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -48,7 +48,7 @@ private object AppleCanvasLogger {
  *
  * Results are cached for 24 hours.
  */
-object AppleMusicCanvasProvider {
+object AppleMusicCanvasProviderPro {
 
     // Public read-only JWT used by the Apple Music web player for unauthenticated catalog reads.
 

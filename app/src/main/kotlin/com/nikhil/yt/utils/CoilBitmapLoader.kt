@@ -6,7 +6,7 @@
 
 
 
- package com.nikhil.yt.utils
+package com.nikhil.yt.utils
 
 import android.content.Context
 import android.graphics.Bitmap

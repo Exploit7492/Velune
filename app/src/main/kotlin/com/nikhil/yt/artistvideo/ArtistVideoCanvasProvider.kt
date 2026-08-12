@@ -1,4 +1,4 @@
-package com.nikhil.yt.canvas.providers
+package com.nikhil.yt.artistvideo
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-object ArtistVideoCanvasProvider {
+object ArtistVideoCanvasProviderExtended {
     private const val BASE_URL = "https://artwork-archivetune.koiiverse.cloud/"
 
     private val json = Json {
