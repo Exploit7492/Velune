@@ -1424,7 +1424,8 @@ fun PlayerBackground(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (playerBackground) {
-            PlayerBackgroundStyle.BLUR -> {
+            PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.LIQUID_GLASS -> {
+                // Liquid Glass reuses the frosted blurred-artwork renderer.
                 AnimatedContent(
                     targetState = mediaMetadata?.thumbnailUrl,
                     transitionSpec = {
@@ -1525,7 +1526,9 @@ fun PlayerBackground(
                 }
             }
 
-            PlayerBackgroundStyle.BLUR_GRADIENT -> {
+            PlayerBackgroundStyle.BLUR_GRADIENT, PlayerBackgroundStyle.APPLE_MUSIC -> {
+                // Apple Music's Now Playing background is a blurred-artwork + color wash,
+                // which is exactly what the existing Blur Gradient renderer already produces.
                 AnimatedContent(
                     targetState = mediaMetadata?.thumbnailUrl,
                     transitionSpec = {
@@ -1711,7 +1714,8 @@ fun PlayerBackground(
                 }
             }
 
-            PlayerBackgroundStyle.GLOW_ANIMATED -> {
+            PlayerBackgroundStyle.GLOW_ANIMATED, PlayerBackgroundStyle.LIVE_MESH -> {
+                // Live Mesh reuses the animated glow renderer's drifting radial-gradient mesh.
                 AnimatedContent(
                     targetState = gradientColors,
                     transitionSpec = {

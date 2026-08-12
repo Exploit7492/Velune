@@ -8,6 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -364,7 +365,7 @@ private fun SpotifyPlaylistList(
                 val imageUrl = playlist.images.firstOrNull()?.url
                 if (imageUrl != null) {
                     androidx.compose.foundation.Image(
-                        painter = coil.compose.rememberAsyncImagePainter(imageUrl),
+                        painter = coil3.compose.rememberAsyncImagePainter(imageUrl),
                         contentDescription = null,
                         modifier = Modifier
                             .size(48.dp)

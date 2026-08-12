@@ -246,7 +246,7 @@ highlightKey: String? = null) {
 
     val (sliderStyle, onSliderStyleChange) = rememberEnumPreference(
         SliderStyleKey,
-        defaultValue = SliderStyle.DEFAULT
+        defaultValue = SliderStyle.Standard
     )
     val (squigglySlider, onSquigglySliderChange) = rememberPreference(
         SquigglySliderKey,
@@ -571,6 +571,7 @@ highlightKey: String? = null) {
                     PlayerButtonsStyle.DEFAULT -> stringResource(R.string.default_style)
                     PlayerButtonsStyle.PRIMARY -> stringResource(R.string.primary_color_style)
                     PlayerButtonsStyle.TERTIARY -> stringResource(R.string.tertiary_color_style)
+                    PlayerButtonsStyle.SECONDARY -> stringResource(R.string.secondary_color_style)
                 }
             }
         )
@@ -591,6 +592,10 @@ highlightKey: String? = null) {
                     PlayerBackgroundStyle.DEFAULT -> stringResource(R.string.follow_theme)
                     PlayerBackgroundStyle.GRADIENT -> stringResource(R.string.gradient)
                     PlayerBackgroundStyle.BLUR -> stringResource(R.string.player_background_blur)
+                    PlayerBackgroundStyle.CUSTOM -> stringResource(R.string.custom)
+                    PlayerBackgroundStyle.COLORING -> stringResource(R.string.coloring)
+                    PlayerBackgroundStyle.BLUR_GRADIENT -> stringResource(R.string.blur_gradient)
+                    PlayerBackgroundStyle.GLOW -> stringResource(R.string.glow)
                     PlayerBackgroundStyle.GLOW_ANIMATED -> stringResource(R.string.glow_animated)
                     PlayerBackgroundStyle.APPLE_MUSIC -> stringResource(R.string.apple_music)
                     PlayerBackgroundStyle.LIVE_MESH -> stringResource(R.string.live_mesh)
@@ -788,11 +793,7 @@ highlightKey: String? = null) {
                 showSliderOptionDialog = false
             }
         ) {
-            val sliderPreviewColors = PlayerSliderColors.getSliderColors(
-                MaterialTheme.colorScheme.primary,
-                PlayerBackgroundStyle.DEFAULT,
-                isSystemInDarkTheme()
-            )
+            val accentColor = MaterialTheme.colorScheme.primary
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -809,11 +810,11 @@ highlightKey: String? = null) {
                             .clip(RoundedCornerShape(16.dp))
                             .border(
                                 1.dp,
-                                if (sliderStyle == SliderStyle.DEFAULT && !squigglySlider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                if (sliderStyle == SliderStyle.Standard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 RoundedCornerShape(16.dp)
                             )
                             .clickable {
-                                onSliderStyleChange(SliderStyle.DEFAULT)
+                                onSliderStyleChange(SliderStyle.Standard)
                                 onSquigglySliderChange(false)
                                 showSliderOptionDialog = false
                             }
@@ -823,9 +824,8 @@ highlightKey: String? = null) {
                         Slider(
                             value = sliderValue,
                             valueRange = 0f..1f,
-                                    
                             onValueChange = {  },
-                            colors = sliderPreviewColors,
+                            colors = PlayerSliderColors.standardSliderColors(accentColor),
                             enabled = false,
                             modifier = Modifier.weight(1f)
                         )
@@ -845,11 +845,11 @@ highlightKey: String? = null) {
                             .clip(RoundedCornerShape(16.dp))
                             .border(
                                 1.dp,
-                                if (sliderStyle == SliderStyle.WAVY && !squigglySlider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                if (sliderStyle == SliderStyle.Wavy && !squigglySlider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 RoundedCornerShape(16.dp)
                             )
                             .clickable {
-                                onSliderStyleChange(SliderStyle.WAVY)
+                                onSliderStyleChange(SliderStyle.Wavy)
                                 onSquigglySliderChange(false)
                                 showSliderOptionDialog = false
                             }
@@ -859,9 +859,8 @@ highlightKey: String? = null) {
                         WavySlider(
                             value = sliderValue,
                             valueRange = 0f..1f,
-                                    
                             onValueChange = {  },
-                            colors = sliderPreviewColors,
+                            colors = PlayerSliderColors.wavySliderColors(accentColor),
                             modifier = Modifier.weight(1f),
                             isPlaying = true,
                             enabled = false
@@ -886,36 +885,35 @@ highlightKey: String? = null) {
                             .clip(RoundedCornerShape(16.dp))
                             .border(
                                 1.dp,
-                                if (sliderStyle == SliderStyle.SLIM) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                if (sliderStyle == SliderStyle.Thick) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 RoundedCornerShape(16.dp)
                             )
                             .clickable {
-                                onSliderStyleChange(SliderStyle.SLIM)
+                                onSliderStyleChange(SliderStyle.Thick)
                                 onSquigglySliderChange(false)
                                 showSliderOptionDialog = false
                             }
                             .padding(12.dp)
                     ) {
-                        val sliderValue = 0.65f
+                        val sliderValue = 0.6f
                         Slider(
                             value = sliderValue,
                             valueRange = 0f..1f,
-                                    
                             onValueChange = {  },
                             thumb = { Spacer(modifier = Modifier.size(0.dp)) },
                             track = { sliderState ->
                                 PlayerSliderTrack(
                                     sliderState = sliderState,
-                                    colors = sliderPreviewColors
+                                    colors = PlayerSliderColors.thickSliderColors(accentColor),
+                                    trackHeight = 12.dp
                                 )
                             },
-                            colors = sliderPreviewColors,
+                            colors = PlayerSliderColors.thickSliderColors(accentColor),
                             enabled = false,
                             modifier = Modifier.weight(1f)
                         )
-
                         Text(
-                            text = stringResource(R.string.slim),
+                            text = stringResource(R.string.thick),
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -930,11 +928,95 @@ highlightKey: String? = null) {
                             .clip(RoundedCornerShape(16.dp))
                             .border(
                                 1.dp,
-                                if (sliderStyle == SliderStyle.WAVY && squigglySlider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                if (sliderStyle == SliderStyle.Circular) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 RoundedCornerShape(16.dp)
                             )
                             .clickable {
-                                onSliderStyleChange(SliderStyle.WAVY)
+                                onSliderStyleChange(SliderStyle.Circular)
+                                onSquigglySliderChange(false)
+                                showSliderOptionDialog = false
+                            }
+                            .padding(12.dp)
+                    ) {
+                        val sliderValue = 0.5f
+                        SquigglySlider(
+                            value = sliderValue,
+                            valueRange = 0f..1f,
+                            onValueChange = {  },
+                            modifier = Modifier.weight(1f),
+                            enabled = false,
+                            colors = PlayerSliderColors.circularSliderColors(accentColor),
+                            isPlaying = true,
+                        )
+                        Text(
+                            text = stringResource(R.string.circular),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(
+                                1.dp,
+                                if (sliderStyle == SliderStyle.Simple) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                onSliderStyleChange(SliderStyle.Simple)
+                                onSquigglySliderChange(false)
+                                showSliderOptionDialog = false
+                            }
+                            .padding(12.dp)
+                    ) {
+                        val sliderValue = 0.65f
+                        Slider(
+                            value = sliderValue,
+                            valueRange = 0f..1f,
+                            onValueChange = {  },
+                            thumb = { Spacer(modifier = Modifier.size(0.dp)) },
+                            track = { sliderState ->
+                                PlayerSliderTrack(
+                                    sliderState = sliderState,
+                                    colors = PlayerSliderColors.simpleSliderColors(accentColor),
+                                    trackHeight = 3.dp
+                                )
+                            },
+                            colors = PlayerSliderColors.simpleSliderColors(accentColor),
+                            enabled = false,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Text(
+                            text = stringResource(R.string.simple),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(
+                                1.dp,
+                                if (sliderStyle == SliderStyle.Wavy && squigglySlider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                onSliderStyleChange(SliderStyle.Wavy)
                                 onSquigglySliderChange(true)
                                 showSliderOptionDialog = false
                             }
@@ -944,11 +1026,10 @@ highlightKey: String? = null) {
                         SquigglySlider(
                             value = sliderValue,
                             valueRange = 0f..1f,
-                                    
                             onValueChange = {  },
                             modifier = Modifier.weight(1f),
                             enabled = false,
-                            colors = sliderPreviewColors,
+                            colors = PlayerSliderColors.wavySliderColors(accentColor),
                             isPlaying = true,
                         )
                         Text(
@@ -1208,6 +1289,10 @@ highlightKey: String? = null) {
                                 PlayerBackgroundStyle.DEFAULT -> stringResource(R.string.follow_theme)
                                 PlayerBackgroundStyle.GRADIENT -> stringResource(R.string.gradient)
                                 PlayerBackgroundStyle.BLUR -> stringResource(R.string.player_background_blur)
+                                PlayerBackgroundStyle.CUSTOM -> stringResource(R.string.custom)
+                                PlayerBackgroundStyle.COLORING -> stringResource(R.string.coloring)
+                                PlayerBackgroundStyle.BLUR_GRADIENT -> stringResource(R.string.blur_gradient)
+                                PlayerBackgroundStyle.GLOW -> stringResource(R.string.glow)
                                 PlayerBackgroundStyle.GLOW_ANIMATED -> stringResource(R.string.glow_animated)
                                 PlayerBackgroundStyle.APPLE_MUSIC -> stringResource(R.string.apple_music)
                                 PlayerBackgroundStyle.LIVE_MESH -> stringResource(R.string.live_mesh)
@@ -1287,6 +1372,7 @@ highlightKey: String? = null) {
                                 PlayerButtonsStyle.DEFAULT -> stringResource(R.string.default_style)
                                 PlayerButtonsStyle.PRIMARY -> stringResource(R.string.primary_color_style)
                                 PlayerButtonsStyle.TERTIARY -> stringResource(R.string.tertiary_color_style)
+                                PlayerButtonsStyle.SECONDARY -> stringResource(R.string.secondary_color_style)
                             }
                         )
                     },
@@ -1299,11 +1385,13 @@ highlightKey: String? = null) {
                     description = {
                         Text(
                             when (sliderStyle) {
-                                SliderStyle.DEFAULT -> stringResource(R.string.default_)
-                                SliderStyle.WAVY -> if (squigglySlider) stringResource(R.string.squiggly) else stringResource(
+                                SliderStyle.Standard -> stringResource(R.string.default_)
+                                SliderStyle.Wavy -> if (squigglySlider) stringResource(R.string.squiggly) else stringResource(
                                     R.string.wavy
                                 )
-                                SliderStyle.SLIM -> stringResource(R.string.slim)
+                                SliderStyle.Thick -> stringResource(R.string.thick)
+                                SliderStyle.Circular -> stringResource(R.string.circular)
+                                SliderStyle.Simple -> stringResource(R.string.simple)
                             }
                         )
                     },

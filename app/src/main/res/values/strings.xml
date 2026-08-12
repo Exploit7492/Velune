@@ -1038,6 +1038,9 @@ Velune will only extract your token, and everything else is stored locally.</str
 <string name="coloring">Coloring</string>
 <string name="blur_gradient">Blur Gradient</string>
 <string name="glow">Glow</string>
+<string name="thick">Thick</string>
+<string name="circular">Circular</string>
+<string name="simple">Simple</string>
 <string name="player_buttons_style">Player button colors</string>
 <string name="default_style">Default</string>
 <string name="secondary_color_style">Secondary</string>

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -113,7 +114,9 @@ private fun Material3SettingsItemRow(
                             Icon(
                                 painter = icon,
                                 contentDescription = null,
-                                tint = if (item.isHighlighted) 
+                                tint = if (!item.tintIcon)
+                                    Color.Unspecified
+                                else if (item.isHighlighted) 
                                     MaterialTheme.colorScheme.primary 
                                 else 
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
@@ -124,7 +127,9 @@ private fun Material3SettingsItemRow(
                         Icon(
                             painter = icon,
                             contentDescription = null,
-                            tint = if (item.isHighlighted) 
+                            tint = if (!item.tintIcon)
+                                Color.Unspecified
+                            else if (item.isHighlighted) 
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
@@ -181,5 +186,6 @@ data class Material3SettingsItem(
     val trailingContent: (@Composable () -> Unit)? = null,
     val showBadge: Boolean = false,
     val isHighlighted: Boolean = false,
+    val tintIcon: Boolean = true,
     val onClick: (() -> Unit)? = null
 )

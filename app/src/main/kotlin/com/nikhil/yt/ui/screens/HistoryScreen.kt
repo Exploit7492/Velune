@@ -25,8 +25,8 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.nikhil.yt.R
 import com.nikhil.yt.viewmodels.HistoryViewModel
 import com.nikhil.yt.viewmodels.HistoryViewModel.ContentType

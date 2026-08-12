@@ -131,6 +131,7 @@ val PermanentShuffleKey = booleanPreferencesKey("permanentShuffle")
 val SkipSilenceKey = booleanPreferencesKey("skipSilence")
 val AudioNormalizationKey = booleanPreferencesKey("audioNormalization")
 val AudioOffload = booleanPreferencesKey("audioOffload")
+val SimilarContent = booleanPreferencesKey("similarContent")
 val AudioCrossfadeDurationKey = intPreferencesKey("audioCrossfadeDuration")
 val AutoLoadMoreKey = booleanPreferencesKey("autoLoadMore")
 val AutoDownloadOnLikeKey = booleanPreferencesKey("autoDownloadOnLike")
@@ -400,6 +401,8 @@ enum class PreferredLyricsProvider {
 enum class PlayerButtonsStyle {
     DEFAULT,
     SECONDARY,
+    PRIMARY,
+    TERTIARY,
 }
 
 enum class PlayerDesignStyle {
@@ -419,6 +422,9 @@ enum class PlayerBackgroundStyle {
     BLUR_GRADIENT,
     GLOW,
     GLOW_ANIMATED,
+    APPLE_MUSIC,
+    LIVE_MESH,
+    LIQUID_GLASS,
 }
 
 // Keys for customized background

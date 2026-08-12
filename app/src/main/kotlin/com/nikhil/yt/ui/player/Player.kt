@@ -368,7 +368,7 @@ fun BottomSheetPlayer(
     }
 
     LaunchedEffect(mediaMetadata?.id, playerBackground) {
-        if (playerBackground == PlayerBackgroundStyle.GRADIENT || playerBackground == PlayerBackgroundStyle.COLORING || playerBackground == PlayerBackgroundStyle.BLUR_GRADIENT || playerBackground == PlayerBackgroundStyle.GLOW || playerBackground == PlayerBackgroundStyle.GLOW_ANIMATED) {
+        if (playerBackground == PlayerBackgroundStyle.GRADIENT || playerBackground == PlayerBackgroundStyle.COLORING || playerBackground == PlayerBackgroundStyle.BLUR_GRADIENT || playerBackground == PlayerBackgroundStyle.GLOW || playerBackground == PlayerBackgroundStyle.GLOW_ANIMATED || playerBackground == PlayerBackgroundStyle.APPLE_MUSIC || playerBackground == PlayerBackgroundStyle.LIVE_MESH || playerBackground == PlayerBackgroundStyle.LIQUID_GLASS) {
             val currentMetadata = mediaMetadata
             if (currentMetadata != null && currentMetadata.thumbnailUrl != null) {
                 val cachedColors = gradientColorsCache[currentMetadata.id]
@@ -434,6 +434,9 @@ fun BottomSheetPlayer(
             PlayerBackgroundStyle.GLOW -> Color.White
             PlayerBackgroundStyle.GLOW_ANIMATED -> Color.White
             PlayerBackgroundStyle.CUSTOM -> Color.White
+            PlayerBackgroundStyle.APPLE_MUSIC -> Color.White
+            PlayerBackgroundStyle.LIVE_MESH -> Color.White
+            PlayerBackgroundStyle.LIQUID_GLASS -> Color.White
         }
 
     val icBackgroundColor =
@@ -446,10 +449,21 @@ fun BottomSheetPlayer(
             PlayerBackgroundStyle.GLOW -> Color.Black
             PlayerBackgroundStyle.GLOW_ANIMATED -> Color.Black
             PlayerBackgroundStyle.CUSTOM -> Color.Black
+            PlayerBackgroundStyle.APPLE_MUSIC -> Color.Black
+            PlayerBackgroundStyle.LIVE_MESH -> Color.Black
+            PlayerBackgroundStyle.LIQUID_GLASS -> Color.Black
         }
 
     val (textButtonColor, iconButtonColor) = when (playerButtonsStyle) {
         PlayerButtonsStyle.DEFAULT -> Pair(TextBackgroundColor, icBackgroundColor)
+        PlayerButtonsStyle.PRIMARY -> Pair(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.onPrimary
+        )
+        PlayerButtonsStyle.TERTIARY -> Pair(
+            MaterialTheme.colorScheme.tertiary,
+            MaterialTheme.colorScheme.onTertiary
+        )
         PlayerButtonsStyle.SECONDARY -> Pair(
             MaterialTheme.colorScheme.secondary,
             MaterialTheme.colorScheme.onSecondary
@@ -928,6 +942,14 @@ fun BottomSheetPlayer(
 
         val (_, _) = when (playerButtonsStyle) {
             PlayerButtonsStyle.DEFAULT -> Pair(queueOnBackgroundColor, queueSurfaceColor)
+            PlayerButtonsStyle.PRIMARY -> Pair(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.onPrimary
+            )
+            PlayerButtonsStyle.TERTIARY -> Pair(
+                MaterialTheme.colorScheme.tertiary,
+                MaterialTheme.colorScheme.onTertiary
+            )
             PlayerButtonsStyle.SECONDARY -> Pair(
                 MaterialTheme.colorScheme.secondary,
                 MaterialTheme.colorScheme.onSecondary

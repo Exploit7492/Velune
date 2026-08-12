@@ -303,6 +303,9 @@ fun Thumbnail(
         PlayerBackgroundStyle.GLOW -> Color.White
         PlayerBackgroundStyle.GLOW_ANIMATED -> Color.White
         PlayerBackgroundStyle.CUSTOM -> Color.White
+        PlayerBackgroundStyle.APPLE_MUSIC -> Color.White
+        PlayerBackgroundStyle.LIVE_MESH -> Color.White
+        PlayerBackgroundStyle.LIQUID_GLASS -> Color.White
     }
 
     LaunchedEffect(maxCanvasCacheSize) {
