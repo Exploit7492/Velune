@@ -980,7 +980,7 @@ highlightKey: String? = null) {
                 )
             )
         )
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.theme),
             items = buildList {
 
@@ -1104,7 +1104,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(id = R.string.mini_player),
             items = buildList {
                 add(
@@ -1141,7 +1141,7 @@ highlightKey: String? = null) {
         var showSensitivityDialog by rememberSaveable { mutableStateOf(false) }
         var showThumbnailCornerRadiusDialog by rememberSaveable { mutableStateOf(false) }
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.player),
             items = listOfNotNull(
                 Material3SettingsItem(
@@ -1515,7 +1515,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.lyrics),
             items = listOfNotNull(
                 Material3SettingsItem(
@@ -1752,7 +1752,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.misc),
             items = listOf(
                 Material3SettingsItem(
@@ -1904,7 +1904,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.auto_playlists),
             items = listOf(
                 Material3SettingsItem(

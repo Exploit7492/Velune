@@ -610,7 +610,7 @@ highlightKey: String? = null) {
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top)))
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.general),
             items = listOf(
                 Material3SettingsItem(
@@ -740,7 +740,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.artist_page_settings),
             items = listOf(
                 Material3SettingsItem(
@@ -855,7 +855,7 @@ highlightKey: String? = null) {
             )
         )
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.album_text),
             items = listOf(
                 Material3SettingsItem(
@@ -885,7 +885,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.app_language),
             items = listOf(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -921,7 +921,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.proxy),
             items = buildList {
                 add(Material3SettingsItem(
@@ -979,7 +979,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.lyrics),
             items = listOf(
                 Material3SettingsItem(
@@ -1160,7 +1160,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.misc),
             items = listOf(
                 Material3SettingsItem(
@@ -1228,7 +1228,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.logs_heading),
             items = listOf(
                 Material3SettingsItem(
