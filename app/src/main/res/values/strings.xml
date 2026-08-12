@@ -1897,4 +1897,8 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="you_label">You Label</string>
     <string name="youtube_decryption_settings_desc">Youtube Decryption Settings</string>
     <string name="yt_sync_desc">Yt Sync</string>
+    <plurals name="seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
 </resources>

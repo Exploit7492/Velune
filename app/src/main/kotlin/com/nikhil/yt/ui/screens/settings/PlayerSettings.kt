@@ -330,7 +330,6 @@ highlightKey: String? = null) {
 
 
         Material3SettingsGroup(
-            scrollState = scrollState,
             title = "Data Saver",
             items = buildList {
                 add(Material3SettingsItem(

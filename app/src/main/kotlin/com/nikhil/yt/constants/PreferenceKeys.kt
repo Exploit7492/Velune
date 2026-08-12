@@ -653,7 +653,7 @@ val OpenRouterBaseUrlKey = stringPreferencesKey("openRouterBaseUrl")
 val OpenRouterModelKey = stringPreferencesKey("openRouterModel")
 val DeeplApiKey = stringPreferencesKey("deeplApiKey")
 val DownloadQualityKey = stringPreferencesKey("downloadQuality")
-enum class DownloadQuality { AUTO, HIGH, HIGHEST, LOW }
+enum class DownloadQuality { AUTO, HIGH, HIGHEST, LOW, YOUTUBE }
 val PreferredAudioDeviceIdKey = stringPreferencesKey("preferredAudioDeviceId")
 val AlbumCanvasEnabledKey = booleanPreferencesKey("albumCanvasEnabled")
 val AppleMusicLyricsBlurKey = booleanPreferencesKey("appleMusicLyricsBlur")
@@ -678,6 +678,8 @@ val HideStatusBarOnFullscreenKey = booleanPreferencesKey("hideStatusBarOnFullscr
 val HideVideoSongsKey = booleanPreferencesKey("hideVideoSongs")
 val HideYoutubeShortsKey = booleanPreferencesKey("hideYoutubeShorts")
 val IpVersionKey = stringPreferencesKey("ipVersion")
+val PauseOnMute = booleanPreferencesKey("pauseOnMute")
+val KeepScreenOn = booleanPreferencesKey("keepScreenOn")
 val LiquidGlassBlurRadiusKey = floatPreferencesKey("liquidGlassBlurRadius")
 val LiquidGlassChromaticAberrationKey = booleanPreferencesKey("liquidGlassChromaticAberration")
 val LiquidGlassDepthEffectKey = booleanPreferencesKey("liquidGlassDepthEffect")

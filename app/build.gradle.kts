@@ -58,6 +58,7 @@ android {
                 ?: ""
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastfmApiKey\"")
         buildConfigField("String", "LASTFM_SECRET", "\"$lastfmSecret\"")
+        buildConfigField("boolean", "CAST_AVAILABLE", "true")
 
         val zaiApiKey =
             localProperties.getProperty("ZAI_API_KEY")

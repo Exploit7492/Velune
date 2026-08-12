@@ -184,7 +184,7 @@ fun SpotifyImportScreen(
             AlertDialog(
                 onDismissRequest = { showImportConfirm = null },
                 title = { Text("Import Playlist") },
-                text = { Text("Import "${playlist.name}" (${playlist.tracks?.total ?: 0} tracks) from Spotify?") },
+                text = { Text("Import \"${playlist.name}\" (${playlist.tracks?.total ?: 0} tracks) from Spotify?") },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -209,7 +209,6 @@ fun SpotifyImportScreen(
         navigationIcon = {
             IconButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain,
             ) {
                 Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
             }
@@ -429,7 +428,7 @@ private fun SpotifyImportProgress(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Importing "$playlistName"",
+            text = "Importing \"$playlistName\"",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -481,7 +480,7 @@ private fun SpotifyImportComplete(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = ""$playlistName"",
+            text = "\"$playlistName\"",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

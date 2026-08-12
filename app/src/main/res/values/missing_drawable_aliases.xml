@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="linear_scale" type="drawable">@drawable/equalizer</item>
+    <item name="cast" type="drawable">@drawable/wifi_proxy</item>
+    <item name="echoequlizer" type="drawable">@drawable/equalizer</item>
+    <item name="volume_off_pause" type="drawable">@drawable/volume_off</item>
+    <item name="check_circle" type="drawable">@drawable/check</item>
+</resources>
