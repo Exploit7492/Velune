@@ -1,4 +1,4 @@
-package com.nikhil.yt.applecanvas
+package com.nikhil.yt.canvas.providers
 
 import com.nikhil.yt.canvas.CanvasArtwork
 import io.ktor.client.HttpClient

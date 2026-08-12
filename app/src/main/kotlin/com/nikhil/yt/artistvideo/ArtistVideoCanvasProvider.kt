@@ -1,4 +1,4 @@
-package com.nikhil.yt.artistvideo
+package com.nikhil.yt.canvas.providers
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
