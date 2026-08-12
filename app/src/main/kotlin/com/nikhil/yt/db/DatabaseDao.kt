@@ -1660,4 +1660,8 @@ interface DatabaseDao {
 
     @Query("DELETE FROM song_skip WHERE songId = :songId")
     suspend fun deleteSkip(songId: String)
+    @Transaction
+    @Query("SELECT * FROM song ORDER BY totalPlayTime DESC LIMIT :limit")
+    fun topSongs(limit: Int): Flow<List<Song>>
+
 }

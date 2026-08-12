@@ -6,7 +6,7 @@
 package com.nikhil.yt.lyrics
 
 import android.content.Context
-import com.music.echo.unison.Unison
+import com.nikhil.yt.unison.Unison
 import com.nikhil.yt.constants.EnableUnisonKey
 import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.utils.get

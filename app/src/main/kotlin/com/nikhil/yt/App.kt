@@ -33,6 +33,7 @@ import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.utils.PreferenceStore
 import com.nikhil.yt.utils.get
 import com.nikhil.yt.utils.reportException
+import com.nikhil.yt.utils.CrashHandler
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.YouTubeLocale
 import com.nikhil.yt.kugou.KuGou

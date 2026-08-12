@@ -911,8 +911,8 @@ fun AudioQualitySelector(context: Context) {
 fun DownloadQualitySelector() {
     val context = LocalContext.current
     val (downloadQuality, onDownloadQualityChange) = rememberEnumPreference(
-        key = iad1tya.echo.music.constants.DownloadQualityKey,
-        defaultValue = iad1tya.echo.music.constants.DownloadQuality.YOUTUBE
+        key = com.nikhil.yt.constants.DownloadQualityKey,
+        defaultValue = com.nikhil.yt.constants.DownloadQuality.YOUTUBE
     )
 
     Column(
@@ -931,7 +931,7 @@ fun DownloadQualitySelector() {
             "Opus"
         )
         val selectedIndex = when (downloadQuality) {
-            iad1tya.echo.music.constants.DownloadQuality.YOUTUBE -> 0
+            com.nikhil.yt.constants.DownloadQuality.YOUTUBE -> 0
             else -> 0
         }
 
@@ -948,8 +948,8 @@ fun DownloadQualitySelector() {
                     checked = selectedIndex == index,
                     onCheckedChange = {
                         val newQuality = when (index) {
-                            0 -> iad1tya.echo.music.constants.DownloadQuality.YOUTUBE
-                            else -> iad1tya.echo.music.constants.DownloadQuality.YOUTUBE
+                            0 -> com.nikhil.yt.constants.DownloadQuality.YOUTUBE
+                            else -> com.nikhil.yt.constants.DownloadQuality.YOUTUBE
                         }
                         onDownloadQualityChange(newQuality)
                     },
