@@ -42,3 +42,4 @@ captures/
 .gradle/
 keystore.properties
 *.keystore
+*.bak
