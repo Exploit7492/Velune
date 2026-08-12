@@ -85,7 +85,7 @@ highlightKey: String? = null) {
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top)))
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.general),
             items = listOf(
                 Material3SettingsItem(
@@ -225,7 +225,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.lyrics_romanization_cyrillic),
             items = listOf(
                 Material3SettingsItem(

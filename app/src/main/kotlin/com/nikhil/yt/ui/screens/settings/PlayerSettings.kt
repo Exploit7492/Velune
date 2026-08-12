@@ -358,7 +358,7 @@ highlightKey: String? = null) {
             }
         )
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.player),
             items = buildList {
                 add(Material3SettingsItem(
@@ -751,7 +751,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.queue),
             items = listOf(
                 Material3SettingsItem(
@@ -979,7 +979,7 @@ highlightKey: String? = null) {
 
         Spacer(modifier = Modifier.height(27.dp))
 
-        Material3SettingsGroup(scrollState = scrollState, 
+        Material3SettingsGroup(
             title = stringResource(R.string.misc),
             items = listOf(
                 Material3SettingsItem(
