@@ -24,8 +24,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
-import com.music.innertube.YouTube
-import com.music.innertube.models.YouTubeClient
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.innertube.models.YouTubeClient
 import okhttp3.OkHttpClient
 import java.util.Locale
 import android.view.ViewGroup

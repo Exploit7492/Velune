@@ -1,8 +1,8 @@
 package com.nikhil.yt.ai
 
 import android.content.Context
-import com.music.innertube.YouTube
-import com.music.innertube.models.SongItem
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.innertube.models.SongItem
 import com.nikhil.yt.constants.AiProviderKey
 import com.nikhil.yt.constants.OpenRouterApiKey
 import com.nikhil.yt.constants.OpenRouterBaseUrlKey

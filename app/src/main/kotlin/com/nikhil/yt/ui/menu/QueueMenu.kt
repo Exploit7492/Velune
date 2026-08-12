@@ -54,7 +54,7 @@ import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import com.music.innertube.YouTube
+import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.LocalDatabase
 import com.nikhil.yt.LocalDownloadUtil
 import com.nikhil.yt.LocalPlayerConnection

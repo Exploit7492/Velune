@@ -2,12 +2,12 @@ package com.nikhil.yt.db.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.music.innertube.models.AlbumItem
-import com.music.innertube.models.Artist
-import com.music.innertube.models.ArtistItem
-import com.music.innertube.models.PlaylistItem
-import com.music.innertube.models.SongItem
-import com.music.innertube.models.YTItem
+import com.nikhil.yt.innertube.models.AlbumItem
+import com.nikhil.yt.innertube.models.Artist
+import com.nikhil.yt.innertube.models.ArtistItem
+import com.nikhil.yt.innertube.models.PlaylistItem
+import com.nikhil.yt.innertube.models.SongItem
+import com.nikhil.yt.innertube.models.YTItem
 
 @Entity(tableName = "speed_dial_item")
 data class SpeedDialItem(

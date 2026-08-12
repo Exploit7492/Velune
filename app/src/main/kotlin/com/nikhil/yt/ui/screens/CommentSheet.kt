@@ -43,9 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.music.innertube.YouTube
-import com.music.innertube.models.comment.CommentRenderer
-import com.music.innertube.models.comment.CommentThreadRenderer
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.innertube.models.comment.CommentRenderer
+import com.nikhil.yt.innertube.models.comment.CommentThreadRenderer
 import com.nikhil.yt.R
 import kotlinx.coroutines.launch
 

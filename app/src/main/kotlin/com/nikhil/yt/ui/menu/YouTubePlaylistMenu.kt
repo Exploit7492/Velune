@@ -53,10 +53,10 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import coil3.compose.AsyncImage
-import com.music.innertube.YouTube
-import com.music.innertube.models.PlaylistItem
-import com.music.innertube.models.SongItem
-import com.music.innertube.utils.completed
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.innertube.models.PlaylistItem
+import com.nikhil.yt.innertube.models.SongItem
+import com.nikhil.yt.innertube.utils.completed
 import com.nikhil.yt.LocalDatabase
 import com.nikhil.yt.LocalDownloadUtil
 import com.nikhil.yt.LocalListenTogetherManager

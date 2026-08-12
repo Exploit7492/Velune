@@ -3,7 +3,7 @@
 package iad1tya.echo.music.utils
 
 import androidx.datastore.preferences.core.edit
-import com.music.innertube.YouTube
+import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.constants.VisitorDataKey
 import com.nikhil.yt.utils.cipher.CipherDeobfuscator
 import com.nikhil.yt.utils.PlaybackLogManager

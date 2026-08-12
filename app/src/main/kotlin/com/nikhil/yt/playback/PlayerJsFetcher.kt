@@ -1,6 +1,6 @@
 package com.nikhil.yt.utils.cipher
 
-import com.music.innertube.YouTube
+import com.nikhil.yt.innertube.YouTube
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex

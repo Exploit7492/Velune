@@ -2,7 +2,7 @@ package com.nikhil.yt.utils.cipher
 
 import android.content.Context
 import android.util.Base64
-import com.music.innertube.YouTube
+import com.nikhil.yt.innertube.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

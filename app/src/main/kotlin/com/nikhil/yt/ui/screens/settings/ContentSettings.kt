@@ -104,7 +104,7 @@ import com.nikhil.yt.utils.rememberEnumPreference
 import com.nikhil.yt.utils.rememberPreference
 import androidx.compose.ui.text.font.FontWeight
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
-import com.music.innertube.models.IpVersion
+import com.nikhil.yt.innertube.models.IpVersion
 import com.nikhil.yt.constants.IpVersionKey
 
 import com.nikhil.yt.lyrics.LyricsProviderRegistry
