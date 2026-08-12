@@ -688,10 +688,13 @@ enum class DensityScale(val value: Float, val label: String) {
 }
 val DisableLoadMoreWhenRepeatAllKey = booleanPreferencesKey("disableLoadMoreWhenRepeatAll")
 val EnableDynamicIconKey = booleanPreferencesKey("enableDynamicIcon")
+val EnableLegacyIconKey = booleanPreferencesKey("enableLegacyIcon")
 val EnableExportAsMp3Key = booleanPreferencesKey("enableExportAsMp3")
 val EnableGoogleCastKey = booleanPreferencesKey("enableGoogleCast")
 val EnableHapticsKey = booleanPreferencesKey("enableHaptics")
 val EnableHighRefreshRateKey = booleanPreferencesKey("enableHighRefreshRate")
+val ShowCodecOnPlayerKey = booleanPreferencesKey("showCodecOnPlayer")
+val HidePlayerSliderKey = booleanPreferencesKey("hidePlayerSlider")
 val EnableLyricsThumbnailPlayPauseKey = booleanPreferencesKey("enableLyricsThumbnailPlayPause")
 val EnableSimpMusicKey = booleanPreferencesKey("enableSimpMusic")
 val ExportDirectoryUriKey = stringPreferencesKey("exportDirectoryUri")

@@ -27,6 +27,10 @@ object MusicRecognitionService {
     private val _recognitionStatus = MutableStateFlow<RecognitionStatus>(RecognitionStatus.Ready)
     val recognitionStatus: StateFlow<RecognitionStatus> = _recognitionStatus.asStateFlow()
 
+    fun reset() {
+        _recognitionStatus.value = RecognitionStatus.Ready
+    }
+
     fun hasRecordPermission(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,

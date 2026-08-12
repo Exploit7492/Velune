@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -114,7 +114,7 @@ fun RecognitionScreen(
                         navController.navigate("recognition_history")
                     },
                     onDismiss = {
-                        MusicRecognitionService.recognitionStatus.value = RecognitionStatus.Ready
+                        MusicRecognitionService.reset()
                     }
                 )
                 is RecognitionStatus.Error -> RecognitionError(
@@ -127,7 +127,7 @@ fun RecognitionScreen(
                         }
                     },
                     onDismiss = {
-                        MusicRecognitionService.recognitionStatus.value = RecognitionStatus.Ready
+                        MusicRecognitionService.reset()
                     }
                 )
             }
@@ -137,7 +137,7 @@ fun RecognitionScreen(
     TopAppBar(
         title = { Text(stringResource(R.string.recognize_music)) },
         navigationIcon = {
-            IconButton(
+            com.nikhil.yt.ui.component.IconButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
             ) {

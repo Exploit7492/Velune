@@ -418,6 +418,12 @@ fun OnlineSearchScreen(
             )
         }
     }
+
+    RecognizeMusicFab(
+        onClick = { navController.navigate("recognition") },
+        modifier = Modifier.align(Alignment.BottomEnd)
+    )
+    }
 }
 
 // ─── SECTION HEADER ─────────────────────────────────────────────────────────
@@ -565,13 +571,6 @@ private fun MoodGenreChip(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    
-        RecognizeMusicFab(
-            onClick = { navController.navigate("recognition") },
-            modifier = Modifier.align(Alignment.BottomEnd)
-        )
-    }
-
     }
 }
 
