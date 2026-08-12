@@ -1,7 +1,8 @@
+package com.nikhil.yt.utils
+
 import com.nikhil.yt.extensions.dataStore
 
 
-package iad1tya.echo.music.utils
 
 import androidx.datastore.preferences.core.edit
 import com.nikhil.yt.innertube.YouTube

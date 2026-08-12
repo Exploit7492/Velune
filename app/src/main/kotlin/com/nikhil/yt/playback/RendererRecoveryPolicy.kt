@@ -1,4 +1,4 @@
-package com.nikhil.yt.utils.cipher
+package com.nikhil.yt.playback
 
 /**
  * Pure (no Android deps) policy for recovering from WebView renderer deaths.

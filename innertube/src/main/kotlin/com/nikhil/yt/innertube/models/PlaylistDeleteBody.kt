@@ -6,7 +6,7 @@
 
 
 
-package com.nikhil.yt.innertube.models.body
+package com.nikhil.yt.innertube.models
 
 import com.nikhil.yt.innertube.models.Context
 import kotlinx.serialization.Serializable

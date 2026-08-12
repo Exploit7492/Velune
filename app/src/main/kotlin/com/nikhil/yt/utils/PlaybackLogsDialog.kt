@@ -1,6 +1,6 @@
 
 
-package com.nikhil.yt.ui.component
+package com.nikhil.yt.utils
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box

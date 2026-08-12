@@ -1,4 +1,4 @@
-package com.nikhil.yt.echomusic
+package com.nikhil.yt.playback
 
 import android.content.Context
 import android.media.AudioDeviceInfo

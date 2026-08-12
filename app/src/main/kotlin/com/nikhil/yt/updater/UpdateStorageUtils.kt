@@ -1,4 +1,4 @@
-package com.nikhil.yt.echomusic.updater
+package com.nikhil.yt.updater
 
 import android.content.Context
 import android.os.Environment

@@ -1,6 +1,6 @@
 
 
-package iad1tya.echo.music.ui.screens
+package com.nikhil.yt.ui.screens
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

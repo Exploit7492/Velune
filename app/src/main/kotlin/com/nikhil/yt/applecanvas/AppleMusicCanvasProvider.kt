@@ -1,4 +1,4 @@
-package com.nikhil.yt.canvas.providers
+package com.nikhil.yt.applecanvas
 
 import com.nikhil.yt.canvas.CanvasArtwork
 import io.ktor.client.HttpClient
@@ -48,7 +48,7 @@ private object AppleCanvasLogger {
  *
  * Results are cached for 24 hours.
  */
-object AppleMusicCanvasProvider {
+object AppleMusicCanvasProviderPro {
 
     // Public read-only JWT used by the Apple Music web player for unauthenticated catalog reads.
 

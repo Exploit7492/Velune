@@ -1,6 +1,6 @@
 
 
-package com.music.echo.discord
+package com.nikhil.yt.discord
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel

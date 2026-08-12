@@ -1,4 +1,4 @@
-package iad1tya.echo.music.playback
+package com.nikhil.yt.playback
 
 /**
  * Owns the short-lived stream-resolution cache and the one-shot recovery gate for a media item.

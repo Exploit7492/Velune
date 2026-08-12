@@ -1,4 +1,4 @@
-package com.nikhil.yt.ui.screens.equalizer
+package com.nikhil.yt.eq.data
 
 import com.nikhil.yt.eq.data.SavedEQProfile
 
