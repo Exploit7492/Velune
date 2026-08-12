@@ -1,6 +1,6 @@
 
 
-package iad1tya.echo.music.ui.screens
+package com.nikhil.yt.ui.screens
 
 import android.content.Intent
 import android.os.Bundle

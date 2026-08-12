@@ -1,3 +1,4 @@
+import com.nikhil.yt.extensions.dataStore
 
 
 package iad1tya.echo.music.utils
@@ -74,7 +75,7 @@ object BotDetectionMitigator {
             
             YouTube.visitorData = null
             
-            YouTube.refreshVisitorData().onSuccess { newData ->
+            YouTube.visitorData = YouTube.generateVisitorData().onSuccess { newData ->
                 Timber.tag(TAG).i("New visitorData obtained successfully for region ${currentLocale.gl}.")
                 
                 
