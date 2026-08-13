@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.nikhil.yt.R
 import com.nikhil.yt.viewmodels.HistoryViewModel
 import com.nikhil.yt.viewmodels.HistoryViewModel.ContentType

@@ -1,6 +1,6 @@
 
 
-package com.music.echo.unison.models
+package com.nikhil.yt.unison.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

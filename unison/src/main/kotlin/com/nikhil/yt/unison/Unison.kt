@@ -1,6 +1,6 @@
 
 
-package com.music.echo.unison
+package com.nikhil.yt.unison
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -15,9 +15,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.Json
-import com.music.echo.unison.models.UnisonEntry
-import com.music.echo.unison.models.UnisonResponse
-import com.music.echo.unison.models.UnisonSearchResponse
+import com.nikhil.yt.unison.models.UnisonEntry
+import com.nikhil.yt.unison.models.UnisonResponse
+import com.nikhil.yt.unison.models.UnisonSearchResponse
 
 object Unison {
     private const val API_BASE_URL = "https://unison.boidu.dev/"

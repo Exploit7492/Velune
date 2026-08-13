@@ -69,6 +69,7 @@ import com.nikhil.yt.ui.component.HideOnScrollFAB
 import com.nikhil.yt.ui.component.LocalBottomSheetPageState
 import com.nikhil.yt.ui.component.LocalMenuState
 import com.nikhil.yt.ui.component.NavigationTitle
+import com.nikhil.yt.ui.component.RecognizeMusicFab
 import com.nikhil.yt.ui.utils.SnapLayoutInfoProvider
 import com.nikhil.yt.utils.rememberPreference
 import com.nikhil.yt.viewmodels.HomeViewModel

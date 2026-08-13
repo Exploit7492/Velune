@@ -42,7 +42,6 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.nikhil.yt.LocalPlayerConnection
 import com.nikhil.yt.extensions.togglePlayPause
-import com.nikhil.yt.ui.player.InlineLyricsView
 import kotlin.math.abs
 
 @Composable
@@ -148,7 +147,7 @@ fun AmbientModeScreen(navController: NavController) {
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = {
-                                    playerConnection.togglePlayPause()
+                                    playerConnection.player.togglePlayPause()
                                 }
                             )
                         }
@@ -163,10 +162,8 @@ fun AmbientModeScreen(navController: NavController) {
                     .padding(start = 16.dp, end = 32.dp, top = 32.dp, bottom = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                InlineLyricsView(
-                    mediaMetadata = mediaMetadata,
-                    showLyrics = true,
-                    positionProvider = { playerConnection.player.currentPosition }
+                com.nikhil.yt.ui.component.Lyrics(
+                    sliderPositionProvider = { playerConnection.player.currentPosition }
                 )
             }
         }

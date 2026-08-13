@@ -8,6 +8,7 @@
 
 package com.nikhil.yt.ui.screens
 
+import android.app.Activity
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -76,6 +78,8 @@ import com.nikhil.yt.ui.screens.recognition.RecognitionScreen
 import com.nikhil.yt.ui.screens.recognition.RecognitionHistoryScreen
 import com.nikhil.yt.ui.screens.spotifyimport.SpotifyImportScreen
 import com.nikhil.yt.ui.screens.equalizer.EqScreen
+import com.nikhil.yt.ui.screens.equalizer.axion.AxionEqScreen
+import com.nikhil.yt.ui.screens.ambient.AmbientModeScreen
 import com.nikhil.yt.ui.screens.settings.GlassEffectSettings
 import com.nikhil.yt.ui.screens.settings.DarkMode
 import com.nikhil.yt.ui.screens.settings.DiscordLoginScreen
@@ -99,6 +103,8 @@ import com.nikhil.yt.utils.rememberPreference
 fun NavGraphBuilder.navigationBuilder(
     navController: NavHostController,
     scrollBehavior: TopAppBarScrollBehavior,
+    activity: Activity,
+    snackbarHostState: SnackbarHostState,
 ) {
     composable(Screens.Home.route) {
         HomeScreen(navController)
@@ -312,7 +318,7 @@ fun NavGraphBuilder.navigationBuilder(
         VeluneAccountSettingsScreen(navController)
     }
     composable("settings/appearance") {
-        AppearanceSettings(navController, scrollBehavior)
+        AppearanceSettings(navController, scrollBehavior, activity, snackbarHostState)
     }
     composable("settings/appearance/palette_picker") {
         PalettePickerScreen(navController)
@@ -390,8 +396,6 @@ fun NavGraphBuilder.navigationBuilder(
     composable("login") {
         LoginScreen(navController)
     }
-        composable("eq/axion") { AxionEqScreen(navController, scrollBehavior) }
-        composable("ambient") { AmbientModeScreen(navController, scrollBehavior) }
-        composable("player/floating") { FloatingMiniPlayer() }
-        composable("settings/search") { SearchableSettings(navController, scrollBehavior) }
+        composable("eq/axion") { AxionEqScreen(onBackClick = { navController.navigateUp() }) }
+        composable("ambient") { AmbientModeScreen(navController) }
 }
