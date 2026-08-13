@@ -2,6 +2,8 @@ package com.nikhil.yt.discord
 
 import com.nikhil.yt.BuildConfig
 
+enum class DiscordOnlineStatus { Online, Idle, Dnd, Invisible }
+
 data class DiscordPresenceActivity(
     val name: String? = null,
     val type: ActivityType = ActivityType.LISTENING,
@@ -10,6 +12,7 @@ data class DiscordPresenceActivity(
     val applicationId: Long = BuildConfig.DISCORD_APPLICATION_ID_LONG,
     val timestamps: Timestamps = Timestamps(),
     val assets: Assets = Assets(),
+    val onlineStatus: DiscordOnlineStatus = DiscordOnlineStatus.Online,
 ) {
     enum class ActivityType(val nativeValue: Int) {
         PLAYING(0), LISTENING(2), WATCHING(3), COMPETING(5),

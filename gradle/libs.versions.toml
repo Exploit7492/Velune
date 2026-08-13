@@ -1,4 +1,6 @@
 [versions]
+protobuf = "4.33.5"
+protobufPlugin = "0.9.6"
 smoothCornerRect = "v1.0.0"
 retrofit = "2.9.0"
 adaptive = "1.1.0"
@@ -46,6 +48,8 @@ rhino = "1.9.1"
 multiplatformMarkdown = "0.39.2"
 
 [libraries]
+protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
+protobuf-kotlin-lite = { module = "com.google.protobuf:protobuf-kotlin-lite", version.ref = "protobuf" }
 smooth-corner-rect = { module = "com.github.racra:smooth-corner-rect-android-compose", version.ref = "smoothCornerRect" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
@@ -144,6 +148,7 @@ material-icons-core = { group = "androidx.compose.material", name = "material-ic
 material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version = "1.7.8" }
 
 [plugins]
+protobufPlugin = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
 android-library = { id = "com.android.library", version.ref = "androidGradlePlugin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

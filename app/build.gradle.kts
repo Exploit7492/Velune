@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.protobufPlugin)
 }
 
 val localProperties = Properties()
@@ -198,6 +199,8 @@ android {
             excludes += "META-INF/NOTICE.md"
             excludes += "META-INF/CONTRIBUTORS.md"
             excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 }
@@ -206,11 +209,31 @@ kotlin {
     jvmToolchain(21)
 }
 
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+                create("java") {
+                    option("lite")
+                }
+                create("kotlin") {
+                    option("lite")
+                }
+            }
+        }
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
+    implementation(libs.protobuf.javalite)
+    implementation(libs.protobuf.kotlin.lite)
     implementation(files("libs/pawns-ndk-1.8.1.aar"))
     implementation(files("libs/internet-sharing-1.8.1.aar"))
     implementation(libs.guava)

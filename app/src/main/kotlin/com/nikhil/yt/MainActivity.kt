@@ -193,7 +193,6 @@ import com.nikhil.yt.ui.component.IconButton
 
 import com.nikhil.yt.ui.component.LocalBottomSheetPageState
 import com.nikhil.yt.ui.component.LocalMenuState
-import com.nikhil.yt.ui.component.StarDialog
 import com.nikhil.yt.ui.component.TopSearch
 import com.nikhil.yt.ui.component.rememberBottomSheetState
 import com.nikhil.yt.ui.component.shimmer.ShimmerTheme
@@ -242,6 +241,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var syncUtils: SyncUtils
+
+    @Inject
+    lateinit var listenTogetherManager: com.nikhil.yt.listentogether.ListenTogetherManager
 
     private lateinit var navController: NavHostController
     private var pendingIntent: Intent? = null
@@ -967,75 +969,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        var showStarDialog by remember { mutableStateOf(false) }
-
-                        LaunchedEffect(Unit) {
-                            delay(3000)
-
-                            withContext(Dispatchers.IO) {
-                                val current = dataStore[LaunchCountKey] ?: 0
-                                val newCount = current + 1
-                                dataStore.edit { prefs ->
-                                    prefs[LaunchCountKey] = newCount
-                                }
-                            }
-
-                            val shouldShow = withContext(Dispatchers.IO) {
-                                val hasPressed = dataStore[HasPressedStarKey] ?: false
-                                val remindAfter = dataStore[RemindAfterKey] ?: 3
-                                !hasPressed && (dataStore[LaunchCountKey] ?: 0) >= remindAfter
-                            }
-
-                            if (shouldShow) {
-                                var waited = 0L
-                                val waitStep = 500L
-                                val maxWait = 30_000L
-                                while (bottomSheetPageState.isVisible && waited < maxWait) {
-                                    delay(waitStep)
-                                    waited += waitStep
-                                }
-                                showStarDialog = true
-                            }
-                        }
-
-                        if (showStarDialog) {
-                            StarDialog(
-                                onDismissRequest = { showStarDialog = false },
-                                onStar = {
-                                    coroutineScope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) {
-                                                dataStore.edit { prefs ->
-                                                    prefs[HasPressedStarKey] = true
-                                                    prefs[RemindAfterKey] = Int.MAX_VALUE
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            reportException(e)
-                                        } finally {
-                                            showStarDialog = false
-                                        }
-                                    }
-                                },
-                                onLater = {
-                                    coroutineScope.launch {
-                                        try {
-                                            val launch = withContext(Dispatchers.IO) { dataStore[LaunchCountKey] ?: 0 }
-                                            withContext(Dispatchers.IO) {
-                                                dataStore.edit { prefs ->
-                                                    prefs[RemindAfterKey] = launch + 10
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            reportException(e)
-                                        } finally {
-                                            showStarDialog = false
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
                         remember(navBackStackEntry) {
                             when (navBackStackEntry?.destination?.route) {
                                 Screens.Home.route -> R.string.home
@@ -1055,6 +988,7 @@ class MainActivity : ComponentActivity() {
                             LocalSyncUtils provides syncUtils,
                             LocalBottomSheetPageState provides bottomSheetPageState,
                             LocalMenuState provides menuState,
+                            LocalListenTogetherManager provides listenTogetherManager,
                         ) {
                             Row {
                                 AnimatedVisibility(useRail && shouldShowNavigationBar) {
@@ -1744,3 +1678,5 @@ val LocalPlayerAwareWindowInsets =
     compositionLocalOf<WindowInsets> { error("No WindowInsets provided") }
 val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No DownloadUtil provided") }
 val LocalSyncUtils = staticCompositionLocalOf<SyncUtils> { error("No SyncUtils provided") }
+val LocalListenTogetherManager =
+    staticCompositionLocalOf<com.nikhil.yt.listentogether.ListenTogetherManager?> { null }

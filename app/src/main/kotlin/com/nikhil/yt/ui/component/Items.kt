@@ -112,7 +112,7 @@ import com.nikhil.yt.extensions.toMediaItem
 import com.nikhil.yt.models.MediaMetadata
 import com.nikhil.yt.playback.queues.LocalAlbumRadio
 import com.nikhil.yt.ui.utils.resize
-import com.nikhil.yt.utils.isLocalMediaId
+import com.nikhil.yt.localmedia.isLocalMediaId
 import com.nikhil.yt.utils.joinByBullet
 import com.nikhil.yt.utils.makeTimeString
 import com.nikhil.yt.utils.rememberEnumPreference
@@ -977,6 +977,7 @@ fun MediaMetadataListItem(
     isSelected: Boolean = false,
     isActive: Boolean = false,
     isPlaying: Boolean = false,
+    shouldLoadImage: Boolean = true,
     shape: Shape = RectangleShape,
     color: Color = MaterialTheme.colorScheme.surfaceContainer,
     trailingContent: @Composable RowScope.() -> Unit = {},
@@ -1006,7 +1007,7 @@ fun MediaMetadataListItem(
         },
         thumbnailContent = {
             ItemThumbnail(
-                thumbnailUrl = mediaMetadata.thumbnailUrl,
+                thumbnailUrl = if (shouldLoadImage) mediaMetadata.thumbnailUrl else null,
                 albumIndex = null,
                 isSelected = isSelected,
                 isActive = isActive,

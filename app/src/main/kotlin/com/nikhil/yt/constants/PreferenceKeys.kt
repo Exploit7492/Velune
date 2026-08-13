@@ -597,11 +597,6 @@ val CountryCodeToName =
         "AE" to "United Arab Emirates",
     )
 
-// App rating / star prompt preferences
-val LaunchCountKey = intPreferencesKey("launch_count")
-val HasPressedStarKey = booleanPreferencesKey("has_pressed_star")
-val RemindAfterKey = intPreferencesKey("remind_after")
-
 // Update settings
 val EnableUpdateNotificationKey = booleanPreferencesKey("enableUpdateNotification")
 val UpdateChannelKey = stringPreferencesKey("updateChannel")
@@ -764,3 +759,17 @@ val SwipeLyricsKey = booleanPreferencesKey("swipeLyrics")
 val SwipeToRemoveSongKey = booleanPreferencesKey("swipeToRemoveSong")
 val UseFloatingNavBarKey = booleanPreferencesKey("useFloatingNavBar")
 val UseNewPlayerDesignKey = booleanPreferencesKey("useNewPlayerDesign")
+
+// Listen Together (ported from echo-music reference)
+val ListenTogetherServerUrlKey = stringPreferencesKey("listenTogetherServerUrl")
+val ListenTogetherUsernameKey = stringPreferencesKey("listenTogetherUsername")
+val EnableListenTogetherKey = booleanPreferencesKey("enableListenTogether")
+val ListenTogetherAutoApprovalKey = booleanPreferencesKey("listenTogetherAutoApproval")
+val ListenTogetherSyncVolumeKey = booleanPreferencesKey("listenTogetherSyncVolume")
+val ListenTogetherSmartResyncKey = booleanPreferencesKey("listenTogetherSmartResync")
+val ListenTogetherBlockedUsersKey = stringPreferencesKey("listenTogetherBlockedUsers")
+val ListenTogetherSessionTokenKey = stringPreferencesKey("listenTogetherSessionToken")
+val ListenTogetherRoomCodeKey = stringPreferencesKey("listenTogetherRoomCode")
+val ListenTogetherUserIdKey = stringPreferencesKey("listenTogetherUserId")
+val ListenTogetherIsHostKey = booleanPreferencesKey("listenTogetherIsHost")
+val ListenTogetherSessionTimestampKey = longPreferencesKey("listenTogetherSessionTimestamp")

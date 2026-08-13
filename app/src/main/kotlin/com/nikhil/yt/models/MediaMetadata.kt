@@ -120,3 +120,5 @@ fun SongItem.toMediaMetadata() =
         explicit = explicit,
         setVideoId = setVideoId
     )
+
+enum class QueueItemSource { USER, RADIO, SEARCH, LOCAL, LISTEN_TOGETHER }

@@ -30,6 +30,7 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import com.nikhil.yt.db.entities.AlbumArtistMap
+import com.nikhil.yt.db.daos.SpeedDialDao
 import com.nikhil.yt.db.entities.SpeedDialItem
 import com.nikhil.yt.db.entities.AlbumEntity
 import com.nikhil.yt.db.entities.ArtistEntity
@@ -70,6 +71,8 @@ class MusicDatabase(
 
     val localMusicDao: LocalMusicDao
         get() = delegate.localMusicDao
+    val speedDialDao: SpeedDialDao
+        get() = delegate.speedDialDao
     val openHelper: SupportSQLiteOpenHelper
         get() = delegate.openHelper
 
@@ -171,6 +174,7 @@ class MusicDatabase(
 abstract class InternalDatabase : RoomDatabase() {
     abstract val dao: DatabaseDao
     abstract val localMusicDao: LocalMusicDao
+    abstract val speedDialDao: SpeedDialDao
 
     companion object {
         const val DB_NAME = "song.db"
