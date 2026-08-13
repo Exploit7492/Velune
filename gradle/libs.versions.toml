@@ -1,6 +1,6 @@
 [versions]
 protobuf = "4.33.5"
-protobufPlugin = "0.9.6"
+protobufPlugin = "0.10.0"
 smoothCornerRect = "v1.0.0"
 retrofit = "2.9.0"
 adaptive = "1.1.0"
