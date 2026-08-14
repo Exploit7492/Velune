@@ -180,6 +180,16 @@
             </intent-filter>
         </service>
 
+        <!-- WorkManager's own SystemForegroundService is merged in from its library manifest
+             with no foregroundServiceType. UpdateDownloadWorker calls setForeground() with
+             FOREGROUND_SERVICE_TYPE_DATA_SYNC (Android Q+), so this override declares that
+             type on the merged manifest entry to satisfy the SpecifyForegroundServiceType
+             lint check and the Android 14+ runtime requirement it's checking for. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <!-- Receiver for Listen Together notification actions (Approve/Reject) -->
         <receiver
             android:name=".listentogether.ListenTogetherActionReceiver"
