@@ -272,6 +272,10 @@ class MusicService :
     private var ioScope = CoroutineScope(Dispatchers.IO + scopeJob)
     private val binder = MusicBinder()
 
+    val castConnectionHandler: CastConnectionHandler by lazy {
+        CastConnectionHandler(this, ioScope, this)
+    }
+
     private lateinit var connectivityManager: ConnectivityManager
     lateinit var connectivityObserver: NetworkConnectivityObserver
     val waitingForNetworkConnection = MutableStateFlow(false)
@@ -4580,6 +4584,9 @@ class MusicService :
             discordRpc?.closeRPC()
         } catch (_: Exception) {}
         discordRpc = null
+        try {
+            castConnectionHandler.release()
+        } catch (_: Exception) {}
         try {
             connectivityObserver.unregister()
         } catch (_: Exception) {}

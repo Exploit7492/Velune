@@ -201,6 +201,7 @@ import com.nikhil.yt.ui.screens.search.OnlineSearchScreen
 import com.nikhil.yt.ui.screens.settings.DarkMode
 import com.nikhil.yt.ui.screens.settings.DiscordPresenceManager
 import com.nikhil.yt.ui.screens.settings.NavigationTab
+import com.nikhil.yt.ui.screens.settings.RingtoneViewModel
 import com.nikhil.yt.ui.theme.VeluneTheme
 import com.nikhil.yt.ui.theme.ColorSaver
 import com.nikhil.yt.ui.theme.DefaultThemeColor
@@ -1673,3 +1674,4 @@ val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No Downl
 val LocalSyncUtils = staticCompositionLocalOf<SyncUtils> { error("No SyncUtils provided") }
 val LocalListenTogetherManager =
     staticCompositionLocalOf<com.nikhil.yt.listentogether.ListenTogetherManager?> { null }
+val LocalRingtoneViewModel = staticCompositionLocalOf<RingtoneViewModel> { RingtoneViewModel() }

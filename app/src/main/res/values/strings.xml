@@ -1332,6 +1332,8 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="account_desc">Account</string>
     <string name="action_export">Action Export</string>
     <string name="action_exported">Action Exported</string>
+    <string name="export">Export</string>
+    <string name="system_equalizer">System Equalizer</string>
     <string name="action_exported_desc">Action Exported</string>
     <string name="action_logout_desc">Action Logout</string>
     <string name="activity_history">Activity History</string>

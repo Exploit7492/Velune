@@ -12,6 +12,8 @@ import com.nikhil.yt.ui.component.VeluneLoader
 import android.content.Intent
 import android.content.res.Configuration
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -382,6 +384,26 @@ fun SongMenu(
     val addToPlaylistText = stringResource(R.string.add_to_playlist)
     val shareText = stringResource(R.string.share)
     val editText = stringResource(R.string.edit)
+    val exportText = stringResource(R.string.export)
+    val exportLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        val artistNames = song.artists.joinToString(", ") { it.name }
+                        val info = buildString {
+                            appendLine(song.song.title)
+                            appendLine(artistNames)
+                            song.album?.title?.let { appendLine(it) }
+                            appendLine("https://music.youtube.com/watch?v=${song.id}")
+                        }
+                        stream.write(info.toByteArray())
+                    }
+                } catch (_: Exception) {
+                    Toast.makeText(context, context.getString(R.string.error_unknown), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
     val primaryActions = remember(
         song,
@@ -497,7 +519,7 @@ fun SongMenu(
             text = exportText,
             onClick = {
                 onDismiss()
-                exportLauncher.launch(null)
+                exportLauncher.launch("${song.song.title}.txt")
             },
         ),
         )

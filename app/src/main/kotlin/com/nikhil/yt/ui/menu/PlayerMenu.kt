@@ -440,7 +440,11 @@ fun PlayerMenu(
                                 )
                             },
                             onClick = {
-                                playerConnection.toggleLibrary()
+                                librarySong?.song?.let { song ->
+                                    database.query {
+                                        update(song.toggleLibrary())
+                                    }
+                                }
                                 onDismiss()
                             }
                         )

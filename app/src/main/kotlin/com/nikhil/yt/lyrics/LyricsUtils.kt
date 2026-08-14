@@ -141,6 +141,7 @@ object LyricsUtils {
                 text = line.text,
                 words = words,
                 agent = line.agent,
+                isBackground = line.isBackground,
             )
         }.sorted()
     }

@@ -23,7 +23,7 @@ fun <T> EnumDialog(
     onDismiss: () -> Unit,
     onSelect: (T) -> Unit,
     title: String,
-    current: T,
+    current: T?,
     values: List<T>,
     valueText: @Composable (T) -> String,
     valueDescription: (@Composable (T) -> String)? = null,

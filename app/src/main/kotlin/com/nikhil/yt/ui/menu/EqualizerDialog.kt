@@ -33,6 +33,7 @@ import com.nikhil.yt.ui.screens.equalizer.EQViewModelFactory
 @Composable
 fun EqualizerDialog(
     onDismiss: () -> Unit,
+    openSystemEqualizer: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val viewModel: EQViewModel = viewModel(factory = EQViewModelFactory(context))
@@ -83,5 +84,12 @@ fun EqualizerDialog(
                 Text(stringResource(R.string.done))
             }
         },
+        dismissButton = if (openSystemEqualizer != null) {
+            {
+                TextButton(onClick = openSystemEqualizer) {
+                    Text(stringResource(R.string.system_equalizer))
+                }
+            }
+        } else null,
     )
 }
