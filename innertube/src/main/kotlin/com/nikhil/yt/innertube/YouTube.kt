@@ -1343,17 +1343,28 @@ object YouTube {
             }.flatten().firstOrNull()
 
         // Merge Legacy and Framework comments
-        val frameworkCommentsMap = commentsFromFramework.associateBy { it.comment?.commentRenderer?.commentId }
+        val frameworkCommentsMap = commentsFromFramework.associateBy { it.properties?.commentId }
         val allIds = (legacyCommentsMap.keys + frameworkCommentsMap.keys).filterNotNull().distinct()
 
         val comments = allIds.mapNotNull { id ->
             val legacy = legacyCommentsMap[id]
             val modern = frameworkCommentsMap[id]
 
-            // Always prioritize the modern framework model because YouTube migrated text content exclusively to it.
-            // We've already injected `legacy.replies` into `modern` above.
+            // Always prioritize the modern framework model because YouTube migrated text content exclusively to it,
+            // but convert it into a CommentThreadRenderer so callers keep working with one consistent shape.
+            // Carry over `legacy.replies` since the framework payload has no reply data of its own.
             if (modern != null) {
-                modern
+                CommentThreadRenderer(
+                    comment = CommentThreadRenderer.Comment(
+                        commentRenderer = com.nikhil.yt.innertube.models.comment.CommentRenderer(
+                            authorText = modern.author?.displayName?.let { Runs(runs = listOf(Run(text = it, navigationEndpoint = null))) },
+                            contentText = modern.properties?.content?.content?.let { Runs(runs = listOf(Run(text = it, navigationEndpoint = null))) },
+                            publishedTimeText = modern.properties?.publishedTime?.let { Runs(runs = listOf(Run(text = it, navigationEndpoint = null))) },
+                            commentId = modern.properties?.commentId,
+                        )
+                    ),
+                    replies = legacy?.replies
+                )
             } else {
                 legacy
             }
