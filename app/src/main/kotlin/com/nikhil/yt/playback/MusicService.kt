@@ -186,6 +186,7 @@ import com.nikhil.yt.utils.YTPlayerUtils
 import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.utils.enumPreference
 import com.nikhil.yt.utils.get
+import com.nikhil.yt.utils.preference
 import com.nikhil.yt.utils.getAsync
 import com.nikhil.yt.utils.getPresenceIntervalMillis
 import com.nikhil.yt.utils.reportException
@@ -288,7 +289,7 @@ class MusicService :
         AudioQualityKey,
         com.nikhil.yt.constants.AudioQuality.AUTO
     )
-    private val dataSaverEnabled by booleanPreference(
+    private val dataSaverEnabled by preference(
         this,
         DataSaverEnabledKey,
         false

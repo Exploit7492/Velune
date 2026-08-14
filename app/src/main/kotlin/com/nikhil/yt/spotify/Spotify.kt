@@ -1278,7 +1278,7 @@ object Spotify {
                 } ?: emptyList(),
             images = parseGqlImages(data.obj("coverArt")?.arr("sources")),
             releaseDate = data.obj("date")?.int("year")?.toString(),
-            uri = uri.ifEmpty { null },
+            uri = uri,
         )
     }
 
@@ -1288,7 +1288,7 @@ object Spotify {
             id = uri.substringAfterLast(":"),
             name = data.obj("profile")?.str("name") ?: "",
             images = parseGqlImages(data.obj("visuals")?.obj("avatarImage")?.arr("sources")),
-            uri = uri.ifEmpty { null },
+            uri = uri,
         )
     }
 

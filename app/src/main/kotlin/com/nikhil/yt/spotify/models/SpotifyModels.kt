@@ -96,12 +96,14 @@ data class SpotifyHomeFeedSection(
  * shapes Spotify's `home` GQL query actually returns (playlists, albums,
  * artists) rather than one flattened, mostly-null data class.
  */
+@Serializable
 sealed class SpotifyHomeFeedItem {
     abstract val uri: String
     abstract val id: String
     abstract val name: String
     abstract val imageUrl: String?
 
+    @Serializable
     data class Playlist(
         override val uri: String,
         override val id: String,
@@ -115,6 +117,7 @@ sealed class SpotifyHomeFeedItem {
         val madeForUsername: String? = null,
     ) : SpotifyHomeFeedItem()
 
+    @Serializable
     data class Album(
         override val uri: String,
         override val id: String,
@@ -124,6 +127,7 @@ sealed class SpotifyHomeFeedItem {
         override val imageUrl: String? = null,
     ) : SpotifyHomeFeedItem()
 
+    @Serializable
     data class Artist(
         override val uri: String,
         override val id: String,

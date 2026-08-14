@@ -61,7 +61,7 @@ object SpotifyMapper {
     ): List<Pair<SpotifyTrack?, SongItem?>> {
         return mapPlaylistTracks(
             tracks.map { SpotifyPlaylistTrack(track = it.track) },
-            onProgress
+            { current, total, _ -> onProgress(current, total) }
         )
     }
 
@@ -113,7 +113,7 @@ object SpotifyMapper {
         tracks: List<SpotifyPlaylistTrack>,
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> },
     ): List<String> {
-        val mapped = mapPlaylistTracks(tracks, onProgress)
+        val mapped = mapPlaylistTracks(tracks) { current, total, _ -> onProgress(current, total) }
         return mapped.mapNotNull { (_, songItem) ->
             songItem?.id
         }
