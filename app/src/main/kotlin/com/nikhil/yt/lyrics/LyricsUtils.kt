@@ -431,4 +431,13 @@ object LyricsUtils {
         // The threshold (e.g., 0.1) can be adjusted based on desired sensitivity.
         return cjkCharCount > 0 && (hiraganaKatakanaCount.toDouble() / text.length.toDouble()) < 0.1
     }
+
+    /**
+     * Checks if the given text contains any Hindi/Devanagari characters.
+     */
+    fun isHindi(text: String): Boolean {
+        return text.any { char ->
+            (char in '\u0900'..'\u097F') // Devanagari
+        }
+    }
 }

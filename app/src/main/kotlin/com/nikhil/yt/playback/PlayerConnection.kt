@@ -84,6 +84,48 @@ class PlayerConnection(
     val waitingForNetworkConnection = service.waitingForNetworkConnection
     val queueRestoreCompleted = service.queueRestoreCompleted
 
+    // ── Listen Together sync hooks ──────────────────────────────────
+    // Set by ListenTogetherManager while a session is active so it can veto
+    // or take over transport controls that would otherwise desync the room.
+    var shouldBlockPlaybackChanges: (() -> Boolean)? = null
+    var onSkipPrevious: (() -> Unit)? = null
+    var onSkipNext: (() -> Unit)? = null
+    var onRestartSong: (() -> Unit)? = null
+
+    // When false, local playback events (seek/track-change) should not be
+    // rebroadcast to the room — used while applying a remote sync update so
+    // we don't echo it straight back out.
+    var allowInternalSync: Boolean = true
+
+    private val muted = MutableStateFlow(false)
+    val isMuted: MutableStateFlow<Boolean> get() = muted
+    private var volumeBeforeMute: Float? = null
+
+    fun setMuted(mute: Boolean) {
+        if (mute == muted.value) return
+        if (mute) {
+            volumeBeforeMute = player.volume
+            player.volume = 0f
+        } else {
+            player.volume = volumeBeforeMute ?: 1f
+            volumeBeforeMute = null
+        }
+        muted.value = mute
+    }
+
+    fun play() {
+        player.playWhenReady = true
+        player.play()
+    }
+
+    fun pause() {
+        player.pause()
+    }
+
+    fun seekTo(position: Long) {
+        player.seekTo(position)
+    }
+
     init {
         player.addListener(this)
 
@@ -132,6 +174,7 @@ class PlayerConnection(
     }
 
     fun seekToNext() {
+        onSkipNext?.let { it(); return }
         val state = service.togetherSessionState.value as? com.nikhil.yt.together.TogetherSessionState.Joined
         if (state?.role is com.nikhil.yt.together.TogetherRole.Guest) {
             service.requestTogetherControl(com.nikhil.yt.together.ControlAction.SkipNext)
@@ -149,6 +192,7 @@ class PlayerConnection(
     }
 
     fun seekToPrevious() {
+        onSkipPrevious?.let { it(); return }
         val state = service.togetherSessionState.value as? com.nikhil.yt.together.TogetherSessionState.Joined
         if (state?.role is com.nikhil.yt.together.TogetherRole.Guest) {
             service.requestTogetherControl(com.nikhil.yt.together.ControlAction.SkipPrevious)

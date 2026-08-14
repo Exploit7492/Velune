@@ -2,6 +2,7 @@ package com.nikhil.yt.spotify
 
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.SongItem
+import com.nikhil.yt.innertube.YouTube.SearchFilter
 import com.nikhil.yt.spotify.models.SpotifyPlaylist
 import com.nikhil.yt.spotify.models.SpotifyPlaylistTrack
 import com.nikhil.yt.spotify.models.SpotifySavedTrack
@@ -25,7 +26,7 @@ object SpotifyMapper {
      */
     suspend fun mapPlaylistTracks(
         tracks: List<SpotifyPlaylistTrack>,
-        onProgress: (current: Int, total: Int) -> Unit = { _, _ -> },
+        onProgress: (current: Int, total: Int, matched: Int) -> Unit = { _, _, _ -> },
     ): List<Pair<SpotifyTrack?, SongItem?>> = withContext(Dispatchers.IO) {
         val validTracks = tracks.mapNotNull { it.track }
         val results = mutableListOf<Pair<SpotifyTrack?, SongItem?>>()
@@ -42,7 +43,8 @@ object SpotifyMapper {
             results.addAll(chunkResults)
             onProgress(
                 minOf((chunkIndex + 1) * MAX_CONCURRENT_SEARCHES, validTracks.size),
-                validTracks.size
+                validTracks.size,
+                results.count { it.second != null }
             )
             delay(SEARCH_DELAY_MS)
         }
@@ -69,8 +71,8 @@ object SpotifyMapper {
     private suspend fun searchYouTube(track: SpotifyTrack): SongItem? {
         val query = buildSearchQuery(track)
         return try {
-            val searchResults = YouTube.search(query)
-            searchResults.getOrNull()?.firstOrNull()
+            val searchResults = YouTube.search(query, SearchFilter.FILTER_SONG)
+            searchResults.getOrNull()?.items?.filterIsInstance<SongItem>()?.firstOrNull()
         } catch (e: Exception) {
             Timber.tag("SpotifyMapper").e(e, "Search failed for: $query")
             null

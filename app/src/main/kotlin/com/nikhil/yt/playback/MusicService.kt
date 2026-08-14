@@ -120,6 +120,8 @@ import com.nikhil.yt.constants.MediaSessionConstants.CommandToggleShuffle
 import com.nikhil.yt.constants.MediaSessionConstants.CommandToggleStartRadio
 import com.nikhil.yt.constants.PauseListenHistoryKey
 import com.nikhil.yt.constants.PauseOnDeviceMuteKey
+import com.nikhil.yt.constants.ParametricEQEnabledKey
+import com.nikhil.yt.constants.ParametricEQSelectedProfileIdKey
 import com.nikhil.yt.constants.PermanentShuffleKey
 import com.nikhil.yt.constants.PersistentQueueKey
 import com.nikhil.yt.constants.PlayerStreamClient
@@ -285,11 +287,11 @@ class MusicService :
         this,
         AudioQualityKey,
         com.nikhil.yt.constants.AudioQuality.AUTO
+    )
     private val dataSaverEnabled by booleanPreference(
         this,
         DataSaverEnabledKey,
         false
-    )
     )
     private val preferredStreamClient by enumPreference(
         this,
@@ -667,7 +669,7 @@ class MusicService :
 
         combine(
             currentMediaMetadata.distinctUntilChangedBy { it?.id },
-            dataStore.data.map { (it[ShowLyricsKey] ?: false) && !it[DataSaverEnabledKey] }.distinctUntilChanged(),
+            dataStore.data.map { (it[ShowLyricsKey] ?: false) && !(it[DataSaverEnabledKey] ?: false) }.distinctUntilChanged(),
         ) { mediaMetadata, showLyrics ->
             mediaMetadata to showLyrics
         }.collectLatest(ioScope) { (mediaMetadata, showLyrics) ->
@@ -1218,6 +1220,28 @@ class MusicService :
                 player.playbackState != Player.STATE_ENDED
         if (canResumeNow) {
             player.play()
+        }
+    }
+
+    @Volatile
+    var preferredDeviceId: Int? = null
+        private set
+
+    /**
+     * Pins playback to a specific output device (e.g. a chosen Bluetooth
+     * headset or wired output) instead of following Android's default audio
+     * routing. Pass null to clear the pin and go back to default routing.
+     */
+    fun setPreferredAudioDevice(deviceId: Int?) {
+        preferredDeviceId = deviceId
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val device = deviceId?.let { id ->
+            audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)?.find { it.id == id }
+        }
+        try {
+            player.setPreferredAudioDevice(device)
+        } catch (_: Throwable) {
+            // Preferred-device routing requires API 23+ / a compatible sink; ignore otherwise.
         }
     }
 

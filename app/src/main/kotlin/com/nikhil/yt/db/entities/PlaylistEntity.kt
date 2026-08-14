@@ -56,6 +56,13 @@ data class PlaylistEntity(
             else null
         }
 
+    // Pinned playlists are the ones with an explicit custom sort order — they
+    // get pulled out of the alphabetical/date-added default and float to the
+    // top of the list, so we key the "pinned" badge off the same field rather
+    // than adding a parallel column that would need its own migration.
+    val isPinned: Boolean
+        get() = customOrder != null
+
     fun localToggleLike() = copy(
         bookmarkedAt = if (bookmarkedAt != null) null else LocalDateTime.now()
     )

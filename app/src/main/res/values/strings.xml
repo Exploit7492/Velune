@@ -1642,6 +1642,12 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="listen_together_in_top_bar_desc">Listen Together In Top Bar</string>
     <string name="listen_together_join_room">Listen Together Join Room</string>
     <string name="listen_together_join_room_desc">Listen Together Join Room</string>
+    <string name="listen_together_notification_channel_name">Listen Together</string>
+    <string name="listen_together_notification_channel_desc">Notifications for Listen Together sessions</string>
+    <string name="listen_together_join_request_notification">%1$s wants to join your session</string>
+    <string name="listen_together_suggestion_received">%1$s suggested \"%2$s\"</string>
+    <string name="listen_together_room_created">Room created: %1$s</string>
+    <string name="listen_together_suggestion_sent">Suggestion sent</string>
     <string name="listen_together_logs">Listen Together Logs</string>
     <string name="listen_together_logs_desc">Listen Together Logs</string>
     <string name="listen_together_not_configured">Listen Together Not Configured</string>

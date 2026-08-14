@@ -211,6 +211,7 @@ object Spotify {
                 throw SpotifyException(412, "PersistedQueryNotFound for $operationName — hash may have rotated")
             }
 
+            SpotifyHashProvider.recordSuccessfulHash(operationName, sha256Hash)
             return result.json!!
         }
 
@@ -1085,6 +1086,83 @@ object Spotify {
                 parameter("limit", limit)
             }
         }
+
+    // ── Saved (Liked Songs) Tracks (REST fallback — no GQL equivalent) ──
+
+    suspend fun savedTracks(
+        limit: Int = 50,
+        offset: Int = 0,
+    ): Result<SpotifyPaging<SpotifySavedTrack>> =
+        runCatching {
+            authenticatedGet("me/tracks") {
+                parameter("limit", limit)
+                parameter("offset", offset)
+            }
+        }
+
+    /** Convenience alias matching the shape callers expect for a "current user" lookup. */
+    suspend fun getCurrentUser(): SpotifyUser = me().getOrThrow()
+
+    /** Convenience alias over [myPlaylists] for callers that just want the paging result. */
+    suspend fun getUserPlaylists(
+        limit: Int = 50,
+        offset: Int = 0,
+    ): SpotifyPaging<SpotifyPlaylist> = myPlaylists(limit, offset).getOrThrow()
+
+    /** Convenience alias over [savedTracks]. */
+    suspend fun getSavedTracks(
+        limit: Int = 50,
+        offset: Int = 0,
+    ): SpotifyPaging<SpotifySavedTrack> = savedTracks(limit, offset).getOrThrow()
+
+    /** Pages through [playlistTracks] until every track in the playlist has been fetched. */
+    suspend fun getAllPlaylistTracks(playlistId: String): List<SpotifyPlaylistTrack> {
+        val all = mutableListOf<SpotifyPlaylistTrack>()
+        var offset = 0
+        val pageSize = 100
+        while (true) {
+            val page = playlistTracks(playlistId, limit = pageSize, offset = offset).getOrThrow()
+            all += page.items
+            if (page.items.isEmpty() || all.size >= page.total) break
+            offset += pageSize
+        }
+        return all
+    }
+
+    /** Pages through [savedTracks] until every liked song has been fetched. */
+    suspend fun getAllSavedTracks(): List<SpotifySavedTrack> {
+        val all = mutableListOf<SpotifySavedTrack>()
+        var offset = 0
+        val pageSize = 50
+        while (true) {
+            val page = savedTracks(limit = pageSize, offset = offset).getOrThrow()
+            all += page.items
+            if (page.items.isEmpty() || all.size >= page.total) break
+            offset += pageSize
+        }
+        return all
+    }
+
+    // ── Authentication ────────────────────────────────────────────────
+
+    /**
+     * Exchanges an `sp_dc` session cookie for an internal web-player access
+     * token and stores it on [accessToken]. Pass a blank cookie to clear the
+     * current session instead of authenticating.
+     */
+    suspend fun setSpDcCookie(cookie: String): Result<Unit> =
+        runCatching {
+            if (cookie.isBlank()) {
+                accessToken = null
+                return@runCatching
+            }
+            val token = SpotifyAuth.fetchAccessToken(cookie).getOrThrow()
+            accessToken = token.accessToken
+        }
+
+    fun clearAuth() {
+        accessToken = null
+    }
 
     // ── Search (GQL: searchDesktop) ─────────────────────────────────────
 

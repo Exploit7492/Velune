@@ -857,6 +857,32 @@ fun PlaylistListItem(
     color = color
 )
 
+/**
+ * "Liquid Glass" variant of [PlaylistListItem] used when the new-design
+ * setting is enabled. Currently reuses the same row layout/content and only
+ * differs in that the whole row is clickable via [onClick] rather than the
+ * caller wrapping the modifier itself — the glass background treatment can
+ * be layered on top via [LocalGlassEffectConfig] once the rest of the
+ * library screens adopt it.
+ */
+@Composable
+fun OverlayPlaylistListItem(
+    playlist: Playlist,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.surfaceContainer,
+    autoPlaylist: Boolean = false,
+    trailingContent: @Composable RowScope.() -> Unit = {},
+    onClick: () -> Unit = {},
+) {
+    PlaylistListItem(
+        playlist = playlist,
+        modifier = modifier.clickable(onClick = onClick),
+        color = color,
+        autoPlaylist = autoPlaylist,
+        trailingContent = trailingContent,
+    )
+}
+
 @Composable
 fun PlaylistGridItem(
     playlist: Playlist,

@@ -29,6 +29,7 @@ data class MediaMetadata(
     val liked: Boolean = false,
     val likedDate: LocalDateTime? = null,
     val inLibrary: LocalDateTime? = null,
+    val suggestedBy: String? = null,
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L

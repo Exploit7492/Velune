@@ -32,7 +32,6 @@ class SpotifyImportRepository(private val context: Context) {
      * Fetches the current user's playlists and liked songs count from Spotify.
      */
     suspend fun fetchPlaylists(): Result<Pair<List<SpotifyPlaylist>, Int>> = runCatching {
-        val user = Spotify.getCurrentUser()
         val playlists = Spotify.getUserPlaylists(limit = 50)
         val savedTracks = Spotify.getSavedTracks(limit = 1)
         val savedCount = savedTracks.total
@@ -47,9 +46,8 @@ class SpotifyImportRepository(private val context: Context) {
         onProgress: (current: Int, total: Int, matched: Int) -> Unit,
     ): Result<List<Pair<SpotifyTrack?, SongItem?>>> = runCatching {
         val tracks = Spotify.getAllPlaylistTracks(playlist.id)
-        val results = SpotifyMapper.mapPlaylistTracks(tracks) { current, total ->
-            val matchedSoFar = results.count { it.second != null }
-            onProgress(current, total, matchedSoFar)
+        val results = SpotifyMapper.mapPlaylistTracks(tracks) { current, total, matched ->
+            onProgress(current, total, matched)
         }
         saveImportedPlaylist(playlist, results)
         results
@@ -63,9 +61,8 @@ class SpotifyImportRepository(private val context: Context) {
     ): Result<List<Pair<SpotifyTrack?, SongItem?>>> = runCatching {
         val tracks = Spotify.getAllSavedTracks()
         val playlistTracks = tracks.map { SpotifyPlaylistTrack(track = it.track) }
-        val results = SpotifyMapper.mapPlaylistTracks(playlistTracks) { current, total ->
-            val matchedSoFar = results.count { it.second != null }
-            onProgress(current, total, matchedSoFar)
+        val results = SpotifyMapper.mapPlaylistTracks(playlistTracks) { current, total, matched ->
+            onProgress(current, total, matched)
         }
         saveImportedPlaylist(
             SpotifyPlaylist(

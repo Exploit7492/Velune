@@ -30,12 +30,22 @@ class SpotifyImportViewModel(context: Context) : ViewModel() {
     }
 
     fun setSpDcCookie(cookie: String) {
-        Spotify.setSpDcCookie(cookie)
-        _isLoggedIn.value = cookie.isNotBlank()
+        viewModelScope.launch {
+            Spotify.setSpDcCookie(cookie)
+                .onSuccess {
+                    _isLoggedIn.value = cookie.isNotBlank()
+                }
+                .onFailure { error ->
+                    _isLoggedIn.value = false
+                    _state.value = SpotifyImportState.Error(
+                        error.message ?: "Failed to sign in to Spotify"
+                    )
+                }
+        }
     }
 
     fun logout() {
-        Spotify.setSpDcCookie("")
+        Spotify.clearAuth()
         _isLoggedIn.value = false
     }
 
