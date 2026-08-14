@@ -983,12 +983,20 @@ class ListenTogetherManager @Inject constructor(
                 
                 PlaybackActions.SKIP_NEXT -> {
                     Timber.tag(TAG).d("Guest: SKIP_NEXT")
-                    connection.seekToNext()
+                    if (player.hasNextMediaItem()) {
+                        player.seekToNext()
+                        player.prepare()
+                        player.playWhenReady = true
+                    }
                 }
 
                 PlaybackActions.SKIP_PREV -> {
                     Timber.tag(TAG).d("Guest: SKIP_PREV")
-                    connection.seekToPrevious()
+                    if (player.hasPreviousMediaItem()) {
+                        player.seekToPrevious()
+                        player.prepare()
+                        player.playWhenReady = true
+                    }
                 }
 
                 PlaybackActions.QUEUE_ADD -> {

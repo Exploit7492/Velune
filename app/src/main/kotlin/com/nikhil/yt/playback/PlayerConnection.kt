@@ -174,7 +174,18 @@ class PlayerConnection(
     }
 
     fun seekToNext() {
-        onSkipNext?.let { it(); return }
+        // Listen Together: only reroute through the room when the local user
+        // is actually restricted (guest without control). Otherwise fall
+        // through to a normal local skip — the hooks are set unconditionally
+        // once a session exists, so gating on shouldBlockPlaybackChanges
+        // (rather than "hook is non-null") is what keeps this a no-op for
+        // the host and for unrestricted guests. Safe from recursion — the
+        // manager applies incoming synced skips via the raw player, never
+        // through this function.
+        if (shouldBlockPlaybackChanges?.invoke() == true) {
+            onSkipNext?.invoke()
+            return
+        }
         val state = service.togetherSessionState.value as? com.nikhil.yt.together.TogetherSessionState.Joined
         if (state?.role is com.nikhil.yt.together.TogetherRole.Guest) {
             service.requestTogetherControl(com.nikhil.yt.together.ControlAction.SkipNext)
@@ -192,7 +203,10 @@ class PlayerConnection(
     }
 
     fun seekToPrevious() {
-        onSkipPrevious?.let { it(); return }
+        if (shouldBlockPlaybackChanges?.invoke() == true) {
+            onSkipPrevious?.invoke()
+            return
+        }
         val state = service.togetherSessionState.value as? com.nikhil.yt.together.TogetherSessionState.Joined
         if (state?.role is com.nikhil.yt.together.TogetherRole.Guest) {
             service.requestTogetherControl(com.nikhil.yt.together.ControlAction.SkipPrevious)
