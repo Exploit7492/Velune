@@ -29,6 +29,7 @@ import com.nikhil.yt.constants.ListenTogetherUserIdKey
 import com.nikhil.yt.utils.NetworkConnectivityObserver
 import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.utils.get
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -134,7 +135,7 @@ sealed class ListenTogetherEvent {
 
 @Singleton
 class ListenTogetherClient @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "ListenTogether"
