@@ -165,7 +165,7 @@ class GatewayClient {
         ready.await()
     }
 
-    fun sendPresenceUpdate(presenceJson: JSONObject): Boolean = send(GatewayOp.PRESENCE_UPDATE, presenceJson)
+    fun sendPresenceUpdate(presenceJson: JSONObject): Boolean = send(GatewayOp.PRESENCE_UPDATE.value, presenceJson)
 
     fun disconnect() {
         closed = true
@@ -232,7 +232,7 @@ class GatewayClient {
             }
 
             when (op) {
-                GatewayOp.HELLO -> {
+                GatewayOp.HELLO.value -> {
                     helloTimerJob?.cancel()
                     val dObj = d as JSONObject
                     val interval = dObj.getInt("heartbeat_interval")
@@ -241,23 +241,23 @@ class GatewayClient {
                     sendIdentify()
                 }
 
-                GatewayOp.HEARTBEAT_ACK -> {
+                GatewayOp.HEARTBEAT_ACK.value -> {
                     lastAck = true
                     ping = (System.currentTimeMillis() - lastHeartbeatAt).toInt()
                     debug("heartbeat ack (${ping}ms)")
                 }
 
-                GatewayOp.HEARTBEAT -> {
+                GatewayOp.HEARTBEAT.value -> {
                     debug("received server heartbeat")
                     sendHeartbeat(force = true)
                 }
 
-                GatewayOp.RECONNECT -> {
+                GatewayOp.RECONNECT.value -> {
                     debug("server requested RECONNECT")
                     forceClose(4000, "server reconnect")
                 }
 
-                GatewayOp.INVALID_SESSION -> {
+                GatewayOp.INVALID_SESSION.value -> {
                     val resumable = if (d is Boolean) d else false
                     debug("INVALID_SESSION resumable=$resumable")
                     if (!resumable) {
@@ -267,7 +267,7 @@ class GatewayClient {
                     forceClose(if (resumable) 4000 else 1000, "invalid session")
                 }
 
-                GatewayOp.DISPATCH -> {
+                GatewayOp.DISPATCH.value -> {
                     handleDispatch(t ?: "", d, s, ready)
                 }
             }
@@ -332,7 +332,7 @@ class GatewayClient {
         properties.put("release_channel", "unknown")
         d.put("properties", properties)
         debug("sending IDENTIFY")
-        send(GatewayOp.IDENTIFY, d)
+        send(GatewayOp.IDENTIFY.value, d)
     }
 
     private fun startHeartbeat(intervalMs: Long) {
@@ -361,7 +361,7 @@ class GatewayClient {
         lastAck = false
         lastHeartbeatAt = System.currentTimeMillis()
         val seq = if (liveSeq > 0) liveSeq else null
-        send(GatewayOp.HEARTBEAT, seq)
+        send(GatewayOp.HEARTBEAT.value, seq)
         debug("heartbeat dispatched seq=$seq")
     }
 

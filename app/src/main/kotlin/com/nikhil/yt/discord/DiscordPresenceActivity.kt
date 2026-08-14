@@ -13,6 +13,7 @@ data class DiscordPresenceActivity(
     val timestamps: Timestamps = Timestamps(),
     val assets: Assets = Assets(),
     val onlineStatus: DiscordOnlineStatus = DiscordOnlineStatus.Online,
+    val buttons: List<Button> = emptyList(),
 ) {
     enum class ActivityType(val nativeValue: Int) {
         PLAYING(0), LISTENING(2), WATCHING(3), COMPETING(5),
@@ -23,5 +24,9 @@ data class DiscordPresenceActivity(
         val largeText: String? = null,
         val smallImage: String? = null,
         val smallText: String? = null,
+    )
+    data class Button(
+        val label: String,
+        val url: String,
     )
 }

@@ -6,7 +6,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.cache.HttpCache
-import com.nikhil.yt.applecanvas.ContentEncoding
+import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -303,7 +303,12 @@ object AppleMusicCanvasProviderPro {
                         // If this is an album result, use album name as both name and albumName
                         val resolvedAlbumName = if (type == "songs") collName else name
                         AppleCanvasLogger.d("Found direct editorialVideo for $name (ID: $targetAlbumId)")
-                        return@runCatching CanvasArtwork(name, resultArtistName, targetAlbumId, name = resolvedAlbumName, animated = hlsUrl)
+                        return@runCatching CanvasArtwork(
+                            name = resolvedAlbumName,
+                            artist = resultArtistName,
+                            albumId = targetAlbumId,
+                            animated = hlsUrl,
+                        )
                     }
                 }
 
@@ -359,7 +364,7 @@ object AppleMusicCanvasProviderPro {
             
             val albumObj = data.firstOrNull()?.jsonObject ?: return@runCatching null
             val attributes = albumObj["attributes"]?.jsonObject
-            val name = attributes?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+            val albumName = attributes?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
             val artistName = attributes?.get("artistName")?.jsonPrimitive?.contentOrNull ?: fallbackArtist
             
             // --- Playlist/Station Filtering ---
@@ -384,7 +389,12 @@ object AppleMusicCanvasProviderPro {
                 val url = extractEditorialVideoUrl(ev)
                 if (!url.isNullOrBlank()) {
                     AppleCanvasLogger.d("found editorialVideo for $finalTitle (album: $albumName, id: $albumId)")
-                    return@runCatching CanvasArtwork(finalTitle, finalArtist, albumId, name = albumName, animated = url)
+                    return@runCatching CanvasArtwork(
+                        name = finalTitle,
+                        artist = finalArtist,
+                        albumId = albumId,
+                        animated = url,
+                    )
                 }
             }
 
