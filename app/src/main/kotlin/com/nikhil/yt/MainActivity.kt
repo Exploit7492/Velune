@@ -63,7 +63,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.core.content.ContextCompat
@@ -155,15 +154,12 @@ import com.nikhil.yt.constants.DarkModeKey
 import com.nikhil.yt.constants.DefaultOpenTabKey
 import com.nikhil.yt.constants.DisableScreenshotKey
 import com.nikhil.yt.constants.DynamicThemeKey
-import com.nikhil.yt.constants.HasPressedStarKey
-import com.nikhil.yt.constants.LaunchCountKey
 import com.nikhil.yt.constants.MiniPlayerBottomSpacing
 import com.nikhil.yt.constants.MiniPlayerHeight
 import com.nikhil.yt.constants.NavigationBarAnimationSpec
 import com.nikhil.yt.constants.NavigationBarHeight
 import com.nikhil.yt.constants.PauseSearchHistoryKey
 import com.nikhil.yt.constants.PureBlackKey
-import com.nikhil.yt.constants.RemindAfterKey
 import com.nikhil.yt.constants.SYSTEM_DEFAULT
 import com.nikhil.yt.constants.SearchSource
 import com.nikhil.yt.constants.SearchSourceKey
@@ -232,6 +228,8 @@ class MainActivity : ComponentActivity() {
         const val ACTION_RECOGNITION = "com.nikhil.yt.action.RECOGNITION"
         const val EXTRA_AUTO_START_RECOGNITION = "auto_start_recognition"
         const val EXTRA_RECOGNITION_RESULT = "recognition_result"
+        const val ACTION_SEARCH = "com.nikhil.yt.action.SEARCH"
+        const val ACTION_LIBRARY = "com.nikhil.yt.action.LIBRARY"
     }
     @Inject
     lateinit var database: MusicDatabase
@@ -1663,11 +1661,6 @@ class MainActivity : ComponentActivity() {
             window.navigationBarColor =
                 (if (isDark) Color.Transparent else Color.Black.copy(alpha = 0.2f)).toArgb()
         }
-    }
-
-    companion object {
-        const val ACTION_SEARCH = "com.nikhil.yt.action.SEARCH"
-        const val ACTION_LIBRARY = "com.nikhil.yt.action.LIBRARY"
     }
 }
 
