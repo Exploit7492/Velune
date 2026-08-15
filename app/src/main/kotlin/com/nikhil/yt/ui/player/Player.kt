@@ -191,8 +191,14 @@ fun BottomSheetPlayer(
             val videoId = mediaMetadata?.id
             if (videoId != null) {
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    // FIX: getVideoStreamUrl() was a cache-only read, and that cache is
+                    // only populated when the client used for the currently-playing audio
+                    // happened to also return video formats — music-only clients (e.g.
+                    // WEB_REMIX) never do, so the cache missed most of the time and this
+                    // toggle silently did nothing. resolveVideoStreamUrl() falls back to
+                    // an active fetch on a cache miss so the video actually loads.
                     val videoUrl = try {
-                        com.nikhil.yt.utils.YTPlayerUtils.getVideoStreamUrl(videoId)
+                        com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(videoId)
                     } catch (e: Exception) { null }
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         if (videoUrl != null) {
@@ -645,67 +651,6 @@ fun BottomSheetPlayer(
             )
         }
 
-        // ─── TOP BAR: SONG/VIDEO PILL (left) — EQUALIZER (right) ───────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Pill switch (Song / Video) — top-left
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Song button
-                Surface(
-                    modifier = Modifier
-                        .clickable { if (isVideoMode) toggleVideo() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
-                ) {
-                    Text(
-                        text = "Song",
-                        color = if (!isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                // Video button
-                Surface(
-                    modifier = Modifier
-                        .clickable { if (!isVideoMode) toggleVideo() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
-                ) {
-                    Text(
-                        text = "Video",
-                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            // Equalizer — top-right. Opens the hybrid Axion equalizer (graphic/
-            // circular + parametric/advanced modes, presets) directly, same
-            // screen the overflow "..." menu's Equalizer entry should open too.
-            IconButton(onClick = { navController.navigate("eq/axion") }) {
-                Icon(
-                    painter = painterResource(R.drawable.equalizer),
-                    contentDescription = stringResource(R.string.equalizer),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-
         val onSliderValueChange: (Long) -> Unit = { sliderPosition = it }
         val onSliderValueChangeFinished: () -> Unit = {
             sliderPosition?.let {
@@ -910,6 +855,79 @@ fun BottomSheetPlayer(
                         Spacer(Modifier.height(30.dp))
                     }
                 }
+            }
+        }
+
+        // ─── TOP BAR: SONG/VIDEO PILL (left) — EQUALIZER (right) ───────────────────
+        // FIX: this Row and the `when (orientation)` block above it are both direct
+        // siblings inside the same BoxScope, so whichever is declared later paints
+        // over the one declared earlier at the same screen position (same rule the
+        // PlayerBackground fix above already relies on). The main content block
+        // (the full-bleed thumbnail/controls Column) was declared after this Row,
+        // so it painted directly over the Song/Video pill and made it invisible —
+        // the equalizer icon happened to survive because the thumbnail image is
+        // centered and usually doesn't reach all the way to the very top edge, but
+        // the pill sits flush left where the image reliably covers it. Moving this
+        // Row to render after the main content — instead of moving the content, or
+        // giving the content a top inset — keeps it painting on top without
+        // affecting the content's own layout/sizing.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pill switch (Song / Video) — top-left
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Song button
+                Surface(
+                    modifier = Modifier
+                        .clickable { if (isVideoMode) toggleVideo() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ) {
+                    Text(
+                        text = "Song",
+                        color = if (!isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                // Video button
+                Surface(
+                    modifier = Modifier
+                        .clickable { if (!isVideoMode) toggleVideo() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ) {
+                    Text(
+                        text = "Video",
+                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Equalizer — top-right. Opens the hybrid Axion equalizer (graphic/
+            // circular + parametric/advanced modes, presets) directly, same
+            // screen the overflow "..." menu's Equalizer entry should open too.
+            IconButton(onClick = { navController.navigate("eq/axion") }) {
+                Icon(
+                    painter = painterResource(R.drawable.equalizer),
+                    contentDescription = stringResource(R.string.equalizer),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
 

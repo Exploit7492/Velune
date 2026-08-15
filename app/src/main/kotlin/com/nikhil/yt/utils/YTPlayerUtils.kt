@@ -102,13 +102,14 @@ object YTPlayerUtils {
      *
      * This is a plain cache read — it does NOT perform network extraction itself.
      * [videoStreamUrlCache] is populated as a side effect of the normal audio
-     * resolution path (see the hoisted selectedVideoFormat/selectedVideoUrl above),
-     * which always runs before playback starts. By the time the user can tap the
-     * Song/Video toggle, a track is already playing, so a matching cache entry is
-     * expected to exist. If it doesn't (cache miss or expired), callers should treat
-     * a null return as "video unavailable right now" rather than blocking on a
-     * fresh network fetch — that keeps this call synchronous and toggleVideo() in
-     * Player.kt does not need to become a suspend/coroutine call.
+     * resolution path (see the hoisted selectedVideoFormat/selectedVideoUrl above).
+     * That side effect only fires when the client whose audio stream ended up being
+     * used also happened to return video adaptiveFormats in the same response —
+     * many of the preferred/fallback clients (e.g. WEB_REMIX, the ANDROID_MUSIC /
+     * *_MUSIC family) are music-only endpoints that never include video formats at
+     * all, so in practice this cache is frequently empty when the user taps the
+     * Song/Video toggle. Use [resolveVideoStreamUrl] instead of this directly for
+     * toggle handling — it falls back to an active fetch on a cache miss.
      */
     fun getVideoStreamUrl(videoId: String): String? {
         val prefix = "$videoId:"
@@ -118,6 +119,52 @@ object YTPlayerUtils {
             .maxByOrNull { it.value.expiresAtMs }
             ?.value
             ?.url
+    }
+
+    /**
+     * Resolves a video stream URL for [videoId], suitable for the Song/Video player
+     * toggle.
+     *
+     * FIX: [getVideoStreamUrl] is a cache-only read, and that cache is only ever
+     * populated as a side effect of the audio-resolution client happening to return
+     * video adaptiveFormats. Since the default/preferred and several fallback
+     * clients are music-only endpoints, the cache misses far more often than not —
+     * which is why tapping "Video" frequently did nothing (toggleVideo() silently
+     * flipped isVideoMode back to false on a null url). This function first tries
+     * the cache, then falls back to an explicit fetch against a client that is
+     * known to return video formats (IOS), so the toggle reliably has a stream to
+     * play even when the currently-playing audio came from a music-only client.
+     */
+    suspend fun resolveVideoStreamUrl(videoId: String): String? {
+        getVideoStreamUrl(videoId)?.let { return it }
+
+        return runCatching {
+            val response = YouTube.player(videoId, null, IOS, null).getOrNull()
+                ?: return@runCatching null
+
+            if (response.playabilityStatus.status != "OK") return@runCatching null
+            val expiresInSeconds = response.streamingData?.expiresInSeconds
+                ?: return@runCatching null
+
+            val candidates = response.streamingData?.adaptiveFormats
+                ?.asSequence()
+                ?.filter { !it.isAudio && it.height != null && it.width != null }
+                ?.filter { it.url != null || it.signatureCipher != null || it.cipher != null }
+                ?.sortedByDescending { it.height ?: 0 }
+                ?.take(5)
+                ?.toList()
+                .orEmpty()
+
+            for (candidate in candidates) {
+                val url = findUrlOrNull(candidate, videoId, IOS) ?: continue
+                videoStreamUrlCache[buildCacheKey(videoId, candidate.itag)] = CachedStreamUrl(
+                    url = url,
+                    expiresAtMs = System.currentTimeMillis() + (expiresInSeconds * 1000L),
+                )
+                return@runCatching url
+            }
+            null
+        }.getOrNull()
     }
 
     fun invalidateCachedStreamUrls(videoId: String) {
