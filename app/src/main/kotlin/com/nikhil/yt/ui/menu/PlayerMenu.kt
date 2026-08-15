@@ -749,7 +749,7 @@ fun PlayerMenu(
                                     )
                                 },
                                 onClick = {
-                                    navController.navigate("settings/eq")
+                                    navController.navigate("eq/axion")
                                     onDismiss()
                                 }
                             )
