@@ -29,6 +29,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nikhil.yt.R
+import com.nikhil.yt.extensions.openLink
 import com.nikhil.yt.viewmodels.HistoryViewModel
 import com.nikhil.yt.viewmodels.HistoryViewModel.ContentType
 import com.nikhil.yt.viewmodels.HistoryViewModel.NotificationType
@@ -42,11 +43,20 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
     val notifications by viewModel.notifications.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val partialError by viewModel.partialError.collectAsState()
     val seenIds by viewModel.seenIds.collectAsState()
     val appName = stringResource(R.string.app_name)
 
     var activeTab by remember { mutableStateOf(NotificationTab.ALL) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Trending failed but the page isn't empty (update channels still populated it) -> a toast,
+    // not a full error screen. Consumed immediately so rotation/recomposition doesn't re-fire it.
+    LaunchedEffect(partialError) {
+        val message = partialError ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumePartialError()
+    }
 
     val filtered = remember(notifications, activeTab) {
         when (activeTab) {
@@ -58,6 +68,7 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
     }
 
     val unreadCount = remember(notifications, seenIds) { notifications.count { !seenIds.contains(it.id) } }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) { if (notifications.isEmpty()) viewModel.refresh() }
 
@@ -98,7 +109,7 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                         NotificationTab.ALL -> notifications.count { !seenIds.contains(it.id) }
                         NotificationTab.MUSIC -> notifications.filter { it.contentType == ContentType.MUSIC }.count { !seenIds.contains(it.id) }
                         NotificationTab.VIDEO -> notifications.filter { it.contentType == ContentType.VIDEO }.count { !seenIds.contains(it.id) }
-                        NotificationTab.CHANNELS -> 0
+                        NotificationTab.CHANNELS -> notifications.filter { it.type == NotificationType.APP_UPDATE }.count { !seenIds.contains(it.id) }
                     }
                     FilterChip(
                         selected = activeTab == tab,
@@ -137,8 +148,11 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                     items(filtered, key = { it.id }) { item ->
                         NotificationCard(item, !seenIds.contains(item.id), appName) {
                             viewModel.markSeen(item.id)
-                            if (item.type == NotificationType.TRENDING) {
-                                navController.navigate("search?query=${java.net.URLEncoder.encode("${item.title} ${item.source}", "UTF-8")}")
+                            when (item.type) {
+                                NotificationType.TRENDING ->
+                                    navController.navigate("search?query=${java.net.URLEncoder.encode("${item.title} ${item.source}", "UTF-8")}")
+                                NotificationType.APP_UPDATE ->
+                                    item.linkUrl?.let { context.openLink(it) }
                             }
                         }
                     }

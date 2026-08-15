@@ -8,13 +8,17 @@ import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.constants.SeenNotificationIdsKey
 import com.nikhil.yt.constants.NotificationLastFetchKey
 import com.nikhil.yt.db.MusicDatabase
+import com.nikhil.yt.utils.Updater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 
@@ -38,10 +42,14 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    // Set only when trending fails but the page isn't empty (update channels still populated it).
+    // Distinct from _error so the UI can show a transient snackbar instead of blanking the whole page.
+    private val _partialError = MutableStateFlow<String?>(null)
+    val partialError: StateFlow<String?> = _partialError.asStateFlow()
     private val _seenIds = MutableStateFlow<Set<String>>(emptySet())
     val seenIds: StateFlow<Set<String>> = _seenIds.asStateFlow()
 
-    data class NotificationItem(val id: String, val title: String, val source: String, val thumbnailUrl: String?, val publishedAt: String, val type: NotificationType, val contentType: ContentType, val viewCount: Long = 0, val durationSeconds: Int = 0)
+    data class NotificationItem(val id: String, val title: String, val source: String, val thumbnailUrl: String?, val publishedAt: String, val type: NotificationType, val contentType: ContentType, val viewCount: Long = 0, val durationSeconds: Int = 0, val linkUrl: String? = null)
     enum class NotificationType { TRENDING, APP_UPDATE }
     enum class ContentType { MUSIC, VIDEO, OTHER }
 
@@ -56,14 +64,46 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             _error.value = null
+            _partialError.value = null
             try {
-                val items = fetchGlobalTrending()
-                _notifications.value = items.sortedByDescending { it.publishedAt }
-                dataStore.edit { prefs -> prefs[NotificationLastFetchKey] = System.currentTimeMillis() }
-            } catch (e: Exception) { _error.value = e.message }
-            finally { _isLoading.value = false }
+                coroutineScope {
+                    val trendingDeferred = async { runCatching { fetchGlobalTrending() } }
+                    val channelsDeferred = async { runCatching { fetchUpdateChannels() } }
+
+                    val trendingResult = trendingDeferred.await()
+                    val channelsResult = channelsDeferred.await()
+
+                    val trendingItems = trendingResult.getOrDefault(emptyList())
+                    val channelItems = channelsResult.getOrDefault(emptyList())
+                    val merged = (trendingItems + channelItems).sortedByDescending { it.publishedAt }
+
+                    _notifications.value = merged
+
+                    val trendingFailure = trendingResult.exceptionOrNull()
+                    if (trendingFailure != null) {
+                        val message = "Trending feed: ${trendingFailure.message ?: "failed to load"}"
+                        if (merged.isEmpty()) {
+                            // Nothing to show at all — full-page error.
+                            _error.value = message
+                        } else {
+                            // Update channels (or leftover cache) still filled the page —
+                            // surface this as a transient snackbar instead of blanking everything.
+                            _partialError.value = message
+                        }
+                    }
+
+                    dataStore.edit { prefs -> prefs[NotificationLastFetchKey] = System.currentTimeMillis() }
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
+
+    /** Clears the transient partial-failure message once the UI has shown it. */
+    fun consumePartialError() { _partialError.value = null }
 
     fun markSeen(id: String) {
         viewModelScope.launch {
@@ -86,14 +126,33 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
         val regions = listOf("NG", "US", "GB", "IN", "ZA", "GH", "CA", "AU", "JP", "DE")
         val allItems = mutableListOf<NotificationItem>()
         val seenKeys = mutableSetOf<String>()
+        // Track per-region failures so a total outage (every region down) can be distinguished
+        // from a genuinely quiet trending day (some/all regions succeed with zero qualifying videos).
+        val failures = mutableListOf<Pair<String, String>>()
         for (region in regions) {
             try {
-                val url = URL("https://trendgetter.vercel.app/api/youtube/videos?region_code=$region&limit=50")
-                val connection = url.openConnection().apply {
+                val url = URL("https://trendgetter-three.vercel.app/api/youtube/videos?region_code=$region&limit=50")
+                val connection = (url.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 15000
                     readTimeout = 15000
+                    requestMethod = "GET"
                 }
-                val response = connection.getInputStream().bufferedReader().use { it.readText() }
+                val status = connection.responseCode
+                if (status !in 200..299) {
+                    val reason = when (status) {
+                        401 -> "unauthorized (HTTP 401)"
+                        402 -> "endpoint suspended / over quota (HTTP 402)"
+                        403 -> "forbidden (HTTP 403)"
+                        404 -> "not found (HTTP 404)"
+                        429 -> "rate limited (HTTP 429)"
+                        in 500..599 -> "server error (HTTP $status)"
+                        else -> "HTTP $status"
+                    }
+                    failures.add(region to reason)
+                    connection.errorStream?.close()
+                    continue
+                }
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val data = json.decodeFromString(TrendingResponse.serializer(), response)
                 for (video in data.data) {
                     val viewCount = video.statistics?.view_count?.toLongOrNull() ?: 0L
@@ -108,9 +167,60 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
                     val thumb = video.thumbnail_url ?: if (derivedId.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) "https://img.youtube.com/vi/$derivedId/mqdefault.jpg" else null
                     allItems.add(NotificationItem(id = "trending_${region}_$derivedId", title = video.title, source = video.channel_title, thumbnailUrl = thumb, publishedAt = video.date, type = NotificationType.TRENDING, contentType = contentType, viewCount = viewCount, durationSeconds = duration))
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                failures.add(region to (e.message ?: e.javaClass.simpleName))
+            }
+        }
+        // Every single region failed -> this is an outage, not "no trending videos today". Say so.
+        if (allItems.isEmpty() && failures.size == regions.size) {
+            val (_, reason) = failures.first()
+            throw IllegalStateException(reason)
         }
         allItems
+    }
+
+    /**
+     * Pulls the already-built GitHub Releases + commit history from [Updater] and maps them into
+     * the APP_UPDATE notification type the HistoryScreen "CHANNELS" tab filters for. Each channel
+     * fails independently so one going down doesn't blank the others or the trending feed.
+     */
+    private suspend fun fetchUpdateChannels(): List<NotificationItem> = coroutineScope {
+        val releasesDeferred = async { runCatching { Updater.getAllReleases().getOrThrow() } }
+        val commitsDeferred = async { runCatching { Updater.getCommitHistory().getOrThrow() } }
+
+        val items = mutableListOf<NotificationItem>()
+
+        releasesDeferred.await().getOrNull()?.forEach { release ->
+            items.add(
+                NotificationItem(
+                    id = "update_release_${release.tagName}",
+                    title = release.name.ifBlank { release.tagName },
+                    source = "GitHub Releases",
+                    thumbnailUrl = null,
+                    publishedAt = release.publishedAt,
+                    type = NotificationType.APP_UPDATE,
+                    contentType = ContentType.OTHER,
+                    linkUrl = release.htmlUrl
+                )
+            )
+        }
+
+        commitsDeferred.await().getOrNull()?.forEach { commit ->
+            items.add(
+                NotificationItem(
+                    id = "update_commit_${commit.sha}",
+                    title = commit.message.ifBlank { commit.sha },
+                    source = "GitHub Commits",
+                    thumbnailUrl = null,
+                    publishedAt = commit.date,
+                    type = NotificationType.APP_UPDATE,
+                    contentType = ContentType.OTHER,
+                    linkUrl = commit.url
+                )
+            )
+        }
+
+        items
     }
 
     private fun parseDuration(pt: String): Int {
