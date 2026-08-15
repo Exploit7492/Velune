@@ -1117,7 +1117,7 @@ highlightKey: String? = null) {
                         icon = painterResource(R.drawable.palette),
                         title = { Text(stringResource(R.string.theme)) },
                         description = { Text(stringResource(R.string.theme_desc)) },
-                        onClick = { navController.navigate("settings/appearance/theme") }
+                        onClick = { navController.navigate("settings/appearance/theme_creator") }
                     )
                 )
                 add(
@@ -1125,7 +1125,7 @@ highlightKey: String? = null) {
                         icon = painterResource(R.drawable.palette),
                         title = { Text(stringResource(R.string.liquid_glass)) },
                         description = { Text(stringResource(R.string.liquid_glass_settings)) },
-                        onClick = { navController.navigate("settings/appearance/liquidglass") }
+                        onClick = { navController.navigate("settings/appearance/glass_effects") }
                     )
                 )
                 add(

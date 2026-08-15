@@ -92,9 +92,11 @@ import com.nikhil.yt.ui.screens.settings.PalettePickerScreen
 import com.nikhil.yt.ui.screens.settings.PlayerSettings
 import com.nikhil.yt.ui.screens.settings.PoTokenScreen
 import com.nikhil.yt.ui.screens.settings.PrivacySettings
+import com.nikhil.yt.ui.screens.settings.RomanizationSettings
 import com.nikhil.yt.ui.screens.settings.SettingsScreen
 import com.nikhil.yt.ui.screens.settings.StorageSettings
 import com.nikhil.yt.ui.screens.settings.ThemeCreatorScreen
+import com.nikhil.yt.ui.screens.settings.UptimeScreen
 import com.nikhil.yt.ui.utils.ShowMediaInfo
 import com.nikhil.yt.utils.rememberEnumPreference
 import com.nikhil.yt.utils.rememberPreference
@@ -389,6 +391,12 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/po_token") {
         PoTokenScreen(navController, scrollBehavior)
+    }
+    composable("settings/content/romanization") {
+        RomanizationSettings(navController, scrollBehavior)
+    }
+    composable("uptime") {
+        UptimeScreen(navController, scrollBehavior)
     }
     composable("customize_background") {
         CustomizeBackground(navController)

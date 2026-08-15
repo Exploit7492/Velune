@@ -468,7 +468,7 @@ fun PlayerMenu(
                                 )
                             },
                             onClick = {
-                                navController.navigate("ambient_mode")
+                                navController.navigate("ambient")
                                 playerBottomSheetState.collapseSoft()
                                 onDismiss()
                             }

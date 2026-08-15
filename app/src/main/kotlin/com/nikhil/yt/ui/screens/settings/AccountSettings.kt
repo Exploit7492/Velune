@@ -164,7 +164,7 @@ fun AccountSettings(
                 onAccountClick = {
                     onClose()
                     if (isLoggedIn) {
-                        navController.navigate("account")
+                        navController.navigate("settings/account")
                     } else {
                         navController.navigate("login")
                     }
