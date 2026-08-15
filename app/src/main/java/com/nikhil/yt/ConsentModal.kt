@@ -52,6 +52,9 @@ fun ConsentModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // Dim scrim so the home screen underneath reads as backgrounded rather
+            // than blocked-out/white — the modal is an overlay, not a full-screen swap.
+            .background(Color.Black.copy(alpha = 0.5f))
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {

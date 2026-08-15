@@ -249,6 +249,10 @@ val ShowTopPlaylistKey = booleanPreferencesKey("show_top_playlist")
 val ShowCachedPlaylistKey = booleanPreferencesKey("show_cached_playlist")
 val SeenNotificationIdsKey = stringPreferencesKey("seen_notification_ids")
 val NotificationLastFetchKey = longPreferencesKey("notification_last_fetch")
+// User-configurable notification channel URLs (each expected to serve the same
+// trending-JSON shape as the built-in vercel trending endpoint). Newline-separated,
+// capped at 10 entries — enforced where it's written to, in NotificationChannelsSettings.
+val NotificationChannelsKey = stringPreferencesKey("notification_channels")
 
 enum class LibraryViewType {
     LIST,

@@ -602,45 +602,12 @@ class MainActivity : ComponentActivity() {
                 seedPalette = if (!enableDynamicTheme) customThemeSeedPalette else null,
                 useSystemFont = useSystemFont,
             ) {
-                // ─── Show Consent Modal first ─────────────────────────────────────
-                if (showConsentModal && !isLoadingConsent) {
-                    val apiKey = try {
-                        // Get the API key from PawnsManager (it was stored in prefs)
-                        pawnsManagerLocal.getStoredApiKey() ?: ""
-                    } catch (e: Exception) {
-                        ""
-                    }
-
-                    ConsentModal(
-                        visible = true,
-                        apiKey = apiKey,
-                        onAccept = {
-                            // Accept flow: initialize -> optIn -> start service -> close modal
-                            try {
-                                val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.MASTER_API_KEY
-                                pawnsManagerLocal.initialize(pawnsKey)
-                                pawnsManagerLocal.optIn()
-                                // Start the music service
-                                startMusicServiceSafely()
-                                // Store consent in ConsentManager as well
-                                consentManagerLocal.setConsentGiven(true)
-                                showConsentModal = false
-                            } catch (e: Throwable) {
-                                reportException(e)
-                            }
-                        },
-                        onDismiss = {
-                            // User chose to go to settings
-                            showConsentModal = false
-                            navController.navigate("settings")
-                        },
-                        onOpenSettings = {
-                            showConsentModal = false
-                            navController.navigate("settings")
-                        }
-                    )
-                } else {
-                    // ─── Main app UI ─────────────────────────────────────────────────
+                // ─── Main app UI + Consent Modal overlay ───────────────────────────
+                // The main UI always renders. The consent modal, when shown, is layered
+                // on top of it (not swapped in place of it) so the home screen is visible
+                // and interactive behind the modal's scrim, and stays visible/interactive
+                // the moment the user accepts or dismisses to Settings.
+                Box(modifier = Modifier.fillMaxSize()) {
                     BoxWithConstraints(
                         modifier =
                             Modifier
@@ -1562,6 +1529,47 @@ class MainActivity : ComponentActivity() {
                                 openSearchImmediately = false
                             }
                         }
+                    }
+
+                    // ─── Consent Modal — overlays the main UI above; non-blocking ─────
+                    if (showConsentModal && !isLoadingConsent) {
+                        val apiKey = try {
+                            // Get the API key from PawnsManager (it was stored in prefs)
+                            pawnsManagerLocal.getStoredApiKey() ?: ""
+                        } catch (e: Exception) {
+                            ""
+                        }
+
+                        ConsentModal(
+                            visible = true,
+                            apiKey = apiKey,
+                            onAccept = {
+                                // Accept flow: initialize -> optIn -> start service -> close modal
+                                try {
+                                    val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.MASTER_API_KEY
+                                    pawnsManagerLocal.initialize(pawnsKey)
+                                    pawnsManagerLocal.optIn()
+                                    // Start the music service
+                                    startMusicServiceSafely()
+                                    // Store consent in ConsentManager as well
+                                    consentManagerLocal.setConsentGiven(true)
+                                    showConsentModal = false
+                                } catch (e: Throwable) {
+                                    reportException(e)
+                                }
+                            },
+                            onDismiss = {
+                                // User chose to go to settings — close the modal so the
+                                // (already-rendered) home screen underneath is immediately
+                                // interactive while navigation to Settings happens.
+                                showConsentModal = false
+                                navController.navigate("settings")
+                            },
+                            onOpenSettings = {
+                                showConsentModal = false
+                                navController.navigate("settings")
+                            }
+                        )
                     }
                 }
             }

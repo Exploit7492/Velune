@@ -7,11 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.constants.SeenNotificationIdsKey
 import com.nikhil.yt.constants.NotificationLastFetchKey
+import com.nikhil.yt.constants.NotificationChannelsKey
 import com.nikhil.yt.db.MusicDatabase
-import com.nikhil.yt.utils.Updater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -180,46 +181,63 @@ class HistoryViewModel @Inject constructor(application: Application, val databas
     }
 
     /**
-     * Pulls the already-built GitHub Releases + commit history from [Updater] and maps them into
-     * the APP_UPDATE notification type the HistoryScreen "CHANNELS" tab filters for. Each channel
-     * fails independently so one going down doesn't blank the others or the trending feed.
+     * Pulls notifications from the user's own configured channels (Settings → Notifications →
+     * Channels, max 10) instead of the app's own build/release history — the History page only
+     * ever shows the vercel trending feed plus whatever channels the user opted into themselves.
+     * Each channel is expected to serve the same JSON shape as the built-in trending endpoint.
+     * Each channel fails independently so one going down doesn't blank the others or the trending feed.
      */
     private suspend fun fetchUpdateChannels(): List<NotificationItem> = coroutineScope {
-        val releasesDeferred = async { runCatching { Updater.getAllReleases().getOrThrow() } }
-        val commitsDeferred = async { runCatching { Updater.getCommitHistory().getOrThrow() } }
+        val channelUrls = dataStore.data.first()[NotificationChannelsKey]
+            ?.split("\n")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.take(10)
+            ?: emptyList()
 
+        if (channelUrls.isEmpty()) return@coroutineScope emptyList()
+
+        val deferredResults = channelUrls.map { channelUrl ->
+            async {
+                runCatching { fetchChannel(channelUrl) }.getOrDefault(emptyList())
+            }
+        }
+        deferredResults.awaitAll().flatten()
+    }
+
+    private suspend fun fetchChannel(channelUrl: String): List<NotificationItem> = withContext(Dispatchers.IO) {
         val items = mutableListOf<NotificationItem>()
-
-        releasesDeferred.await().getOrNull()?.forEach { release ->
+        val connection = (URL(channelUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 15000
+            requestMethod = "GET"
+        }
+        val status = connection.responseCode
+        if (status !in 200..299) {
+            connection.errorStream?.close()
+            throw IllegalStateException("HTTP $status")
+        }
+        val response = connection.inputStream.bufferedReader().use { it.readText() }
+        val data = json.decodeFromString(TrendingResponse.serializer(), response)
+        val host = runCatching { URL(channelUrl).host }.getOrDefault(channelUrl)
+        for (video in data.data) {
+            val derivedId = video.video_id.ifBlank { video.url.substringAfter("v=").takeIf { it.length == 11 } ?: "${video.channel_title}_${video.title}".replace(Regex("[^a-zA-Z0-9]"), "_").take(60) }
+            val thumb = video.thumbnail_url ?: if (derivedId.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) "https://img.youtube.com/vi/$derivedId/mqdefault.jpg" else null
+            val duration = parseDuration(video.details?.duration ?: "")
             items.add(
                 NotificationItem(
-                    id = "update_release_${release.tagName}",
-                    title = release.name.ifBlank { release.tagName },
-                    source = "GitHub Releases",
-                    thumbnailUrl = null,
-                    publishedAt = release.publishedAt,
+                    id = "channel_${host}_$derivedId",
+                    title = video.title,
+                    source = video.channel_title.ifBlank { host },
+                    thumbnailUrl = thumb,
+                    publishedAt = video.date,
                     type = NotificationType.APP_UPDATE,
-                    contentType = ContentType.OTHER,
-                    linkUrl = release.htmlUrl
+                    contentType = classifyContent(video.title, video.channel_title, duration),
+                    durationSeconds = duration,
+                    linkUrl = video.url.ifBlank { null }
                 )
             )
         }
-
-        commitsDeferred.await().getOrNull()?.forEach { commit ->
-            items.add(
-                NotificationItem(
-                    id = "update_commit_${commit.sha}",
-                    title = commit.message.ifBlank { commit.sha },
-                    source = "GitHub Commits",
-                    thumbnailUrl = null,
-                    publishedAt = commit.date,
-                    type = NotificationType.APP_UPDATE,
-                    contentType = ContentType.OTHER,
-                    linkUrl = commit.url
-                )
-            )
-        }
-
         items
     }
 

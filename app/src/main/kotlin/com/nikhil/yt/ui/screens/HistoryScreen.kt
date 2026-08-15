@@ -103,7 +103,7 @@ fun HistoryScreen(navController: NavController, viewModel: HistoryViewModel = hi
                         NotificationTab.ALL -> "All"
                         NotificationTab.MUSIC -> "Music"
                         NotificationTab.VIDEO -> "Video"
-                        NotificationTab.CHANNELS -> appName
+                        NotificationTab.CHANNELS -> "Channels"
                     }
                     val count = when (tab) {
                         NotificationTab.ALL -> notifications.count { !seenIds.contains(it.id) }
