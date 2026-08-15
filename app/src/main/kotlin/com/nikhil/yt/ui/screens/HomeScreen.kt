@@ -69,7 +69,6 @@ import com.nikhil.yt.ui.component.HideOnScrollFAB
 import com.nikhil.yt.ui.component.LocalBottomSheetPageState
 import com.nikhil.yt.ui.component.LocalMenuState
 import com.nikhil.yt.ui.component.NavigationTitle
-import com.nikhil.yt.ui.component.RecognizeMusicFab
 import com.nikhil.yt.ui.utils.SnapLayoutInfoProvider
 import com.nikhil.yt.utils.rememberPreference
 import com.nikhil.yt.viewmodels.HomeViewModel
@@ -513,6 +512,7 @@ fun HomeScreen(
                 visible = allLocalItems.isNotEmpty() || allYtItems.isNotEmpty(),
                 lazyListState = lazylistState,
                 icon = R.drawable.shuffle,
+                onRecognitionClick = { navController.navigate("recognition") },
                 onClick = {
                     val local = when {
                         allLocalItems.isNotEmpty() && allYtItems.isNotEmpty() -> Random.nextFloat() < 0.5
@@ -558,9 +558,5 @@ fun HomeScreen(
                     .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues()),
             )
         }
-        RecognizeMusicFab(
-            onClick = { navController.navigate("recognition") },
-            modifier = Modifier.align(Alignment.BottomEnd)
-        )
     }
 }

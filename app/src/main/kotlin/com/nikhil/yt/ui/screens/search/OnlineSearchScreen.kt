@@ -43,7 +43,6 @@ import com.nikhil.yt.models.toMediaMetadata
 import com.nikhil.yt.playback.queues.YouTubeQueue
 import com.nikhil.yt.ui.component.LocalMenuState
 import com.nikhil.yt.ui.component.YouTubeListItem
-import com.nikhil.yt.ui.component.RecognizeMusicFab
 import com.nikhil.yt.ui.component.YouTubeGridItem
 import com.nikhil.yt.ui.menu.*
 import com.nikhil.yt.viewmodels.OnlineSearchSuggestionViewModel
@@ -418,11 +417,6 @@ fun OnlineSearchScreen(
             )
         }
     }
-
-    RecognizeMusicFab(
-        onClick = { navController.navigate("recognition") },
-        modifier = Modifier.align(Alignment.BottomEnd)
-    )
     }
 }
 
