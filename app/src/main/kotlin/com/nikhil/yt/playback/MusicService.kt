@@ -73,9 +73,14 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.flac.FlacExtractor
 import androidx.media3.extractor.mkv.MatroskaExtractor
+import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.extractor.mp4.Mp4Extractor
+import androidx.media3.extractor.ogg.OggExtractor
+import androidx.media3.extractor.ts.AdtsExtractor
+import androidx.media3.extractor.wav.WavExtractor
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
@@ -4314,7 +4319,21 @@ class MusicService :
         DefaultMediaSourceFactory(
             createDataSourceFactory(),
             ExtractorsFactory {
-                arrayOf(Mp4Extractor(), FragmentedMp4Extractor(), MatroskaExtractor())
+                // Mp4/FragmentedMp4/Matroska cover YouTube's MP4(M4A/AAC) and WebM audio streams.
+                // Mp3/Flac/Ogg/Wav/Adts are added so locally-scanned device files (which are
+                // overwhelmingly MP3, plus FLAC/OGG/WAV/AAC) can actually be extracted and played —
+                // without them ExoPlayer throws UnrecognizedInputFormatException for any local file
+                // that isn't MP4/WebM, i.e. essentially all real-world local music.
+                arrayOf(
+                    Mp4Extractor(),
+                    FragmentedMp4Extractor(),
+                    MatroskaExtractor(),
+                    Mp3Extractor(),
+                    FlacExtractor(),
+                    OggExtractor(),
+                    WavExtractor(),
+                    AdtsExtractor(),
+                )
             },
         )
 
