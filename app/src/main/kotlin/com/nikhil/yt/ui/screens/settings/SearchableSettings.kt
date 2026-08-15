@@ -305,7 +305,7 @@ fun getAllSearchableSettings(): List<SearchableSetting> {
             SearchableSetting("Import 'm3u' Playlist", null, "Backup & Restore", "settings/backup_restore"),
             SearchableSetting("Import 'csv' Playlist", null, "Backup & Restore", "settings/backup_restore"),
             SearchableSetting("Local Backup", null, "Backup & Restore", "settings/backup_restore"),
-            SearchableSetting("Equalizer", null, "Player and audio", "settings/equalizer"),
+            SearchableSetting("Equalizer", null, "Player and audio", "settings/eq"),
             SearchableSetting("Integrations", null, "Settings", "settings/integrations"),
             SearchableSetting("Listen Together", null, "Integrations", "settings/integrations/listen_together"),
             SearchableSetting("YouLyPlus", null, "Content", "settings/content"),

@@ -743,7 +743,7 @@ highlightKey: String? = null) {
                     icon = painterResource(R.drawable.echoequlizer),
                     title = { Text(stringResource(R.string.echo_equalizer)) },
                     description = { Text(stringResource(R.string.echo_equalizer_desc)) },
-                    onClick = { navController.navigate("settings/equalizer") }
+                    onClick = { navController.navigate("settings/eq") }
                 ))
             }
         )

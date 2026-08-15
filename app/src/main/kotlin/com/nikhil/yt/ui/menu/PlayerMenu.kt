@@ -749,7 +749,7 @@ fun PlayerMenu(
                                     )
                                 },
                                 onClick = {
-                                    navController.navigate("equalizer")
+                                    navController.navigate("settings/eq")
                                     onDismiss()
                                 }
                             )
