@@ -15,7 +15,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,10 +84,11 @@ fun LibraryScreen(navController: NavController) {
     var showFolderBrowser by remember { mutableStateOf(false) }
     var showPermissionDenied by remember { mutableStateOf(false) }
 
-    androidx.activity.compose.BackHandler(enabled = selectionMode || selectedFolder != null) {
+    androidx.activity.compose.BackHandler(enabled = selectionMode || selectedFolder != null || showSidebar) {
         when {
             selectionMode -> viewModel.exitSelectionMode()
             selectedFolder != null -> viewModel.clearSelectedFolder()
+            showSidebar -> showSidebar = false
         }
     }
 
@@ -174,11 +179,26 @@ fun LibraryScreen(navController: NavController) {
                     // intercept touches meant for this screen in that overlapping band.
                     .padding(top = LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top).asPaddingValues().calculateTopPadding() + 8.dp)
                     .pointerInput(libraryMode) {
-                        var totalDrag = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { totalDrag = 0f },
-                            onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
-                            onDragEnd = {
+                        // Reserve a strip along the left edge for the OS back gesture. Without
+                        // this, any rightward swipe anywhere on the screen — including one
+                        // starting at the very edge, which is exactly the system "swipe back"
+                        // gesture — got consumed here to toggle Browse/Local instead of ever
+                        // reaching the back dispatcher, so Library had no way to navigate back.
+                        val edgeZonePx = 32.dp.toPx()
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            if (down.position.x < edgeZonePx) return@awaitEachGesture
+
+                            var totalDrag = 0f
+                            val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
+                                totalDrag += over
+                                change.consume()
+                            }
+                            if (drag != null) {
+                                horizontalDrag(drag.id) { change ->
+                                    totalDrag += change.positionChange().x
+                                    change.consume()
+                                }
                                 val threshold = 120f
                                 when {
                                     totalDrag < -threshold -> showSidebar = true
@@ -187,8 +207,8 @@ fun LibraryScreen(navController: NavController) {
                                             if (libraryMode == LibraryMode.BROWSE) LibraryMode.LOCAL else LibraryMode.BROWSE
                                         )
                                 }
-                            },
-                        )
+                            }
+                        }
                     },
             )
         ) {
