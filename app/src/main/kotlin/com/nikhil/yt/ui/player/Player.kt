@@ -79,7 +79,10 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_BUFFERING
 import androidx.media3.common.Player.STATE_READY
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
@@ -110,6 +113,9 @@ import com.nikhil.yt.constants.UseNewMiniPlayerDesignKey
 import com.nikhil.yt.extensions.metadata
 import com.nikhil.yt.extensions.togglePlayPause
 import com.nikhil.yt.innertube.toHighResThumbnail
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.innertube.models.YouTubeClient
+import okhttp3.OkHttpClient
 import com.nikhil.yt.models.MediaMetadata
 import com.nikhil.yt.ui.component.BottomSheet
 import com.nikhil.yt.ui.component.BottomSheetState
@@ -160,9 +166,46 @@ fun BottomSheetPlayer(
     // ─── Video morphing state ────────────────────────────────────────────────────
     var isVideoMode by remember { mutableStateOf(false) }
 
+    // The video stream URL resolved for the toggle always comes from the IOS
+    // client (see YTPlayerUtils.resolveVideoStreamUrl), and googlevideo.com
+    // rejects requests that don't carry that client's User-Agent — a bare
+    // ExoPlayer.Builder() uses ExoPlayer's own default User-Agent instead, so
+    // the request gets refused and the toggle looked like it "did nothing"
+    // even after the URL itself resolved correctly. Same header setup
+    // CanvasArtworkPlayer/MusicService already use for the same reason.
+    val slaveOkHttpClient = remember {
+        OkHttpClient.Builder()
+            .proxy(YouTube.proxy)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val host = request.url.host
+                val isYouTubeMediaHost =
+                    host.endsWith("googlevideo.com") ||
+                        host.endsWith("googleusercontent.com") ||
+                        host.endsWith("youtube.com") ||
+                        host.endsWith("youtube-nocookie.com") ||
+                        host.endsWith("ytimg.com")
+
+                if (!isYouTubeMediaHost) return@addInterceptor chain.proceed(request)
+
+                chain.proceed(
+                    request.newBuilder()
+                        .header("User-Agent", YouTubeClient.IOS.userAgent)
+                        .build()
+                )
+            }
+            .build()
+    }
+    val slaveMediaSourceFactory = remember(slaveOkHttpClient) {
+        DefaultMediaSourceFactory(
+            DefaultDataSource.Factory(context, OkHttpDataSource.Factory(slaveOkHttpClient))
+        )
+    }
+
     // Slave video player (audio disabled, muted)
-    val player = remember(context) {
+    val player = remember(context, slaveMediaSourceFactory) {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(slaveMediaSourceFactory)
             .setTrackSelector(DefaultTrackSelector(context).apply {
                 setParameters(buildUponParameters()
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
