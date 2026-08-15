@@ -1392,7 +1392,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="album_text_desc">Album Text</string>
     <string name="albums_desc">Albums</string>
     <string name="app_language_desc">App Language</string>
-    <string name="app_name">App Name</string>
     <string name="app_update_uptodate">App Update Uptodate</string>
     <string name="app_update_uptodate_desc">App Update Uptodate</string>
     <string name="app_updates_title_desc">App Updates Title</string>
