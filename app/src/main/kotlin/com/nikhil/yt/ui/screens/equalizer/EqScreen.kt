@@ -1,5 +1,5 @@
 /*
- * Velune - Parametric EQ settings screen.
+ * Velune - Parametric EQ editor (the "Custom" mode of the hybrid equalizer).
  * Ported from Echo Music (GPL-3.0).
  */
 
@@ -12,27 +12,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import com.nikhil.yt.ui.component.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,31 +36,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.R
-import com.nikhil.yt.eq.data.ParametricEQ
 import com.nikhil.yt.ui.component.EnumDialog
 import com.nikhil.yt.ui.component.PreferenceEntry
 import com.nikhil.yt.ui.component.PreferenceGroupTitle
 import com.nikhil.yt.ui.component.SwitchPreference
 import com.nikhil.yt.ui.component.TextFieldDialog
-import com.nikhil.yt.ui.utils.backToMain
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The parametric-EQ editor body (profile picker, import/export, preamp,
+ * per-band frequency/gain/Q sliders with add/remove). This used to be its own
+ * standalone screen ("Echo Equalizer" at settings/eq); it's now embedded as the
+ * "Custom" mode inside the hybrid Axion equalizer (see AxionEqScreen) instead of
+ * two screens duplicating the same controls. Same [EQViewModel]/EqualizerService
+ * backend either way, so a profile saved here shows up in Simple/Advanced too.
+ */
 @Composable
-fun EqScreen(
-    navController: NavController,
-    scrollBehavior: TopAppBarScrollBehavior,
-) {
+fun ParametricEqEditor(viewModel: EQViewModel) {
     val context = LocalContext.current
-    val viewModel: EQViewModel = viewModel(factory = EQViewModelFactory(context))
     val state by viewModel.state.collectAsState()
-
-    val scrollState = rememberScrollState()
 
     // File picker for JSON import
     val importLauncher = rememberLauncherForActivityResult(
@@ -83,19 +70,7 @@ fun EqScreen(
         }
     }
 
-    Column(
-        Modifier
-            .windowInsetsPadding(
-                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-            )
-            .verticalScroll(scrollState)
-    ) {
-        Spacer(
-            Modifier.windowInsetsPadding(
-                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top)
-            )
-        )
-
+    Column {
         PreferenceGroupTitle(title = stringResource(R.string.parametric_eq))
 
         // Enable toggle
@@ -339,18 +314,6 @@ fun EqScreen(
             },
         )
     }
-
-    TopAppBar(
-        title = { Text(stringResource(R.string.parametric_eq)) },
-        navigationIcon = {
-            IconButton(
-                onClick = navController::navigateUp,
-                onLongClick = navController::backToMain,
-            ) {
-                Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
-            }
-        },
-    )
 }
 
 class EQViewModelFactory(private val context: android.content.Context) : androidx.lifecycle.ViewModelProvider.Factory {

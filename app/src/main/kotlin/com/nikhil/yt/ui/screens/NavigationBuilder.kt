@@ -77,7 +77,6 @@ import com.nikhil.yt.ui.screens.settings.AiSettings
 import com.nikhil.yt.ui.screens.recognition.RecognitionScreen
 import com.nikhil.yt.ui.screens.recognition.RecognitionHistoryScreen
 import com.nikhil.yt.ui.screens.spotifyimport.SpotifyImportScreen
-import com.nikhil.yt.ui.screens.equalizer.EqScreen
 import com.nikhil.yt.ui.screens.equalizer.axion.AxionEqScreen
 import com.nikhil.yt.ui.screens.ambient.AmbientModeScreen
 import com.nikhil.yt.ui.screens.settings.GlassEffectSettings
@@ -337,9 +336,9 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/ai") {
         AiSettings(navController, scrollBehavior)
     }
-    composable("settings/eq") {
-        EqScreen(navController, scrollBehavior)
-    }
+    // Old standalone parametric-EQ route — folded into the "Custom" tab of the
+    // hybrid equalizer at eq/axion (see AxionEqScreen) so there's one EQ screen,
+    // not two with overlapping controls on the same backend.
     composable("recognition") {
         RecognitionScreen(navController, scrollBehavior)
     }

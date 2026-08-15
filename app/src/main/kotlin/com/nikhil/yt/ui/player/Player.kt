@@ -922,7 +922,15 @@ fun BottomSheetPlayer(
             // Equalizer — top-right. Opens the hybrid Axion equalizer (graphic/
             // circular + parametric/advanced modes, presets) directly, same
             // screen the overflow "..." menu's Equalizer entry should open too.
-            IconButton(onClick = { navController.navigate("eq/axion") }) {
+            // Collapse the full-player sheet in the same click as navigating —
+            // otherwise the sheet stays expanded on top of the newly-navigated
+            // screen (which renders underneath, just hidden) until the user
+            // presses back and the sheet's own BackHandler collapses it, which
+            // looked like the EQ screen didn't open until you hit back.
+            IconButton(onClick = {
+                state.collapseSoft()
+                navController.navigate("eq/axion")
+            }) {
                 Icon(
                     painter = painterResource(R.drawable.equalizer),
                     contentDescription = stringResource(R.string.equalizer),

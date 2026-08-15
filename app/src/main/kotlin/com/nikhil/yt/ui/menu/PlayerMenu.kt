@@ -749,6 +749,11 @@ fun PlayerMenu(
                                     )
                                 },
                                 onClick = {
+                                    // Collapse the sheet in the same click as navigating so the
+                                    // EQ screen underneath is visible immediately instead of
+                                    // staying hidden behind the still-expanded player until the
+                                    // user presses back (which is what was collapsing it before).
+                                    playerBottomSheetState.collapseSoft()
                                     navController.navigate("eq/axion")
                                     onDismiss()
                                 }

@@ -494,8 +494,9 @@
     <string name="eq_enable_summary">Apply custom sound shaping to playback</string>
     <string name="eq_simple">Simple</string>
     <string name="eq_advanced">Advanced</string>
+    <string name="eq_custom">Custom</string>
     <string name="eq_label_custom">Custom</string>
-    <string name="eq_label_echo">Echo</string>
+    <string name="eq_label_echo">Signature</string>
     <string name="eq_label_dolby">Dolby</string>
     <string name="eq_label_dirac">Dirac</string>
     <string name="eq_label_bass">Bass</string>
@@ -511,7 +512,7 @@
     <string name="eq_preset_pop">Pop</string>
     <string name="eq_preset_jazz">Jazz</string>
     <string name="eq_preset_voice">Voice</string>
-    <string name="eq_preset_echo_signature">Echo Signature</string>
+    <string name="eq_preset_echo_signature">Signature</string>
     <string name="eq_preset_dolby_open">Dolby Open</string>
     <string name="eq_preset_dolby_rich">Dolby Rich</string>
     <string name="eq_preset_dolby_focused">Dolby Focused</string>
@@ -1492,8 +1493,8 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="download_desc">Download</string>
     <string name="download_quality_title_desc">Download Quality Title</string>
     <string name="downloaded_songs_desc">Downloaded Songs</string>
-    <string name="echo_equalizer">Echo Equalizer</string>
-    <string name="echo_equalizer_desc">Echo Equalizer</string>
+    <string name="echo_equalizer">%1$s Equalizer</string>
+    <string name="echo_equalizer_desc">Adjust bass, mid, and treble with presets or a custom EQ curve</string>
     <string name="echomusic_1">Echomusic 1</string>
     <string name="echomusic_1_desc">Echomusic 1</string>
     <string name="echomusic_canvas">Echomusic Canvas</string>

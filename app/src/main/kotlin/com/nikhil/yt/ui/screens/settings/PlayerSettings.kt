@@ -739,11 +739,11 @@ highlightKey: String? = null) {
                     onClick = { onSeekExtraSeconds(!seekExtraSeconds) }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.echo_equalizer)),
+    isHighlighted = (highlightKey == stringResource(R.string.echo_equalizer, stringResource(R.string.app_name))),
                     icon = painterResource(R.drawable.echoequlizer),
-                    title = { Text(stringResource(R.string.echo_equalizer)) },
+                    title = { Text(stringResource(R.string.echo_equalizer, stringResource(R.string.app_name))) },
                     description = { Text(stringResource(R.string.echo_equalizer_desc)) },
-                    onClick = { navController.navigate("settings/eq") }
+                    onClick = { navController.navigate("eq/axion") }
                 ))
             }
         )

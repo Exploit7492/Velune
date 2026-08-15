@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -29,10 +30,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nikhil.yt.R
 import com.nikhil.yt.eq.data.SavedEQProfile
 import com.nikhil.yt.ui.component.Material3SettingsGroup
 import com.nikhil.yt.ui.component.Material3SettingsItem
+import com.nikhil.yt.ui.screens.equalizer.EQViewModel
+import com.nikhil.yt.ui.screens.equalizer.EQViewModelFactory
+import com.nikhil.yt.ui.screens.equalizer.ParametricEqEditor
 import com.nikhil.yt.ui.utils.backToMain
 import kotlin.math.abs
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
@@ -50,7 +55,7 @@ fun AxionEqScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.echo_equalizer)) },
+                title = { Text(stringResource(R.string.echo_equalizer, stringResource(R.string.app_name))) },
                 navigationIcon = {
                     com.nikhil.yt.ui.component.IconButton(
                         onClick = onBackClick,
@@ -115,9 +120,17 @@ fun AxionEqScreen(
                     checked = mode == 1,
                     onCheckedChange = { viewModel.setMode(1) },
                     modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
                 ) {
                     Text(stringResource(R.string.eq_advanced))
+                }
+                ToggleButton(
+                    checked = mode == 2,
+                    onCheckedChange = { viewModel.setMode(2) },
+                    modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                ) {
+                    Text(stringResource(R.string.eq_custom))
                 }
             }
 
@@ -149,7 +162,7 @@ fun AxionEqScreen(
                         isDirty = isDirty,
                         onSaveClick = { showSaveDialog = true }
                     )
-                    else -> AdvancedEqMode(
+                    1 -> AdvancedEqMode(
                         bandGains = bandGains,
                         enabled = enabled,
                         onBandChange = { band, value ->
@@ -159,6 +172,19 @@ fun AxionEqScreen(
                             viewModel.reset()
                         }
                     )
+                    else -> {
+                        // "Custom" — the full parametric editor (arbitrary bands, free
+                        // frequency/gain/Q, JSON/AutoEQ import, profile management).
+                        // This is the screen that used to live on its own at
+                        // settings/eq under the "Echo Equalizer" name; it's the same
+                        // EqualizerService/EQProfileRepository backend as Simple/
+                        // Advanced above, so a profile saved here shows up there too.
+                        val parametricContext = LocalContext.current
+                        val parametricViewModel: EQViewModel = viewModel(
+                            factory = EQViewModelFactory(parametricContext)
+                        )
+                        ParametricEqEditor(viewModel = parametricViewModel)
+                    }
                 }
             }
 
