@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.window.core.layout.WindowSizeClass
 import androidx.navigation.NavController
+import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.LocalPlayerConnection
 import com.nikhil.yt.constants.LibraryMode
 import com.nikhil.yt.playback.queues.ListQueue
@@ -159,7 +162,16 @@ fun LibraryScreen(navController: NavController) {
             modifier = modifier.then(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = com.nikhil.yt.constants.AppBarHeight + 8.dp)
+                    // Was a hardcoded `AppBarHeight + 8.dp`, which is missing the status bar
+                    // component. The real floating global header (logo + search/settings)
+                    // that overlays this screen is `statusBarHeight + AppBarHeight` tall
+                    // (see the blur backdrop height in MainActivity), and that's exactly
+                    // what LocalPlayerAwareWindowInsets already bakes in for every other
+                    // top-level screen (Home, Stats). Library was the odd one out, so its
+                    // header row rendered too high and sat partly under the global header —
+                    // which also meant the global header's higher z-order buttons could
+                    // intercept touches meant for this screen in that overlapping band.
+                    .padding(top = LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top).asPaddingValues().calculateTopPadding() + 8.dp)
                     .pointerInput(libraryMode) {
                         var totalDrag = 0f
                         detectHorizontalDragGestures(

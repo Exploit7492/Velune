@@ -208,31 +208,46 @@ class LocalLibraryViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
-    fun addSort(key: LocalSortKey) {
-        viewModelScope.launch {
-            val current = sorts.first().toMutableList()
-            if (current.none { it.key == key }) {
-                current.add(SortEntry(key, SortDir.ASC))
-                saveSorts(current)
-            }
+    // NOTE: these are suspend functions, not `fun ... { viewModelScope.launch { ... } }`.
+    // Each used to launch its own independent coroutine on viewModelScope, which meant a
+    // caller composing several of them (see toggleSort below) never actually waited for one
+    // mutation to land before starting the next. All of them do a read-modify-write against
+    // the same `sorts.first()` snapshot, so those independent launches raced: whichever
+    // coroutine's saveSorts() ran last silently clobbered the other's change, and a chained
+    // call (e.g. addSort then toggleSortDir) frequently read the pre-add list and no-opped.
+    // Making these suspend and awaiting them in sequence from a single caller-owned coroutine
+    // fixes the race.
+    private suspend fun addSortSuspend(key: LocalSortKey) {
+        val current = sorts.first().toMutableList()
+        if (current.none { it.key == key }) {
+            current.add(SortEntry(key, SortDir.ASC))
+            saveSorts(current)
         }
+    }
+
+    private suspend fun removeSortSuspend(key: LocalSortKey) {
+        val current = sorts.first().filter { it.key != key }
+        saveSorts(current)
+    }
+
+    private suspend fun toggleSortDirSuspend(key: LocalSortKey) {
+        val current = sorts.first().map {
+            if (it.key == key) it.copy(dir = if (it.dir == SortDir.ASC) SortDir.DESC else SortDir.ASC)
+            else it
+        }
+        saveSorts(current)
+    }
+
+    fun addSort(key: LocalSortKey) {
+        viewModelScope.launch { addSortSuspend(key) }
     }
 
     fun removeSort(key: LocalSortKey) {
-        viewModelScope.launch {
-            val current = sorts.first().filter { it.key != key }
-            saveSorts(current)
-        }
+        viewModelScope.launch { removeSortSuspend(key) }
     }
 
     fun toggleSortDir(key: LocalSortKey) {
-        viewModelScope.launch {
-            val current = sorts.first().map {
-                if (it.key == key) it.copy(dir = if (it.dir == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                else it
-            }
-            saveSorts(current)
-        }
+        viewModelScope.launch { toggleSortDirSuspend(key) }
     }
 
     fun clearSorts() {
@@ -245,12 +260,12 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val current = sorts.first()
             if (current.any { it.key == key }) {
-                removeSort(key)
+                removeSortSuspend(key)
             } else {
-                addSort(key)
+                addSortSuspend(key)
                 // Default date sorts to DESC (newest first)
                 if (key == LocalSortKey.DATE_ADDED || key == LocalSortKey.DATE_MODIFIED) {
-                    toggleSortDir(key)
+                    toggleSortDirSuspend(key)
                 }
             }
         }
