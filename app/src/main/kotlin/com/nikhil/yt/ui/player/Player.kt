@@ -628,6 +628,23 @@ fun BottomSheetPlayer(
             )
         },
     ) {
+        // Background must be drawn first: this content lambda is a BoxScope, and later
+        // siblings paint over earlier ones at the same position. PlayerBackground is
+        // Modifier.fillMaxSize(), so having it declared after the top bar (as it was)
+        // painted directly over the equalizer icon and made it invisible.
+        if (!state.isCollapsed) {
+            PlayerBackground(
+                playerBackground = playerBackground,
+                mediaMetadata = mediaMetadata,
+                gradientColors = gradientColors,
+                disableBlur = disableBlur,
+                playerCustomImageUri = playerCustomImageUri,
+                playerCustomBlur = playerCustomBlur,
+                playerCustomContrast = playerCustomContrast,
+                playerCustomBrightness = playerCustomBrightness
+            )
+        }
+
         // ─── TOP BAR: SONG/VIDEO PILL (left) — EQUALIZER (right) ───────────────────
         Row(
             modifier = Modifier
@@ -751,19 +768,6 @@ fun BottomSheetPlayer(
                 context = context,
                 onSliderValueChange = onSliderValueChange,
                 onSliderValueChangeFinished = onSliderValueChangeFinished
-            )
-        }
-
-        if (!state.isCollapsed) {
-            PlayerBackground(
-                playerBackground = playerBackground,
-                mediaMetadata = mediaMetadata,
-                gradientColors = gradientColors,
-                disableBlur = disableBlur,
-                playerCustomImageUri = playerCustomImageUri,
-                playerCustomBlur = playerCustomBlur,
-                playerCustomContrast = playerCustomContrast,
-                playerCustomBrightness = playerCustomBrightness
             )
         }
 

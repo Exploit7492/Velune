@@ -860,8 +860,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="enable_parametric_eq">Enable Parametric EQ</string>
     <string name="enable_parametric_eq_desc">Use software DSP equalizer instead of system EQ</string>
     <string name="eq_profile">EQ Profile</string>
-    <string name="eq_enabled">Enable equalizer</string>
-    <string name="eq_preamp">Preamp</string>
     <string name="import_profile">Import</string>
     <string name="save_profile">Save</string>
     <string name="delete_profile">Delete Profile</string>
@@ -1337,7 +1335,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="action_export">Action Export</string>
     <string name="action_exported">Action Exported</string>
     <string name="export">Export</string>
-    <string name="system_equalizer">System Equalizer</string>
     <string name="action_exported_desc">Action Exported</string>
     <string name="action_logout_desc">Action Logout</string>
     <string name="activity_history">Activity History</string>
