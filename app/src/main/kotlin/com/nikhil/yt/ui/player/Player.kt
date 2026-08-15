@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -914,6 +915,16 @@ fun BottomSheetPlayer(
         // Row to render after the main content — instead of moving the content, or
         // giving the content a top inset — keeps it painting on top without
         // affecting the content's own layout/sizing.
+        //
+        // Accent follows the same artwork-extracted palette (gradientColors) the
+        // rest of the player uses, so the pill's selected state and the equalizer
+        // icon re-tint themselves per song/artist instead of a fixed theme color.
+        // gradientColors is only populated for background styles that use it
+        // (GRADIENT/COLORING/GLOW/etc.) — for the others it's empty and this falls
+        // back to the normal theme primary, so nothing changes there.
+        val pillAccentColor = gradientColors.firstOrNull() ?: MaterialTheme.colorScheme.primary
+        val pillAccentContentColor = if (pillAccentColor.luminance() > 0.5f) Color.Black else Color.White
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -924,24 +935,24 @@ fun BottomSheetPlayer(
             // Pill switch (Song / Video) — top-left
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Song button
                 Surface(
                     modifier = Modifier
                         .clickable { if (isVideoMode) toggleVideo() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = if (!isVideoMode) pillAccentColor else Color.Transparent,
                 ) {
                     Text(
                         text = "Song",
-                        color = if (!isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        color = if (!isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -949,14 +960,14 @@ fun BottomSheetPlayer(
                 Surface(
                     modifier = Modifier
                         .clickable { if (!isVideoMode) toggleVideo() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = if (isVideoMode) pillAccentColor else Color.Transparent,
                 ) {
                     Text(
                         text = "Video",
-                        color = if (isVideoMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        color = if (isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -977,7 +988,7 @@ fun BottomSheetPlayer(
                 Icon(
                     painter = painterResource(R.drawable.equalizer),
                     contentDescription = stringResource(R.string.equalizer),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = if (gradientColors.isNotEmpty()) pillAccentColor else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
