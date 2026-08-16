@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -113,6 +114,10 @@ import com.nikhil.yt.constants.SliderStyleKey
 import com.nikhil.yt.constants.UseNewMiniPlayerDesignKey
 import com.nikhil.yt.extensions.metadata
 import com.nikhil.yt.extensions.togglePlayPause
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.vibrancy
 import com.nikhil.yt.innertube.toHighResThumbnail
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.YouTubeClient
@@ -986,34 +991,69 @@ fun BottomSheetPlayer(
         val pillAccentColor = gradientColors.firstOrNull() ?: MaterialTheme.colorScheme.primary
         val pillAccentContentColor = if (pillAccentColor.luminance() > 0.5f) Color.Black else Color.White
 
+        // Glassy pill background — same self-contained backdrop-blur technique
+        // GlassMiniPlayer uses (a synthetic backdrop tinted from the artist's own
+        // accent color, blurred + given vibrancy), rather than a flat translucent
+        // fill, so this reads as actual frosted glass instead of a plain chip.
+        val pillSupportsBackdrop = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        val pillShape = RoundedCornerShape(14.dp)
+        val density = LocalDensity.current
+        val pillBackdrop = rememberCanvasBackdrop {
+            drawRect(color = pillAccentColor.copy(alpha = 0.22f), size = size)
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = PlayerHorizontalPadding, vertical = 8.dp),
+                // Pushed further down from the very top edge (was flush against it)
+                // and off the horizontal edges a touch more to read as a floating
+                // control rather than an edge-docked bar.
+                .padding(
+                    start = PlayerHorizontalPadding,
+                    end = PlayerHorizontalPadding,
+                    top = PlayerHorizontalPadding + 40.dp,
+                    bottom = 8.dp,
+                ),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Pill switch (Song / Video) — top-left
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                    .padding(3.dp),
+                    .clip(pillShape)
+                    .then(
+                        if (pillSupportsBackdrop) {
+                            Modifier.drawBackdrop(
+                                backdrop = pillBackdrop,
+                                shape = { pillShape },
+                                effects = {
+                                    vibrancy()
+                                    blur(with(density) { 14.dp.toPx() })
+                                },
+                                onDrawSurface = {
+                                    drawRect(pillAccentColor.copy(alpha = 0.10f))
+                                }
+                            )
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                        }
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), pillShape)
+                    .padding(2.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // Song button
                 Surface(
                     modifier = Modifier
                         .clickable { if (isVideoMode) toggleVideo() }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(13.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    shape = RoundedCornerShape(11.dp),
                     color = if (!isVideoMode) pillAccentColor else Color.Transparent,
                 ) {
                     Text(
                         text = "Song",
                         color = if (!isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -1021,14 +1061,14 @@ fun BottomSheetPlayer(
                 Surface(
                     modifier = Modifier
                         .clickable { if (!isVideoMode) toggleVideo() }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(13.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    shape = RoundedCornerShape(11.dp),
                     color = if (isVideoMode) pillAccentColor else Color.Transparent,
                 ) {
                     Text(
                         text = "Video",
                         color = if (isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
