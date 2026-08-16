@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -123,7 +121,6 @@ fun LibrarySidebar(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxHeight()
                     .width(64.dp)
                     .align(Alignment.CenterEnd)
                     .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
