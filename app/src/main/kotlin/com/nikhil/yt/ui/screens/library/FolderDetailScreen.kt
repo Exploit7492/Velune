@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nikhil.yt.LocalPlayerAwareWindowInsets
 import com.nikhil.yt.constants.LocalSortKey
 import com.nikhil.yt.db.entities.LocalTrackEntity
 import com.nikhil.yt.ui.screens.library.components.InlineFilterRow
@@ -80,9 +84,14 @@ fun FolderDetailScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Header ─────────────────────────────────────────────────────
+            // This screen fully replaces LibraryScreen's content while a folder is
+            // selected (see LibraryScreen's FolderDetailPane), so it needs the same
+            // top inset LibraryScreen's own header uses — otherwise this header sits
+            // where the main app header/search bar overlay is, instead of below it.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top).asPaddingValues().calculateTopPadding())
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
