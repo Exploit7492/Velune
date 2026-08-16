@@ -69,6 +69,17 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     // bend *after* a peak arrived; it never saw it coming.
     private val lookaheadLimiter = LookaheadLimiter(sampleRate = 44100)
 
+    // Spectrum analyzer — taps the fully-processed signal (after
+    // convolution/bands/bass-boost/width/limiter, so what it visualizes is
+    // exactly what reaches the output) and feeds it a mono downmix, one
+    // sample at a time, from the same audio thread this whole class already
+    // runs on. Off by default (see SpectrumAnalyzer.enabled) so there's no
+    // extra per-sample cost while no spectrum UI is on screen; the EQ
+    // screen turns it on/off via setSpectrumAnalyzerEnabled as it appears/
+    // disappears from composition. See EqualizerService for the UI-facing
+    // wrapper and SpectrumAnalyzer for the FFT/binning itself.
+    val spectrumAnalyzer = SpectrumAnalyzer()
+
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
@@ -160,6 +171,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         lookaheadLimiter.setEnabled(enabled)
     }
 
+    fun setSpectrumAnalyzerEnabled(enabled: Boolean) {
+        spectrumAnalyzer.enabled = enabled
+    }
+
     private fun applyStereoWidth(left: Double, right: Double): Pair<Double, Double> {
         if (kotlin.math.abs(stereoWidth - 1.0) < 0.001) return left to right
         val mid = (left + right) * 0.5
@@ -218,6 +233,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         isActive = (encoding == C.ENCODING_PCM_16BIT || encoding == C.ENCODING_PCM_FLOAT)
         rebuildBassBoostFilter()
         lookaheadLimiter.configure(sampleRate)
+        spectrumAnalyzer.configure(sampleRate)
 
         pendingImpulseResponseFile?.let { file ->
             try {
@@ -306,6 +322,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left = limited.first
                 right = limited.second
 
+                if (spectrumAnalyzer.enabled) {
+                    spectrumAnalyzer.accept((left + right) * 0.5)
+                }
+
                 output.putShort((left * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             } else {
@@ -315,6 +335,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
                 sample = lookaheadLimiter.processMono(sample)
+                if (spectrumAnalyzer.enabled) {
+                    spectrumAnalyzer.accept(sample)
+                }
                 output.putShort((sample * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             }
         }
@@ -358,6 +381,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left = limited.first
                 right = limited.second
 
+                if (spectrumAnalyzer.enabled) {
+                    spectrumAnalyzer.accept((left + right) * 0.5)
+                }
+
                 output.putFloat(left.coerceIn(-1.0, 1.0).toFloat())
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
             } else {
@@ -367,6 +394,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
                 sample = lookaheadLimiter.processMono(sample)
+                if (spectrumAnalyzer.enabled) {
+                    spectrumAnalyzer.accept(sample)
+                }
                 output.putFloat(sample.coerceIn(-1.0, 1.0).toFloat())
             }
         }
@@ -387,6 +417,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         filters.forEach { it.reset() }
         lookaheadLimiter.reset()
         convolutionEngine?.reset()
+        spectrumAnalyzer.reset()
     }
 
     override fun reset() {

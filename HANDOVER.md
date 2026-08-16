@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v3)
+# Velune EQ/DSP Handover (v4)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,25 +93,24 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v3), the **real GitHub `main`** was last confirmed
+As of this handover (v4), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-aa79252 feat(eq): add Convolution UI — load/enable/clear impulse response in Master tab
+27ba1d3 docs: add HANDOVER.md to the repo itself
 ```
 
-One patch was built after that commit in the v3 session — `0012` — but
-**you have no way to know from here whether the user has applied it
-yet.** Check the log after cloning:
+That's patch `0012` (preset IR library) plus this file, both already
+merged. One more patch was built after that commit in the v4 session —
+`0013`, the spectrum analyzer — but **you have no way to know from here
+whether the user has applied it yet.** Check the log after cloning:
 
-- If `main` still tops out at `aa79252` → `0012` not applied yet. Ask if
+- If `main` still tops out at `27ba1d3` → `0013` not applied yet. Ask if
   the user still has the file, or regenerate it from §2 below if needed.
-- If `main` already has a commit titled `feat(eq): connect preset IR
-  library to ASH-IR-Dataset on GitHub` → applied, build on top of that
-  history directly. This file (`HANDOVER.md`) is included in that same
-  patch, so if that commit landed, this file is already on `main` too —
-  which is also how you'd know a fresh clone will show it to whoever
-  picks this up next.
+- If `main` already has a commit titled `feat(eq): add FFT spectrum
+  analyzer to the Master tab` → applied, build on top of that history
+  directly. This file (`HANDOVER.md`) is updated in that same patch, so if
+  that commit landed, this version of the file is already on `main` too.
 
 Number your next patch accordingly.
 
@@ -135,10 +134,9 @@ All of this lives under `app/src/main/kotlin/com/nikhil/yt/eq/` and
    enable/clear controls in the Master tab, DataStore persistence,
    `AxionEqViewModel.importImpulseResponse` / `setConvolutionEnabled` /
    `clearImpulseResponse`.
-6. **Preset IR library** (patch `0012`, this session, pending user
-   apply) — closes the "no preset library" gap from v2's §3 by
-   connecting to a real open source dataset instead of hand-building
-   presets:
+6. **Preset IR library** (patch `0012`, merged) — closes the "no preset
+   library" gap from v2's §3 by connecting to a real open source dataset
+   instead of hand-building presets:
    - **`eq/data/PresetIrRepository.kt`**: browses/downloads from
      `github.com/ShanonPearce/ASH-IR-Dataset` — a manufacturer-organized
      set of real measured single-channel headphone correction filters
@@ -180,6 +178,61 @@ All of this lives under `app/src/main/kotlin/com/nikhil/yt/eq/` and
      confirming Velune's monetization status before this ships**, and if
      it's ever monetized, this specific integration needs to be swapped
      for a permissively-licensed source instead.
+7. **Spectrum analyzer** (patch `0013`, this session, pending user apply)
+   — closes the "spectrum analyzer feeding the EQ UI" item from §3:
+   - **`eq/audio/SpectrumAnalyzer.kt`** (new): reuses the existing `Fft`
+     class (built for the convolution engine) rather than a second FFT
+     implementation. 1024-sample non-overlapping blocks, Hann-windowed,
+     magnitude converted to dB and normalized into 28 log-spaced bars
+     from 20Hz to min(Nyquist, 20kHz). Publishes each finished block via
+     a single `AtomicReference.set` — the audio thread (`accept()`, one
+     sample at a time) and the UI thread (`snapshot()`) never share a
+     lock, and a reader can never see a half-written array. Off by
+     default (`enabled` flag) so there's no per-sample cost paid when no
+     spectrum UI is on screen.
+   - **`CustomEqualizerAudioProcessor.kt`**: taps the signal at the very
+     end of the chain — after convolution, bands, bass boost, width, and
+     the limiter — so what it visualizes is exactly what reaches the
+     output, not an intermediate stage. Mono downmix `(left+right)*0.5`
+     fed in for stereo; the raw sample for mono streams. Reset alongside
+     the limiter/convolver in `flush()`.
+   - **`EqualizerService.kt`**: `setSpectrumAnalyzerEnabled`/
+     `spectrumSnapshot()`, same "pending" pattern as every other control
+     here — a toggle flipped before a processor exists is remembered and
+     applied once one shows up. `spectrumSnapshot()` reads the first
+     active processor (the normal single-player case has exactly one).
+   - **`AxionEqViewModel.kt`**: `spectrumBars` StateFlow +
+     `setSpectrumVisible(Boolean)`, which starts/stops both the DSP tap
+     and a ~20fps (50ms) poll loop together. Deliberately *not*
+     persisted like the other master-bus toggles — it's view-visibility,
+     always starts off when the screen opens.
+   - **`AxionEqScreen.kt`**: new `SpectrumSection` in the Master tab,
+     above `MasterBusControls` — a switch plus a `Canvas`-based bar
+     graph (`SpectrumBarsCanvas`) with a simple linear peak-decay layered
+     on top in the UI layer (the DSP layer itself publishes raw,
+     unsmoothed blocks — see its class doc for why that split). Wired to
+     `viewModel.setSpectrumVisible` via a `DisposableEffect` scoped to
+     the Master tab's own composition, so switching tabs, closing the EQ
+     screen, or backgrounding the app all stop it automatically — never
+     left polling in the background.
+
+### How the spectrum analyzer specifically was verified
+
+Same JVM-harness approach as every other patch (§2's later paragraph
+below describes the general method). For `SpectrumAnalyzer` specifically:
+fed a synthetic 1kHz sine wave and confirmed the peak bar lands within one
+bar of where the log-frequency mapping predicts (computed independently in
+the test, not by re-deriving the analyzer's own formula); confirmed a
+quiet bar far from the peak stays well below it; confirmed pure silence
+reads near-zero on every bar; confirmed `accept()` never throws when
+called disabled and/or unconfigured; confirmed reconfiguring to a
+different sample rate mid-session (e.g. a track change) still produces a
+correct analysis afterward; confirmed `snapshot()` always returns exactly
+`BAR_COUNT` elements, including before the first block completes; confirmed
+`reset()` actually clears state. All passed. **Not verified**: the Canvas
+composable's actual on-device rendering, frame pacing, or whether 20fps
+polling feels smooth — same "nothing touched a real phone yet" caveat as
+everything else in this file, see below.
 
 ### How the DSP/logic was verified (and how you should verify yours)
 
@@ -224,35 +277,43 @@ Neutron/Poweramp/UAPP/Wavelet feature parity, with the same
 explicitly-out-of-scope list from v1/v2: tempo/pitch, bit-perfect/USB-DAC
 output, decoder-level gapless, "a decade of tuning."
 
-**Still open, now that convolution + its preset library both exist:**
-- **Never tested on-device**, at all, across three patches now (`0010`,
-  `0011`, `0012`): the ~23ms convolution latency's interaction with
+**Still open, now that convolution + its preset library + the spectrum
+analyzer all exist:**
+- **Never tested on-device**, at all, across four patches now (`0010`,
+  `0011`, `0012`, `0013`): the ~23ms convolution latency's interaction with
   `flush()` on seek/track-change, actual CPU cost for realistic IR
   lengths, whether the SAF picker actually works across different file
-  managers/providers, and now also whether the preset browser sheet
-  renders/scrolls sensibly and whether downloads actually complete
-  reliably on a real network. This is arguably the single biggest gap
-  left in the convolution feature as a whole — a lot has been built and
-  JVM-verified, nothing has been touched on a real phone.
+  managers/providers, whether the preset browser sheet renders/scrolls
+  sensibly, whether downloads actually complete reliably on a real
+  network, and now also whether the spectrum analyzer's Canvas actually
+  renders smoothly at the intended 20fps poll rate and whether the extra
+  per-sample analyzer cost is noticeable on a low-end device while it's
+  toggled on. This is arguably the single biggest gap left in the EQ
+  feature set as a whole — a lot has been built and JVM-verified, nothing
+  has been touched on a real phone.
 - **Preset library's licensing status** — see §2's licensing note. Ask
   the user directly if this hasn't come up: is Velune ever going to be
   monetized in a way that conflicts with CC BY-NC-SA 4.0?
 
-**Still-live, not-yet-started options** (same as v1/v2, offer if asked
-"what's next"):
-- Spectrum analyzer feeding the EQ UI (`Fft.kt` already exists from the
-  convolution engine, reuse it).
+**Still-live, not-yet-started options** (offer if asked "what's next"):
 - Tempo/pitch engine (bigger, separate subsystem).
+- Spectrum analyzer refinements, if the user wants them after seeing it
+  on-device: overlap between FFT blocks (currently non-overlapping, so
+  there's a small chance of missing a very short transient between
+  blocks), a peak-hold line instead of/alongside the decay fill, or a
+  frequency-axis label row under the bars.
 
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 
-1. **On-device verification pass** — nothing convolution-related has
-   ever run on an actual phone; this is arguably overdue given how much
-   has been built on top of it across three patches.
-2. **Spectrum analyzer** — FFT-driven visualizer feeding the EQ UI.
-3. **Tempo/pitch engine** — separate, larger DSP subsystem.
+1. **On-device verification pass** — nothing convolution- or spectrum-
+   related has ever run on an actual phone; this is arguably overdue
+   given how much has been built on top of it across four patches.
+2. **Tempo/pitch engine** — separate, larger DSP subsystem.
+3. **Spectrum analyzer refinements** — overlap, peak-hold, frequency
+   labels (see §3) — only worth it after an on-device look at what's
+   there already.
 4. Something else the user names.
 
 Whichever you pick: scope it honestly, build it for real, verify what you

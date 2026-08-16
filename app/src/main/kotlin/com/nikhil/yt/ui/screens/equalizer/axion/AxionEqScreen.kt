@@ -46,6 +46,7 @@ import com.nikhil.yt.ui.screens.equalizer.EQViewModelFactory
 import com.nikhil.yt.ui.screens.equalizer.ParametricEqEditor
 import com.nikhil.yt.ui.utils.backToMain
 import kotlin.math.abs
+import kotlin.math.max
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
 /**
@@ -96,6 +97,8 @@ fun AxionEqScreen(
     val presetBrowserError by viewModel.presetBrowserError.collectAsState()
     val presetDownloadingName by viewModel.presetDownloadingName.collectAsState()
     var showPresetSheet by remember { mutableStateOf(false) }
+    val spectrumBars by viewModel.spectrumBars.collectAsState()
+    var spectrumShown by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val irPickerLauncher = rememberLauncherForActivityResult(
@@ -242,6 +245,26 @@ fun AxionEqScreen(
                         // as Simple/Advanced above, so a profile saved here shows up
                         // there too.
                         Column {
+                            // Stops the audio-thread tap and the UI poll
+                            // loop the moment this Column leaves
+                            // composition — leaving the Master tab (the
+                            // AnimatedContent above swaps it out), closing
+                            // the EQ screen, or backgrounding the app all
+                            // go through this, so the analyzer never keeps
+                            // running unattended. Re-armed on re-entry only
+                            // if the toggle itself was left on.
+                            DisposableEffect(Unit) {
+                                onDispose { viewModel.setSpectrumVisible(false) }
+                            }
+                            LaunchedEffect(spectrumShown, enabled) {
+                                viewModel.setSpectrumVisible(spectrumShown && enabled)
+                            }
+                            SpectrumSection(
+                                enabled = enabled,
+                                shown = spectrumShown,
+                                bars = spectrumBars,
+                                onShownChange = { spectrumShown = it },
+                            )
                             MasterBusControls(
                                 preampDb = preampDb,
                                 balance = balance,
@@ -434,6 +457,107 @@ private fun MasterBusControls(
                 checked = limiterEnabled,
                 onCheckedChange = onLimiterEnabledChange,
                 enabled = enabled,
+            )
+        }
+    }
+}
+
+/**
+ * Spectrum analyzer — a toggleable live view of the fully-processed signal
+ * (SpectrumAnalyzer taps post-limiter, see CustomEqualizerAudioProcessor),
+ * sitting at the top of the Master tab above the rotary knobs it visualizes
+ * the effect of. Off by default: the switch is what actually starts the
+ * audio-thread tap and the UI poll loop (AxionEqViewModel.setSpectrumVisible)
+ * — there's a real per-sample cost to the analysis, so it only runs while
+ * this section is both expanded and the equalizer itself is on.
+ *
+ * Unverified beyond compiling, same caveat as the rest of this screen (see
+ * HANDOVER.md §3): the DSP behind it (SpectrumAnalyzer) was checked with a
+ * JVM harness — windowing, dB scaling, log-frequency binning, a real 1kHz
+ * tone landing in the expected bar — but this Canvas's actual on-device
+ * rendering/frame pacing has not been.
+ */
+@Composable
+private fun SpectrumSection(
+    enabled: Boolean,
+    shown: Boolean,
+    bars: FloatArray,
+    onShownChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.eq_spectrum),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = if (enabled) stringResource(R.string.eq_spectrum_summary)
+                    else stringResource(R.string.eq_spectrum_disabled_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = shown && enabled,
+                onCheckedChange = onShownChange,
+                enabled = enabled,
+            )
+        }
+        AnimatedVisibility(visible = shown && enabled) {
+            SpectrumBarsCanvas(
+                bars = bars,
+                barColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .height(120.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Draws [bars] (each already normalized 0f..1f by SpectrumAnalyzer) as a
+ * simple vertical bar graph with a lightweight peak-decay on top of the raw
+ * values — the DSP layer publishes a fresh block every ~23ms with no
+ * smoothing of its own (see SpectrumAnalyzer's class doc for why that
+ * split), so the decay purely a presentation concern that belongs here, not
+ * in the analyzer.
+ */
+@Composable
+private fun SpectrumBarsCanvas(
+    bars: FloatArray,
+    barColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    // One peak-hold value per bar, decayed a little every recomposition so
+    // it falls back toward the current level instead of snapping straight
+    // down — cheap enough not to need its own animation framework.
+    val peaks = remember(bars.size) { FloatArray(bars.size) }
+    for (i in bars.indices) {
+        peaks[i] = max(bars[i], peaks[i] - 0.04f)
+    }
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        if (peaks.isEmpty()) return@Canvas
+        val barCount = peaks.size
+        val gap = 3.dp.toPx()
+        val totalGap = gap * (barCount - 1)
+        val barWidth = ((size.width - totalGap) / barCount).coerceAtLeast(1f)
+        for (i in 0 until barCount) {
+            val level = peaks[i].coerceIn(0f, 1f)
+            val barHeight = size.height * level
+            val x = i * (barWidth + gap)
+            drawRect(
+                color = barColor.copy(alpha = 0.35f + 0.65f * level),
+                topLeft = androidx.compose.ui.geometry.Offset(x, size.height - barHeight),
+                size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
             )
         }
     }

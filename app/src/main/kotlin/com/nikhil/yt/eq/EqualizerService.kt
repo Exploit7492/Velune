@@ -41,6 +41,12 @@ class EqualizerService @Inject constructor() {
     private var pendingImpulseResponseFile: java.io.File? = null
     private var pendingConvolutionEnabled: Boolean = false
 
+    // Spectrum analyzer — same "pending" pattern as everything else above,
+    // so a toggle flipped before a track is loaded (or across a processor
+    // being torn down/recreated on track change) still takes effect once a
+    // processor exists.
+    private var pendingSpectrumEnabled: Boolean = false
+
     companion object {
         private const val TAG = "EqualizerService"
     }
@@ -66,6 +72,7 @@ class EqualizerService @Inject constructor() {
         processor.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb)
         pendingImpulseResponseFile?.let { processor.loadImpulseResponse(it) }
         processor.setConvolutionEnabled(pendingConvolutionEnabled)
+        processor.setSpectrumAnalyzerEnabled(pendingSpectrumEnabled)
     }
 
     
@@ -138,7 +145,28 @@ class EqualizerService @Inject constructor() {
         audioProcessors.forEach { it.clearImpulseResponse() }
     }
 
-    
+    /**
+     * Turns the spectrum analyzer tap on/off across all active processors.
+     * Left off unless the spectrum UI is actually on screen — see
+     * SpectrumAnalyzer's class doc for why (avoids a per-sample cost with
+     * nothing displaying it).
+     */
+    @OptIn(UnstableApi::class)
+    fun setSpectrumAnalyzerEnabled(enabled: Boolean) {
+        pendingSpectrumEnabled = enabled
+        audioProcessors.forEach { it.setSpectrumAnalyzerEnabled(enabled) }
+    }
+
+    /**
+     * Latest spectrum analysis, [SpectrumAnalyzer.BAR_COUNT] bars each
+     * normalized 0f..1f. Reads from whichever processor is currently
+     * active; in the normal single-player case there's exactly one.
+     */
+    @OptIn(UnstableApi::class)
+    fun spectrumSnapshot(): FloatArray =
+        audioProcessors.firstOrNull()?.spectrumAnalyzer?.snapshot()
+            ?: FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+
     @OptIn(UnstableApi::class)
     fun applyProfile(profile: SavedEQProfile): Result<Unit> {
         if (audioProcessors.isEmpty()) {

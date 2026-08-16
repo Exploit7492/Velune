@@ -523,6 +523,9 @@
     <string name="eq_convolution_presets_back">Back to manufacturers</string>
     <string name="eq_convolution_presets_refresh">Refresh</string>
     <string name="eq_convolution_presets_loading">Loading…</string>
+    <string name="eq_spectrum">Spectrum analyzer</string>
+    <string name="eq_spectrum_summary">Live frequency view of what\'s actually reaching the output, after every stage above</string>
+    <string name="eq_spectrum_disabled_hint">Enable the equalizer to view the spectrum</string>
     <string name="eq_convolution_presets_downloading">Downloading %1$s…</string>
     <string name="eq_convolution_presets_empty">No manufacturers found</string>
     <string name="eq_convolution_presets_error_generic">Couldn\'t reach the preset library. Check your connection and try again.</string>

@@ -146,6 +146,17 @@ class AxionEqViewModel @Inject constructor(
     private val _convolutionImportError = MutableStateFlow<String?>(null)
     val convolutionImportError = _convolutionImportError.asStateFlow()
 
+    // Spectrum analyzer — deliberately *not* a persisted preference like
+    // the toggles above: this is view-visibility, not a setting, so it
+    // resets to off every time the screen opens rather than remembering
+    // the user's last choice. See setSpectrumVisible for why polling only
+    // runs while something's actually observing it.
+    private val _spectrumBars = MutableStateFlow(
+        FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+    )
+    val spectrumBars = _spectrumBars.asStateFlow()
+    private var spectrumPollJob: kotlinx.coroutines.Job? = null
+
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
         profiles.filter { it.isCustom && it.id != "echo_tuning" }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -463,6 +474,33 @@ class AxionEqViewModel @Inject constructor(
             context.dataStore.edit { it[EqConvolutionEnabledKey] = enabled }
         }
         equalizerService.setConvolutionEnabled(enabled)
+    }
+
+    /**
+     * Starts/stops the spectrum analyzer: both the audio-thread tap
+     * (EqualizerService.setSpectrumAnalyzerEnabled — real per-sample DSP
+     * cost, only worth paying while something's drawing the result) and
+     * the UI-thread poll loop that reads a new snapshot every ~50ms
+     * (20fps — plenty smooth for bars, no reason to poll faster than the
+     * analyzer produces new blocks anyway). The Master tab's spectrum
+     * section calls this from a DisposableEffect keyed on its own
+     * composed/toggled state, so this turns off automatically when the
+     * user leaves the Master tab, closes the EQ screen, or switches the
+     * toggle off — never left running in the background.
+     */
+    fun setSpectrumVisible(visible: Boolean) {
+        spectrumPollJob?.cancel()
+        equalizerService.setSpectrumAnalyzerEnabled(visible)
+        if (!visible) {
+            spectrumPollJob = null
+            return
+        }
+        spectrumPollJob = viewModelScope.launch {
+            while (true) {
+                _spectrumBars.value = equalizerService.spectrumSnapshot()
+                kotlinx.coroutines.delay(50)
+            }
+        }
     }
 
     fun clearImpulseResponse() {
