@@ -277,42 +277,182 @@ class AxionEqViewModel @Inject constructor(
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         dest.outputStream().use { output -> input.copyTo(output) }
                     } ?: throw java.io.IOException("Could not open the selected file")
-
-                    // targetSampleRate here only affects the resample step,
-                    // not validation or the metadata read back below — the
-                    // real device rate is applied again when
-                    // EqualizerService hands the file to the DSP layer.
-                    val ir = FileInputStream(dest).use {
-                        ImpulseResponseLoader.load(it, targetSampleRate = 48000)
-                    }
-                    dest to ir
+                    validateIrFile(dest)
                 }
             }
+            adoptImportResult(result, displayName)
+            _convolutionImporting.value = false
+        }
+    }
 
-            result.onSuccess { (file, ir) ->
-                // Now that the new IR has validated, drop the old copy —
-                // otherwise app storage accumulates one .wav per import.
-                currentIrFile?.takeIf { it.exists() && it != file }?.delete()
-                currentIrFile = file
-                _impulseResponseInfo.value = ImpulseResponseInfo(
-                    displayName = displayName,
-                    durationSeconds = ir.left.size.toFloat() / ir.sampleRate,
-                    channels = if (ir.right != null) 2 else 1,
-                    sampleRateHz = ir.sampleRate,
-                )
-                _convolutionEnabled.value = true
+    /**
+     * Parses/validates a candidate IR file already sitting on disk —
+     * shared by both [importImpulseResponse] (SAF-picked file, already
+     * copied to [file]) and [importFromPresetLibrary] (already downloaded
+     * to [file]). Doesn't touch any state; just throws on a bad file or
+     * returns the parsed result, same "validate before adopting" shape
+     * both callers rely on.
+     */
+    private fun validateIrFile(file: File): Pair<File, com.nikhil.yt.eq.data.ImpulseResponse> {
+        // targetSampleRate here only affects the resample step, not
+        // validation or the metadata read back below — the real device
+        // rate is applied again when EqualizerService hands the file to
+        // the DSP layer.
+        val ir = FileInputStream(file).use {
+            ImpulseResponseLoader.load(it, targetSampleRate = 48000)
+        }
+        return file to ir
+    }
+
+    /**
+     * Shared success/failure handling for both import paths: on success,
+     * drops the previous IR copy, updates all convolution state/prefs,
+     * and pushes the new file into the DSP layer; on failure, surfaces an
+     * error and leaves whatever was previously loaded untouched.
+     */
+    private fun adoptImportResult(
+        result: Result<Pair<File, com.nikhil.yt.eq.data.ImpulseResponse>>,
+        displayName: String,
+    ) {
+        result.onSuccess { (file, ir) ->
+            // Now that the new IR has validated, drop the old copy —
+            // otherwise app storage accumulates one .wav per import.
+            currentIrFile?.takeIf { it.exists() && it != file }?.delete()
+            currentIrFile = file
+            _impulseResponseInfo.value = ImpulseResponseInfo(
+                displayName = displayName,
+                durationSeconds = ir.left.size.toFloat() / ir.sampleRate,
+                channels = if (ir.right != null) 2 else 1,
+                sampleRateHz = ir.sampleRate,
+            )
+            _convolutionEnabled.value = true
+            viewModelScope.launch {
                 context.dataStore.edit {
                     it[EqConvolutionIrPathKey] = file.absolutePath
                     it[EqConvolutionIrNameKey] = displayName
                     it[EqConvolutionEnabledKey] = true
                 }
-                equalizerService.loadImpulseResponse(file)
-                equalizerService.setConvolutionEnabled(true)
             }
+            equalizerService.loadImpulseResponse(file)
+            equalizerService.setConvolutionEnabled(true)
+        }
+        result.onFailure { e ->
+            _convolutionImportError.value = e.message?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.eq_convolution_error_generic)
+        }
+    }
+
+    // --- Preset IR library (ASH-IR-Dataset, browsed/downloaded on demand) ---
+    // See PresetIrRepository for the licensing note (CC BY-NC-SA 4.0 — the
+    // dataset's license, not Velune's). This section is UI-facing plumbing
+    // only; the actual browse-and-download logic lives in the repository
+    // so it can be unit-tested without Android.
+
+    private val presetIrRepository = com.nikhil.yt.eq.data.PresetIrRepository(context)
+
+    private val _presetManufacturers =
+        MutableStateFlow<List<com.nikhil.yt.eq.data.PresetManufacturer>>(emptyList())
+    val presetManufacturers = _presetManufacturers.asStateFlow()
+
+    private val _presetModels =
+        MutableStateFlow<List<com.nikhil.yt.eq.data.PresetHeadphoneModel>>(emptyList())
+    val presetModels = _presetModels.asStateFlow()
+
+    private val _presetSelectedManufacturer =
+        MutableStateFlow<com.nikhil.yt.eq.data.PresetManufacturer?>(null)
+    val presetSelectedManufacturer = _presetSelectedManufacturer.asStateFlow()
+
+    private val _presetBrowserLoading = MutableStateFlow(false)
+    val presetBrowserLoading = _presetBrowserLoading.asStateFlow()
+
+    private val _presetBrowserError = MutableStateFlow<String?>(null)
+    val presetBrowserError = _presetBrowserError.asStateFlow()
+
+    /** Currently downloading model's display name, or null if idle — lets
+     *  the UI show "Downloading AKG K240…" on the specific row tapped. */
+    private val _presetDownloadingName = MutableStateFlow<String?>(null)
+    val presetDownloadingName = _presetDownloadingName.asStateFlow()
+
+    fun loadPresetManufacturers(forceRefresh: Boolean = false) {
+        _presetBrowserError.value = null
+        _presetBrowserLoading.value = true
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { presetIrRepository.listManufacturers(forceRefresh) }
+            }
+            result.onSuccess { _presetManufacturers.value = it }
             result.onFailure { e ->
-                _convolutionImportError.value = e.message?.takeIf { it.isNotBlank() }
-                    ?: context.getString(R.string.eq_convolution_error_generic)
+                _presetBrowserError.value = e.message?.takeIf { it.isNotBlank() }
+                    ?: context.getString(R.string.eq_convolution_presets_error_generic)
             }
+            _presetBrowserLoading.value = false
+        }
+    }
+
+    fun openPresetManufacturer(
+        manufacturer: com.nikhil.yt.eq.data.PresetManufacturer,
+        forceRefresh: Boolean = false,
+    ) {
+        _presetSelectedManufacturer.value = manufacturer
+        _presetModels.value = emptyList()
+        _presetBrowserError.value = null
+        _presetBrowserLoading.value = true
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { presetIrRepository.listModels(manufacturer, forceRefresh) }
+            }
+            result.onSuccess { _presetModels.value = it }
+            result.onFailure { e ->
+                _presetBrowserError.value = e.message?.takeIf { it.isNotBlank() }
+                    ?: context.getString(R.string.eq_convolution_presets_error_generic)
+            }
+            _presetBrowserLoading.value = false
+        }
+    }
+
+    fun closePresetManufacturer() {
+        _presetSelectedManufacturer.value = null
+        _presetModels.value = emptyList()
+        _presetBrowserError.value = null
+    }
+
+    /**
+     * Downloads [model] (or reuses a previously-downloaded local copy —
+     * same cache file per model, keyed off its filename, so re-picking a
+     * preset you've already tried doesn't re-download it), then routes
+     * through the exact same validate-then-adopt path as a manually
+     * picked file. If validation fails here, that's this integration
+     * surfacing a real bug rather than something to paper over — see the
+     * 24-bit PCM fix earlier in this patch, found the same way.
+     */
+    fun importFromPresetLibrary(model: com.nikhil.yt.eq.data.PresetHeadphoneModel) {
+        _convolutionImportError.value = null
+        _convolutionImporting.value = true
+        _presetDownloadingName.value = model.displayName
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(context.filesDir, "impulse_responses").apply { mkdirs() }
+                    val safeName = model.fileName.map { c ->
+                        if (c.isLetterOrDigit() || c == '.' || c == '_' || c == '-') c else '_'
+                    }.joinToString("")
+                    val dest = File(dir, "preset_$safeName")
+                    if (!dest.exists()) {
+                        presetIrRepository.download(model, dest)
+                    }
+                    try {
+                        validateIrFile(dest)
+                    } catch (e: Exception) {
+                        // Don't let a corrupt/partial cached copy perma-fail
+                        // this preset — clear it so the next attempt
+                        // re-downloads instead of reusing the bad file.
+                        dest.delete()
+                        throw e
+                    }
+                }
+            }
+            adoptImportResult(result, model.displayName)
+            _presetDownloadingName.value = null
             _convolutionImporting.value = false
         }
     }

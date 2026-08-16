@@ -93,7 +93,7 @@ object ImpulseResponseLoader {
         if (audioFormat != 1 && audioFormat != 3) {
             throw UnsupportedWavException("Unsupported WAV codec (format code $audioFormat)")
         }
-        if (bitsPerSample != 16 && bitsPerSample != 32) {
+        if (bitsPerSample != 16 && bitsPerSample != 24 && bitsPerSample != 32) {
             throw UnsupportedWavException("Unsupported bit depth: $bitsPerSample")
         }
         if (channels > 2) {
@@ -111,6 +111,20 @@ object ImpulseResponseLoader {
                 if (data.remaining() < bytesPerSample) throw EOFException("Truncated WAV data")
                 val sample = when {
                     bitsPerSample == 16 -> data.short.toDouble() / 32768.0
+                    // 24-bit PCM has no native ByteBuffer accessor — read the
+                    // 3 bytes by hand and sign-extend into an Int. This is
+                    // the format a lot of "real" measured IR/HpCF libraries
+                    // ship in (e.g. ASH-IR-Dataset's headphone correction
+                    // filters), as opposed to the 16-bit/32-bit-float files
+                    // this parser originally assumed everything would be.
+                    bitsPerSample == 24 -> {
+                        val b0 = data.get().toInt() and 0xFF
+                        val b1 = data.get().toInt() and 0xFF
+                        val b2 = data.get().toInt() and 0xFF
+                        var raw = b0 or (b1 shl 8) or (b2 shl 16)
+                        if (raw and 0x800000 != 0) raw = raw or -0x1000000 // sign-extend
+                        raw.toDouble() / 8388608.0
+                    }
                     audioFormat == 3 -> data.float.toDouble()
                     else -> data.int.toDouble() / 2147483648.0 // 32-bit int PCM
                 }

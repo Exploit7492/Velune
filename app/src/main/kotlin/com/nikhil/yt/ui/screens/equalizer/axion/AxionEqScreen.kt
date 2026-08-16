@@ -89,6 +89,13 @@ fun AxionEqScreen(
     val impulseResponseInfo by viewModel.impulseResponseInfo.collectAsState()
     val convolutionImporting by viewModel.convolutionImporting.collectAsState()
     val convolutionImportError by viewModel.convolutionImportError.collectAsState()
+    val presetManufacturers by viewModel.presetManufacturers.collectAsState()
+    val presetModels by viewModel.presetModels.collectAsState()
+    val presetSelectedManufacturer by viewModel.presetSelectedManufacturer.collectAsState()
+    val presetBrowserLoading by viewModel.presetBrowserLoading.collectAsState()
+    val presetBrowserError by viewModel.presetBrowserError.collectAsState()
+    val presetDownloadingName by viewModel.presetDownloadingName.collectAsState()
+    var showPresetSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val irPickerLauncher = rememberLauncherForActivityResult(
@@ -270,7 +277,41 @@ fun AxionEqScreen(
                                 },
                                 onEnabledChange = { viewModel.setConvolutionEnabled(it) },
                                 onClearClick = { viewModel.clearImpulseResponse() },
+                                onBrowsePresetsClick = {
+                                    showPresetSheet = true
+                                    if (presetManufacturers.isEmpty()) {
+                                        viewModel.loadPresetManufacturers()
+                                    }
+                                },
                             )
+                            if (showPresetSheet) {
+                                PresetLibrarySheet(
+                                    manufacturers = presetManufacturers,
+                                    models = presetModels,
+                                    selectedManufacturer = presetSelectedManufacturer,
+                                    loading = presetBrowserLoading,
+                                    error = presetBrowserError,
+                                    downloadingName = presetDownloadingName,
+                                    onManufacturerClick = { viewModel.openPresetManufacturer(it) },
+                                    onBackClick = { viewModel.closePresetManufacturer() },
+                                    onRefreshClick = {
+                                        val current = presetSelectedManufacturer
+                                        if (current != null) {
+                                            viewModel.openPresetManufacturer(current, forceRefresh = true)
+                                        } else {
+                                            viewModel.loadPresetManufacturers(forceRefresh = true)
+                                        }
+                                    },
+                                    onModelClick = { model ->
+                                        viewModel.importFromPresetLibrary(model)
+                                        showPresetSheet = false
+                                    },
+                                    onDismiss = {
+                                        showPresetSheet = false
+                                        viewModel.closePresetManufacturer()
+                                    },
+                                )
+                            }
                             val parametricContext = LocalContext.current
                             val parametricViewModel: EQViewModel = viewModel(
                                 factory = EQViewModelFactory(parametricContext)
@@ -416,6 +457,7 @@ private fun ConvolutionSection(
     onLoadClick: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onClearClick: () -> Unit,
+    onBrowsePresetsClick: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PreferenceGroupTitle(title = stringResource(R.string.eq_convolution))
@@ -498,6 +540,16 @@ private fun ConvolutionSection(
             }
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            TextButton(onClick = onBrowsePresetsClick, enabled = enabled && !importing) {
+                Text(stringResource(R.string.eq_convolution_browse_presets))
+            }
+        }
+
         AnimatedVisibility(visible = importError != null) {
             Text(
                 text = importError.orEmpty(),
@@ -505,6 +557,135 @@ private fun ConvolutionSection(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+        }
+    }
+}
+
+/**
+ * Bottom sheet browsing the ASH-IR-Dataset preset library — manufacturer
+ * list, drill into a manufacturer for its headphone models, tap a model
+ * to download+apply it through the same validate-then-adopt path as a
+ * manually picked file (AxionEqViewModel.importFromPresetLibrary).
+ * Deliberately two flat lists rather than a search box or nested tree —
+ * the catalog is fetched from GitHub on demand (see PresetIrRepository),
+ * not bundled, so keeping the browse UI simple keeps the number of things
+ * that can go wrong on a real device (vs. what the JVM harness could
+ * verify) small: this composable's rendering itself is unverified beyond
+ * compiling, same caveat as the rest of the Convolution UI.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PresetLibrarySheet(
+    manufacturers: List<com.nikhil.yt.eq.data.PresetManufacturer>,
+    models: List<com.nikhil.yt.eq.data.PresetHeadphoneModel>,
+    selectedManufacturer: com.nikhil.yt.eq.data.PresetManufacturer?,
+    loading: Boolean,
+    error: String?,
+    downloadingName: String?,
+    onManufacturerClick: (com.nikhil.yt.eq.data.PresetManufacturer) -> Unit,
+    onBackClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onModelClick: (com.nikhil.yt.eq.data.PresetHeadphoneModel) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 320.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = selectedManufacturer?.name
+                        ?: stringResource(R.string.eq_convolution_presets_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selectedManufacturer != null) {
+                        TextButton(onClick = onBackClick) {
+                            Text(stringResource(R.string.eq_convolution_presets_back))
+                        }
+                    }
+                    TextButton(onClick = onRefreshClick, enabled = !loading) {
+                        Text(stringResource(R.string.eq_convolution_presets_refresh))
+                    }
+                }
+            }
+            Text(
+                text = stringResource(R.string.eq_convolution_presets_attribution),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+
+            if (downloadingName != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(R.string.eq_convolution_presets_downloading, downloadingName),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            } else if (loading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                }
+            } else if (error != null) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+            } else if (selectedManufacturer == null) {
+                if (manufacturers.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.eq_convolution_presets_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                        items(manufacturers) { manufacturer ->
+                            Text(
+                                text = manufacturer.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onManufacturerClick(manufacturer) }
+                                    .padding(vertical = 12.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    items(models) { model ->
+                        Text(
+                            text = model.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onModelClick(model) }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
