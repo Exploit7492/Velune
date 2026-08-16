@@ -3,8 +3,12 @@ package com.nikhil.yt.eq.audio
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import com.nikhil.yt.eq.data.ImpulseResponse
+import com.nikhil.yt.eq.data.ImpulseResponseLoader
 import com.nikhil.yt.eq.data.ParametricEQ
 import timber.log.Timber
+import java.io.File
+import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.pow
@@ -25,6 +29,16 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     private var filters: List<BiquadFilter> = emptyList()
     private var preampGain: Double = 1.0
     private var pendingProfile: ParametricEQ? = null
+
+    // Convolution-based tone shaping — the first stage of the chain, ahead
+    // of the biquad EQ bands below, so a loaded correction IR (measured
+    // headphone/DAC response, etc.) sets the baseline tonality and the
+    // user's parametric bands sit on top of it as manual trim. This is the
+    // "real impulse-response based tone shaping" piece the biquad chain
+    // alone can't do — see ConvolutionAudioProcessor for how it works.
+    private var convolutionEngine: ConvolutionAudioProcessor? = null
+    private var pendingImpulseResponseFile: File? = null
+    private var convolutionRequestedEnabled: Boolean = false
 
     // Master-bus controls — independent of the per-band profile, always applied
     // on top of it (or on their own if no profile/filters are set), same as a
@@ -81,6 +95,45 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         preampGain = 1.0
         pendingProfile = null
         Timber.tag(TAG).d("Equalizer disabled")
+    }
+
+    /**
+     * Loads a WAV impulse response for convolution-based tone shaping. If
+     * the sample rate isn't known yet (processor not configured for a
+     * stream), the file is remembered and actually parsed/resampled once
+     * [configure] runs — same "pending" approach [applyProfile] uses for a
+     * profile applied before the first track loads.
+     */
+    @Synchronized
+    fun loadImpulseResponse(file: File) {
+        if (sampleRate == 0) {
+            pendingImpulseResponseFile = file
+            Timber.tag(TAG).d("Sample rate not known yet, storing IR file as pending: ${file.name}")
+            return
+        }
+        try {
+            val ir = FileInputStream(file).use { ImpulseResponseLoader.load(it, sampleRate) }
+            installImpulseResponse(ir)
+            Timber.tag(TAG).d("Loaded IR ${file.name}: ${ir.left.size} taps @ ${ir.sampleRate}Hz")
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to load impulse response: ${file.name}")
+        }
+    }
+
+    private fun installImpulseResponse(ir: ImpulseResponse) {
+        convolutionEngine = ConvolutionAudioProcessor(ir).also { it.enabled = convolutionRequestedEnabled }
+    }
+
+    @Synchronized
+    fun setConvolutionEnabled(enabled: Boolean) {
+        convolutionRequestedEnabled = enabled
+        convolutionEngine?.enabled = enabled
+    }
+
+    @Synchronized
+    fun clearImpulseResponse() {
+        convolutionEngine = null
+        pendingImpulseResponseFile = null
     }
 
     fun isEnabled(): Boolean = equalizerEnabled
@@ -165,6 +218,18 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         isActive = (encoding == C.ENCODING_PCM_16BIT || encoding == C.ENCODING_PCM_FLOAT)
         rebuildBassBoostFilter()
         lookaheadLimiter.configure(sampleRate)
+
+        pendingImpulseResponseFile?.let { file ->
+            try {
+                val ir = FileInputStream(file).use { ImpulseResponseLoader.load(it, sampleRate) }
+                installImpulseResponse(ir)
+                Timber.tag(TAG).d("Applied pending IR ${file.name}: ${ir.left.size} taps @ ${ir.sampleRate}Hz")
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to load pending impulse response: ${file.name}")
+            }
+            pendingImpulseResponseFile = null
+        }
+
         return inputAudioFormat
     }
 
@@ -174,7 +239,8 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 bassBoostFilter != null ||
                 balance != 0.0 ||
                 kotlin.math.abs(stereoWidth - 1.0) >= 0.001 ||
-                lookaheadLimiter.enabled
+                lookaheadLimiter.enabled ||
+                convolutionEngine?.enabled == true
             )
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -206,10 +272,17 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         val leftGain = preampGain * (1.0 - balance.coerceAtLeast(0.0))
         val rightGain = preampGain * (1.0 + balance.coerceAtMost(0.0))
         val bassFilter = bassBoostFilter
+        val convolver = convolutionEngine
         for (i in 0 until sampleCount / channelCount) {
             if (channelCount == 2) {
                 var left = input.getShort().toDouble() / 32768.0
                 var right = input.getShort().toDouble() / 32768.0
+
+                if (convolver != null) {
+                    val convolved = convolver.process(left, right)
+                    left = convolved.first
+                    right = convolved.second
+                }
 
                 filters.forEach { filter ->
                     val (l, r) = filter.processStereo(left, right)
@@ -237,6 +310,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             } else {
                 var sample = input.getShort().toDouble() / 32768.0
+                convolver?.let { sample = it.processMono(sample) }
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
@@ -250,10 +324,17 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         val leftGain = preampGain * (1.0 - balance.coerceAtLeast(0.0))
         val rightGain = preampGain * (1.0 + balance.coerceAtMost(0.0))
         val bassFilter = bassBoostFilter
+        val convolver = convolutionEngine
         for (i in 0 until sampleCount / channelCount) {
             if (channelCount == 2) {
                 var left = input.getFloat().toDouble()
                 var right = input.getFloat().toDouble()
+
+                if (convolver != null) {
+                    val convolved = convolver.process(left, right)
+                    left = convolved.first
+                    right = convolved.second
+                }
 
                 filters.forEach { filter ->
                     val (l, r) = filter.processStereo(left, right)
@@ -281,6 +362,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
             } else {
                 var sample = input.getFloat().toDouble()
+                convolver?.let { sample = it.processMono(sample) }
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
@@ -304,6 +386,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         inputEnded = false
         filters.forEach { it.reset() }
         lookaheadLimiter.reset()
+        convolutionEngine?.reset()
     }
 
     override fun reset() {

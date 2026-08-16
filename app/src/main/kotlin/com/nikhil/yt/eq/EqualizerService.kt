@@ -33,6 +33,14 @@ class EqualizerService @Inject constructor() {
     private var pendingLimiterEnabled: Boolean = false
     private var pendingLimiterCeilingDb: Double = 0.0
 
+    // Convolution-based tone shaping (see ConvolutionAudioProcessor) — same
+    // "pending" pattern again: remember the last loaded IR file and whether
+    // it should be active, so a processor torn down/recreated for a new
+    // track picks the same state back up without the user having to
+    // reload it.
+    private var pendingImpulseResponseFile: java.io.File? = null
+    private var pendingConvolutionEnabled: Boolean = false
+
     companion object {
         private const val TAG = "EqualizerService"
     }
@@ -56,6 +64,8 @@ class EqualizerService @Inject constructor() {
         processor.setBassBoost(pendingBassBoostDb)
         processor.setStereoWidth(pendingStereoWidth)
         processor.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb)
+        pendingImpulseResponseFile?.let { processor.loadImpulseResponse(it) }
+        processor.setConvolutionEnabled(pendingConvolutionEnabled)
     }
 
     
@@ -100,6 +110,32 @@ class EqualizerService @Inject constructor() {
         pendingLimiterEnabled = enabled
         pendingLimiterCeilingDb = ceilingDb.coerceIn(-12.0, 0.0)
         audioProcessors.forEach { it.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb) }
+    }
+
+    /**
+     * Loads a WAV impulse response (a measured headphone/DAC correction
+     * curve, etc.) for convolution-based tone shaping. This runs ahead of
+     * the parametric EQ bands in the chain — see ConvolutionAudioProcessor.
+     * Loading doesn't itself enable it; call [setConvolutionEnabled] too
+     * (or call it first — order doesn't matter, both are remembered).
+     */
+    @OptIn(UnstableApi::class)
+    fun loadImpulseResponse(file: java.io.File) {
+        pendingImpulseResponseFile = file
+        audioProcessors.forEach { it.loadImpulseResponse(file) }
+    }
+
+    @OptIn(UnstableApi::class)
+    fun setConvolutionEnabled(enabled: Boolean) {
+        pendingConvolutionEnabled = enabled
+        audioProcessors.forEach { it.setConvolutionEnabled(enabled) }
+    }
+
+    @OptIn(UnstableApi::class)
+    fun clearImpulseResponse() {
+        pendingImpulseResponseFile = null
+        pendingConvolutionEnabled = false
+        audioProcessors.forEach { it.clearImpulseResponse() }
     }
 
     
