@@ -90,7 +90,6 @@ import com.nikhil.yt.ui.screens.settings.MusicTogetherScreen
 import com.nikhil.yt.ui.screens.settings.PalettePickerScreen
 import com.nikhil.yt.ui.screens.settings.PlayerSettings
 import com.nikhil.yt.ui.screens.settings.PoTokenScreen
-import com.nikhil.yt.ui.screens.settings.NotificationChannelsSettings
 import com.nikhil.yt.ui.screens.settings.PrivacySettings
 import com.nikhil.yt.ui.screens.settings.RomanizationSettings
 import com.nikhil.yt.ui.screens.settings.SettingsScreen
@@ -357,9 +356,6 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/privacy") {
         PrivacySettings(navController, scrollBehavior)
-    }
-    composable("settings/notifications") {
-        NotificationChannelsSettings(navController, scrollBehavior)
     }
     composable("settings/backup_restore") {
         BackupAndRestore(navController, scrollBehavior)

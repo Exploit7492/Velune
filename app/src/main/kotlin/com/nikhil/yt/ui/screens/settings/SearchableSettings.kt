@@ -110,7 +110,6 @@ fun getAllSearchableSettings(): List<SearchableSetting> {
             SearchableSetting(stringResource(R.string.download_quality_title), stringResource(R.string.download_quality_title_desc), "Player and audio", "settings/player"),
             SearchableSetting(stringResource(R.string.downloaded_songs), stringResource(R.string.downloaded_songs_desc), "Storage", "settings/storage"),
             SearchableSetting(stringResource(R.string.echo_equalizer, stringResource(R.string.app_name)), stringResource(R.string.echo_equalizer_desc), "Player and audio", "eq/axion"),
-            SearchableSetting(stringResource(R.string.notification_channels), stringResource(R.string.notification_channels_desc, 10), "Privacy", "settings/notifications"),
             SearchableSetting(stringResource(R.string.echomusic_1), stringResource(R.string.echomusic_1_desc), "Appearance", "settings/appearance"),
             SearchableSetting(stringResource(R.string.echomusic_canvas), stringResource(R.string.echomusic_canvas_desc), "Appearance", "settings/appearance"),
             SearchableSetting(stringResource(R.string.enable), stringResource(R.string.enable_desc), "Player and audio", "settings/player"),

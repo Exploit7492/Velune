@@ -19,6 +19,16 @@
     </plurals>
     <!-- Home -->
     <string name="history">History</string>
+    <string name="no_listen_history">No listen history yet</string>
+    <string name="no_listen_history_desc">Songs you play will show up here</string>
+    <string name="clear_history">Clear history</string>
+    <string name="clear_history_confirm">This removes your entire listen history. This can\'t be undone.</string>
+    <string name="clear">Clear</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="this_week">This Week</string>
+    <string name="this_month">This Month</string>
+    <string name="earlier">Earlier</string>
     <string name="stats">Stats</string>
     <string name="mood_and_genres">Mood and Genres</string>
     <string name="account">Account</string>
@@ -870,12 +880,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="gain_db">Gain: %1$s dB</string>
     <string name="add_band">Add Band</string>
     <string name="remove">Remove</string>
-    <string name="notification_channels">Notification Channels</string>
-    <string name="notification_channels_desc">Add channel URLs you want to see notifications from (max %1$d)</string>
-    <string name="no_channels_added">No channels added yet</string>
-    <string name="add_channel">Add Channel</string>
-    <string name="channel_limit_reached">Limit reached (%1$d max)</string>
-    <string name="channel_url_placeholder">https://example.com/feed</string>
     <string name="paste_json_or_pick_file">Paste JSON or pick a file</string>
     <string name="paste_json_here">Paste JSON here…</string>
     <string name="import_label">Import</string>

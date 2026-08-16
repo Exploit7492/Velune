@@ -477,20 +477,6 @@ fun SettingsScreen(
                         ),
                         onClick = { navController.navigate("settings/privacy") },
                     ),
-                    PremiumSettingsItem(
-                        icon = painterResource(R.drawable.notification),
-                        title = stringResource(R.string.notification_channels),
-                        subtitle = stringResource(R.string.notification_channels_desc, 10),
-                        accentColor = MaterialTheme.colorScheme.error,
-                        keywords = listOf(
-                            "notifications",
-                            "channels",
-                            "history",
-                            "vercel",
-                            "trending",
-                        ),
-                        onClick = { navController.navigate("settings/notifications") },
-                    ),
                 ),
             ),
         )
