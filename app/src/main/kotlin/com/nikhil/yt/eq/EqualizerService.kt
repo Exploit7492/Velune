@@ -27,6 +27,12 @@ class EqualizerService @Inject constructor() {
     private var pendingBalance: Double = 0.0
     private var pendingBassBoostDb: Double = 0.0
 
+    // Stereo width and limiter — same "pending" pattern as balance/bass
+    // boost above, so they survive a processor being torn down/recreated.
+    private var pendingStereoWidth: Double = 1.0
+    private var pendingLimiterEnabled: Boolean = false
+    private var pendingLimiterCeilingDb: Double = 0.0
+
     companion object {
         private const val TAG = "EqualizerService"
     }
@@ -48,6 +54,8 @@ class EqualizerService @Inject constructor() {
         }
         processor.setBalance(pendingBalance)
         processor.setBassBoost(pendingBassBoostDb)
+        processor.setStereoWidth(pendingStereoWidth)
+        processor.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb)
     }
 
     
@@ -67,6 +75,31 @@ class EqualizerService @Inject constructor() {
     fun setBassBoost(gainDb: Double) {
         pendingBassBoostDb = gainDb.coerceIn(0.0, 12.0)
         audioProcessors.forEach { it.setBassBoost(pendingBassBoostDb) }
+    }
+
+    /**
+     * Stereo image width — 0.0 (mono) .. 1.0 (unchanged) .. 2.0 (extra
+     * wide), via mid/side processing. Independent of [setBalance]: balance
+     * shifts L/R *level*, this reshapes the stereo *image* itself.
+     */
+    @OptIn(UnstableApi::class)
+    fun setStereoWidth(value: Double) {
+        pendingStereoWidth = value.coerceIn(0.0, 2.0)
+        audioProcessors.forEach { it.setStereoWidth(pendingStereoWidth) }
+    }
+
+    /**
+     * Master limiter — the last stage of the whole chain (per-band EQ, bass
+     * boost, balance, and width have all already been applied by the time
+     * this runs), so raising preamp/band gain to taste can't clip the
+     * output. [ceilingDb] is the output ceiling in dBFS, e.g. -1.0 to leave
+     * a small amount of headroom.
+     */
+    @OptIn(UnstableApi::class)
+    fun setLimiter(enabled: Boolean, ceilingDb: Double) {
+        pendingLimiterEnabled = enabled
+        pendingLimiterCeilingDb = ceilingDb.coerceIn(-12.0, 0.0)
+        audioProcessors.forEach { it.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb) }
     }
 
     

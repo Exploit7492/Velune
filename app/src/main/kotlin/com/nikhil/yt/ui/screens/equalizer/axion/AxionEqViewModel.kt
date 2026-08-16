@@ -6,6 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nikhil.yt.constants.EqBalanceKey
 import com.nikhil.yt.constants.EqBassBoostKey
+import com.nikhil.yt.constants.EqBandQPrefix
+import com.nikhil.yt.constants.EqLimiterCeilingKey
+import com.nikhil.yt.constants.EqLimiterEnabledKey
+import com.nikhil.yt.constants.EqStereoWidthKey
 import com.nikhil.yt.constants.ParametricEQEnabledKey
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
@@ -50,6 +54,15 @@ class AxionEqViewModel @Inject constructor(
     )
     val bandGains = _bandGains.asStateFlow()
 
+    // Per-band Q (bandwidth/quality) for the Advanced tab — Poweramp-style
+    // per-band control, independent of gain. Every band defaulted to a
+    // fixed 1.41 before; now each is individually adjustable and persisted
+    // the same per-band way gains already are.
+    private val _bandQ = MutableStateFlow(
+        FloatArray(10) { prefs.getFloat("$EqBandQPrefix$it", 1.41f) }
+    )
+    val bandQ = _bandQ.asStateFlow()
+
     private val _mode = MutableStateFlow(prefs.getInt("mode", 0)) 
     val mode = _mode.asStateFlow()
 
@@ -71,6 +84,20 @@ class AxionEqViewModel @Inject constructor(
     private val _bassBoostDb = MutableStateFlow(0f)
     val bassBoostDb = _bassBoostDb.asStateFlow()
 
+    // Stereo width and limiter — additive master-bus controls, same
+    // pending/apply-immediately pattern as balance/bass boost above. See
+    // CustomEqualizerAudioProcessor for why these don't duplicate balance
+    // or bass boost: width reshapes the stereo image (mid/side), the
+    // limiter caps final output level after every other stage.
+    private val _stereoWidth = MutableStateFlow(1f)
+    val stereoWidth = _stereoWidth.asStateFlow()
+
+    private val _limiterEnabled = MutableStateFlow(false)
+    val limiterEnabled = _limiterEnabled.asStateFlow()
+
+    private val _limiterCeilingDb = MutableStateFlow(-0.3f)
+    val limiterCeilingDb = _limiterCeilingDb.asStateFlow()
+
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
         profiles.filter { it.isCustom && it.id != "echo_tuning" }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -89,8 +116,13 @@ class AxionEqViewModel @Inject constructor(
             val prefsSnapshot = context.dataStore.data.first()
             _balance.value = prefsSnapshot[EqBalanceKey] ?: 0f
             _bassBoostDb.value = prefsSnapshot[EqBassBoostKey] ?: 0f
+            _stereoWidth.value = prefsSnapshot[EqStereoWidthKey] ?: 1f
+            _limiterEnabled.value = prefsSnapshot[EqLimiterEnabledKey] ?: false
+            _limiterCeilingDb.value = prefsSnapshot[EqLimiterCeilingKey] ?: -0.3f
             equalizerService.setBalance(_balance.value.toDouble())
             equalizerService.setBassBoost(_bassBoostDb.value.toDouble())
+            equalizerService.setStereoWidth(_stereoWidth.value.toDouble())
+            equalizerService.setLimiter(_limiterEnabled.value, _limiterCeilingDb.value.toDouble())
         }
         if (_enabled.value) {
             applyToService()
@@ -119,6 +151,41 @@ class AxionEqViewModel @Inject constructor(
             context.dataStore.edit { it[EqBassBoostKey] = db }
         }
         equalizerService.setBassBoost(db.toDouble())
+    }
+
+    fun setStereoWidth(value: Float) {
+        _stereoWidth.value = value
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqStereoWidthKey] = value }
+        }
+        equalizerService.setStereoWidth(value.toDouble())
+    }
+
+    fun setLimiterEnabled(enabled: Boolean) {
+        _limiterEnabled.value = enabled
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqLimiterEnabledKey] = enabled }
+        }
+        equalizerService.setLimiter(enabled, _limiterCeilingDb.value.toDouble())
+    }
+
+    fun setLimiterCeilingDb(db: Float) {
+        _limiterCeilingDb.value = db
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqLimiterCeilingKey] = db }
+        }
+        equalizerService.setLimiter(_limiterEnabled.value, db.toDouble())
+    }
+
+    fun setBandQ(index: Int, q: Float) {
+        val newQ = _bandQ.value.copyOf()
+        newQ[index] = q
+        _bandQ.value = newQ
+        prefs.edit().putFloat("$EqBandQPrefix$index", q).apply()
+        _isDirty.value = true
+        if (_enabled.value) {
+            applyToService()
+        }
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -168,6 +235,11 @@ class AxionEqViewModel @Inject constructor(
     fun reset() {
         val flat = FloatArray(10) { 0f }
         setBandsGains(flat)
+        val flatQ = FloatArray(10) { 1.41f }
+        _bandQ.value = flatQ
+        val editor = prefs.edit()
+        flatQ.forEachIndexed { index, q -> editor.putFloat("$EqBandQPrefix$index", q) }
+        editor.apply()
     }
 
     fun saveCustomProfile(name: String) {
@@ -176,7 +248,7 @@ class AxionEqViewModel @Inject constructor(
                 ParametricEQBand(
                     frequency = bandFrequencies[index],
                     gain = f.toDouble() / 50.0,
-                    q = 1.41,
+                    q = _bandQ.value[index].toDouble(),
                     filterType = FilterType.PK,
                     enabled = true
                 )
@@ -213,7 +285,7 @@ class AxionEqViewModel @Inject constructor(
                 ParametricEQBand(
                     frequency = bandFrequencies[index],
                     gain = f.toDouble() / 50.0, 
-                    q = 1.41,
+                    q = _bandQ.value[index].toDouble(),
                     filterType = FilterType.PK,
                     enabled = true
                 )

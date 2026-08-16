@@ -33,6 +33,28 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     private var bassBoostGainDb: Double = 0.0 // 0..12 dB shelf boost below ~120Hz
     private var bassBoostFilter: BiquadFilter? = null
 
+    // Stereo width — mid/side processing, distinct from [balance]: balance
+    // shifts *volume* between the two channels, width narrows/widens the
+    // *stereo image* itself (how far apart L/R content sounds) without
+    // touching overall level. 1.0 = unchanged, 0.0 = mono (mid only),
+    // >1.0 = wider than the source, same knob Neutron's Stereo module and
+    // most mastering-style DSP chains expose.
+    private var stereoWidth: Double = 1.0
+
+    // Master limiter — the last stage in the chain, after preamp/band gain/
+    // bass boost/balance/width have already been applied, so it catches the
+    // combined result of all of them rather than any one stage in isolation
+    // (the same "output ceiling" position Poweramp's limiter and Neutron's
+    // final brickwall/lookahead limiter both use). Implemented as a smooth
+    // soft-knee saturation rather than a hard coerceIn clamp: a hard clamp
+    // (what this processor did before) creates audible digital clipping the
+    // instant any stage pushes a sample past full scale; a soft knee bends
+    // the transfer curve smoothly into the ceiling instead, which is what
+    // makes a limiter sound like a limiter rather than distortion.
+    private var limiterEnabled: Boolean = false
+    private var limiterCeiling: Double = 1.0 // linear amplitude, e.g. -1dB ≈ 0.891
+    private val kneeWidth: Double = 0.15 // fraction of ceiling where the soft knee begins
+
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
@@ -72,6 +94,48 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     fun setBassBoost(gainDb: Double) {
         bassBoostGainDb = gainDb.coerceIn(0.0, 12.0)
         rebuildBassBoostFilter()
+    }
+
+    @Synchronized
+    fun setStereoWidth(value: Double) {
+        stereoWidth = value.coerceIn(0.0, 2.0)
+    }
+
+    @Synchronized
+    fun setLimiter(enabled: Boolean, ceilingDb: Double) {
+        limiterEnabled = enabled
+        limiterCeiling = 10.0.pow(ceilingDb.coerceIn(-12.0, 0.0) / 20.0)
+    }
+
+    /**
+     * Soft-knee limiter: below `ceiling * (1 - kneeWidth)` the signal passes
+     * through unchanged; from there to the ceiling it's bent along a smooth
+     * quadratic curve that approaches but never crosses the ceiling, instead
+     * of the hard `coerceIn` clamp every output stage used before (which is
+     * a rectangular clip — audible as harsh distortion the instant a sample
+     * exceeds full scale, rather than the smooth "gluing" a limiter is
+     * supposed to sound like).
+     */
+    private fun limit(sample: Double): Double {
+        if (!limiterEnabled) return sample
+        val sign = if (sample < 0) -1.0 else 1.0
+        val magnitude = kotlin.math.abs(sample)
+        val kneeStart = limiterCeiling * (1.0 - kneeWidth)
+        if (magnitude <= kneeStart) return sample
+        val kneeRange = limiterCeiling - kneeStart
+        if (kneeRange <= 0.0) return sign * limiterCeiling
+        val over = ((magnitude - kneeStart) / kneeRange).coerceIn(0.0, 1.0)
+        // Quadratic ease-out: fast approach to the ceiling, asymptotically
+        // flattening rather than snapping straight to it.
+        val eased = 1.0 - (1.0 - over) * (1.0 - over)
+        return sign * (kneeStart + eased * kneeRange)
+    }
+
+    private fun applyStereoWidth(left: Double, right: Double): Pair<Double, Double> {
+        if (kotlin.math.abs(stereoWidth - 1.0) < 0.001) return left to right
+        val mid = (left + right) * 0.5
+        val side = (left - right) * 0.5 * stereoWidth
+        return (mid + side) to (mid - side)
     }
 
     private fun rebuildBassBoostFilter() {
@@ -128,7 +192,13 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     }
 
     override fun isActive(): Boolean =
-        isActive && ((equalizerEnabled && filters.isNotEmpty()) || bassBoostFilter != null || balance != 0.0)
+        isActive && (
+            (equalizerEnabled && filters.isNotEmpty()) ||
+                bassBoostFilter != null ||
+                balance != 0.0 ||
+                kotlin.math.abs(stereoWidth - 1.0) >= 0.001 ||
+                limiterEnabled
+            )
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (!inputBuffer.hasRemaining()) return
@@ -175,8 +245,15 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                     right = r
                 }
 
+                val widened = applyStereoWidth(left, right)
+                left = widened.first
+                right = widened.second
+
                 left *= leftGain
                 right *= rightGain
+
+                left = limit(left)
+                right = limit(right)
 
                 output.putShort((left * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
@@ -185,6 +262,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
+                sample = limit(sample)
                 output.putShort((sample * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             }
         }
@@ -210,8 +288,15 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                     right = r
                 }
 
+                val widened = applyStereoWidth(left, right)
+                left = widened.first
+                right = widened.second
+
                 left *= leftGain
                 right *= rightGain
+
+                left = limit(left)
+                right = limit(right)
 
                 output.putFloat(left.coerceIn(-1.0, 1.0).toFloat())
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
@@ -220,6 +305,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
+                sample = limit(sample)
                 output.putFloat(sample.coerceIn(-1.0, 1.0).toFloat())
             }
         }

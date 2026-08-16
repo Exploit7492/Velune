@@ -506,6 +506,9 @@
     <string name="eq_preamp">Preamp</string>
     <string name="eq_balance">Balance</string>
     <string name="eq_balance_center">Center</string>
+    <string name="eq_stereo_width">Width</string>
+    <string name="eq_limiter">Output limiter</string>
+    <string name="eq_limiter_ceiling">Ceiling</string>
     <string name="eq_label_custom">Custom</string>
     <string name="eq_label_echo">Signature</string>
     <string name="eq_label_dolby">Dolby</string>

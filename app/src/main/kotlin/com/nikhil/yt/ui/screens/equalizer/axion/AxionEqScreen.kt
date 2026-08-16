@@ -52,10 +52,14 @@ fun AxionEqScreen(
 ) {
     val enabled by viewModel.enabled.collectAsState()
     val bandGains by viewModel.bandGains.collectAsState()
+    val bandQ by viewModel.bandQ.collectAsState()
     val mode by viewModel.mode.collectAsState()
     val preampDb by viewModel.preampDb.collectAsState()
     val balance by viewModel.balance.collectAsState()
     val bassBoostDb by viewModel.bassBoostDb.collectAsState()
+    val stereoWidth by viewModel.stereoWidth.collectAsState()
+    val limiterEnabled by viewModel.limiterEnabled.collectAsState()
+    val limiterCeilingDb by viewModel.limiterCeilingDb.collectAsState()
 
     Scaffold(
         topBar = {
@@ -169,9 +173,13 @@ fun AxionEqScreen(
                     )
                     1 -> AdvancedEqMode(
                         bandGains = bandGains,
+                        bandQ = bandQ,
                         enabled = enabled,
                         onBandChange = { band, value ->
                             viewModel.setBandGain(band, value)
+                        },
+                        onBandQChange = { band, q ->
+                            viewModel.setBandQ(band, q)
                         },
                         onReset = {
                             viewModel.reset()
@@ -179,24 +187,31 @@ fun AxionEqScreen(
                     )
                     else -> {
                         // "Master" — master-bus rotary knobs (Preamp, Balance, Bass
-                        // Boost — the Poweramp/Wavelet/Neutron-style controls that sit
-                        // above the per-band curve) plus the full parametric band
-                        // editor below them (arbitrary bands, free frequency/gain/Q,
-                        // JSON/AutoEQ import, profile management). This used to live on
-                        // its own screen at settings/eq under the "Echo Equalizer"
-                        // name; it's the same EqualizerService/EQProfileRepository
-                        // backend as Simple/Advanced above, so a profile saved here
-                        // shows up there too.
+                        // Boost, Stereo Width, Limiter — the Poweramp/Wavelet-style
+                        // knobs combined with a Neutron-style final limiter/stereo
+                        // enhancer stage) plus the full parametric band editor below
+                        // them (arbitrary bands, free frequency/gain/Q, JSON/AutoEQ
+                        // import, profile management). This used to live on its own
+                        // screen at settings/eq under the "Echo Equalizer" name;
+                        // it's the same EqualizerService/EQProfileRepository backend
+                        // as Simple/Advanced above, so a profile saved here shows up
+                        // there too.
                         Column {
                             MasterBusControls(
                                 preampDb = preampDb,
                                 balance = balance,
                                 bassBoostDb = bassBoostDb,
+                                stereoWidth = stereoWidth,
+                                limiterEnabled = limiterEnabled,
+                                limiterCeilingDb = limiterCeilingDb,
                                 enabled = enabled,
                                 accentColor = MaterialTheme.colorScheme.primary,
                                 onPreampChange = { viewModel.setPreampDb(it) },
                                 onBalanceChange = { viewModel.setBalance(it) },
                                 onBassBoostChange = { viewModel.setBassBoostDb(it) },
+                                onStereoWidthChange = { viewModel.setStereoWidth(it) },
+                                onLimiterEnabledChange = { viewModel.setLimiterEnabled(it) },
+                                onLimiterCeilingChange = { viewModel.setLimiterCeilingDb(it) },
                             )
                             val parametricContext = LocalContext.current
                             val parametricViewModel: EQViewModel = viewModel(
@@ -226,11 +241,17 @@ private fun MasterBusControls(
     preampDb: Float,
     balance: Float,
     bassBoostDb: Float,
+    stereoWidth: Float,
+    limiterEnabled: Boolean,
+    limiterCeilingDb: Float,
     enabled: Boolean,
     accentColor: Color,
     onPreampChange: (Float) -> Unit,
     onBalanceChange: (Float) -> Unit,
     onBassBoostChange: (Float) -> Unit,
+    onStereoWidthChange: (Float) -> Unit,
+    onLimiterEnabledChange: (Boolean) -> Unit,
+    onLimiterCeilingChange: (Float) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PreferenceGroupTitle(title = stringResource(R.string.eq_master_bus))
@@ -267,6 +288,53 @@ private fun MasterBusControls(
                 valueLabel = "+%.1f dB".format(bassBoostDb),
                 enabled = enabled,
                 accentColor = accentColor,
+            )
+        }
+        // Stereo width and limiter — the Neutron-style "mastering" half of
+        // the master bus, distinct from the Poweramp-style tone knobs above:
+        // width reshapes the stereo image instead of tone, the limiter caps
+        // final output instead of shaping it. Kept in their own row so the
+        // Master tab visually groups "tone" controls from "output" controls,
+        // the same separation Neutron's own master chain uses.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            RotaryKnob(
+                value = (stereoWidth / 2f).coerceIn(0f, 1f),
+                onValueChange = { onStereoWidthChange((it * 2f).coerceIn(0f, 2f)) },
+                label = stringResource(R.string.eq_stereo_width),
+                valueLabel = "%.0f%%".format(stereoWidth * 100),
+                enabled = enabled,
+                accentColor = accentColor,
+            )
+            RotaryKnob(
+                value = ((limiterCeilingDb + 12f) / 12f).coerceIn(0f, 1f),
+                onValueChange = { onLimiterCeilingChange((it * 12f - 12f).coerceIn(-12f, 0f)) },
+                label = stringResource(R.string.eq_limiter_ceiling),
+                valueLabel = "%.1f dB".format(limiterCeilingDb),
+                enabled = enabled && limiterEnabled,
+                accentColor = accentColor,
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.eq_limiter),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+            )
+            Switch(
+                checked = limiterEnabled,
+                onCheckedChange = onLimiterEnabledChange,
+                enabled = enabled,
             )
         }
     }
@@ -587,8 +655,10 @@ private fun SavePresetDialog(
 @Composable
 private fun AdvancedEqMode(
     bandGains: FloatArray,
+    bandQ: FloatArray,
     enabled: Boolean,
     onBandChange: (Int, Float) -> Unit,
+    onBandQChange: (Int, Float) -> Unit,
     onReset: () -> Unit,
 ) {
     val bandLabels = arrayOf("31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k")
@@ -611,8 +681,10 @@ private fun AdvancedEqMode(
                     EqBandSlider(
                         label = bandLabels[band],
                         value = bandGains[band],
+                        qValue = bandQ.getOrElse(band) { 1.41f },
                         enabled = enabled,
                         onValueChange = { onBandChange(band, it) },
+                        onQChange = { onBandQChange(band, it) },
                     )
                 }
             }
@@ -635,8 +707,10 @@ private fun AdvancedEqMode(
 private fun EqBandSlider(
     label: String,
     value: Float,
+    qValue: Float,
     enabled: Boolean,
     onValueChange: (Float) -> Unit,
+    onQChange: (Float) -> Unit,
 ) {
     Column(
         modifier = Modifier.width(56.dp),
@@ -688,6 +762,27 @@ private fun EqBandSlider(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+        )
+
+        // Per-band Q (bandwidth/quality) — the Poweramp-style "how narrow/
+        // wide is this band's bell curve" control, previously fixed at 1.41
+        // for every band regardless of what the user set gain to. Kept as a
+        // compact horizontal slider under each vertical fader rather than a
+        // second full-height slider, since Q is a secondary/occasional
+        // adjustment compared to gain.
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Q %.1f".format(qValue),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Slider(
+            value = qValue,
+            onValueChange = onQChange,
+            valueRange = 0.4f..4.0f,
+            enabled = enabled,
+            modifier = Modifier.width(56.dp),
         )
     }
 }
