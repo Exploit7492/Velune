@@ -45,9 +45,6 @@
     <string name="internal_subcategory_settings">Internal &amp; subcategory settings</string>
     <string name="search_try_different">Try a different search term</string>
     <!-- History -->
-    <string name="today">Today</string>
-    <string name="yesterday">Yesterday</string>
-    <string name="this_week">This week</string>
     <string name="last_week">Last week</string>
     <!-- Stats -->
     <string name="most_played_songs">Most played songs</string>
@@ -509,7 +506,6 @@
     <string name="eq_preamp">Preamp</string>
     <string name="eq_balance">Balance</string>
     <string name="eq_balance_center">Center</string>
-    <string name="eq_bass_boost">Bass Boost</string>
     <string name="eq_label_custom">Custom</string>
     <string name="eq_label_echo">Signature</string>
     <string name="eq_label_dolby">Dolby</string>
@@ -704,7 +700,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="log_level_error">Error</string>
     <string name="filter_discord_only">Discord</string>
     <string name="filter_all_logs">All</string>
-    <string name="clear">Clear</string>
     <string name="logs_empty_message">Logs will appear here when available</string>
     <string name="real_time_playback_stats">Real-time playback statistics</string>
     <string name="copied_to_clipboard">Copied log to clipboard</string>
@@ -1450,7 +1445,7 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="clear_downloaded_updates">Clear Downloaded Updates</string>
     <string name="clear_downloaded_updates_desc">Clear Downloaded Updates</string>
     <string name="clear_downloads_dialog_desc">Clear Downloads Dialog</string>
-    <string name="clear_history">Clear History</string>
+    <string name="clear_history_desc">Clear History</string>
     <string name="clear_image_cache_desc">Clear Image Cache</string>
     <string name="clear_image_cache_dialog_desc">Clear Image Cache Dialog</string>
     <string name="clear_listen_history_confirm_desc">Clear Listen History Confirm</string>
