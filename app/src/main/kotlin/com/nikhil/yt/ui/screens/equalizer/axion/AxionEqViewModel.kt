@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nikhil.yt.constants.EqBalanceKey
+import com.nikhil.yt.constants.EqBassBoostKey
 import com.nikhil.yt.constants.ParametricEQEnabledKey
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
@@ -19,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @HiltViewModel
@@ -53,6 +56,21 @@ class AxionEqViewModel @Inject constructor(
     private val _isDirty = MutableStateFlow(false)
     val isDirty = _isDirty.asStateFlow()
 
+    // ─── Master bus (Master tab rotary knobs) ──────────────────────────────────
+    // Preamp affects the active profile (Simple/Advanced/Custom all apply it the
+    // same way, via SavedEQProfile.preamp). Balance and bass boost are applied on
+    // top of whichever profile is active, at the audio-processor level, the same
+    // way a mixer's master bus sits above individual channel EQ — see
+    // EqualizerService.setBalance/setBassBoost.
+    private val _preampDb = MutableStateFlow(prefs.getFloat("preamp_db", 0f))
+    val preampDb = _preampDb.asStateFlow()
+
+    private val _balance = MutableStateFlow(0f)
+    val balance = _balance.asStateFlow()
+
+    private val _bassBoostDb = MutableStateFlow(0f)
+    val bassBoostDb = _bassBoostDb.asStateFlow()
+
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
         profiles.filter { it.isCustom && it.id != "echo_tuning" }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -67,9 +85,40 @@ class AxionEqViewModel @Inject constructor(
                     }
                 }
         }
+        viewModelScope.launch {
+            val prefsSnapshot = context.dataStore.data.first()
+            _balance.value = prefsSnapshot[EqBalanceKey] ?: 0f
+            _bassBoostDb.value = prefsSnapshot[EqBassBoostKey] ?: 0f
+            equalizerService.setBalance(_balance.value.toDouble())
+            equalizerService.setBassBoost(_bassBoostDb.value.toDouble())
+        }
         if (_enabled.value) {
             applyToService()
         }
+    }
+
+    fun setPreampDb(db: Float) {
+        _preampDb.value = db
+        prefs.edit().putFloat("preamp_db", db).apply()
+        if (_enabled.value) {
+            applyToService()
+        }
+    }
+
+    fun setBalance(value: Float) {
+        _balance.value = value
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqBalanceKey] = value }
+        }
+        equalizerService.setBalance(value.toDouble())
+    }
+
+    fun setBassBoostDb(db: Float) {
+        _bassBoostDb.value = db
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqBassBoostKey] = db }
+        }
+        equalizerService.setBassBoost(db.toDouble())
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -175,7 +224,7 @@ class AxionEqViewModel @Inject constructor(
                 name = "Echo Tuning",
                 deviceModel = "Equalizer",
                 bands = bands,
-                preamp = 0.0,
+                preamp = _preampDb.value.toDouble(),
                 isCustom = false,
                 isActive = true
             )

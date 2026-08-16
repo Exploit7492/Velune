@@ -504,7 +504,12 @@
     <string name="eq_enable_summary">Apply custom sound shaping to playback</string>
     <string name="eq_simple">Simple</string>
     <string name="eq_advanced">Advanced</string>
-    <string name="eq_custom">Custom</string>
+    <string name="eq_master">Master</string>
+    <string name="eq_master_bus">Master Bus</string>
+    <string name="eq_preamp">Preamp</string>
+    <string name="eq_balance">Balance</string>
+    <string name="eq_balance_center">Center</string>
+    <string name="eq_bass_boost">Bass Boost</string>
     <string name="eq_label_custom">Custom</string>
     <string name="eq_label_echo">Signature</string>
     <string name="eq_label_dolby">Dolby</string>

@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +36,7 @@ import com.nikhil.yt.R
 import com.nikhil.yt.eq.data.SavedEQProfile
 import com.nikhil.yt.ui.component.Material3SettingsGroup
 import com.nikhil.yt.ui.component.Material3SettingsItem
+import com.nikhil.yt.ui.component.PreferenceGroupTitle
 import com.nikhil.yt.ui.screens.equalizer.EQViewModel
 import com.nikhil.yt.ui.screens.equalizer.EQViewModelFactory
 import com.nikhil.yt.ui.screens.equalizer.ParametricEqEditor
@@ -51,6 +53,9 @@ fun AxionEqScreen(
     val enabled by viewModel.enabled.collectAsState()
     val bandGains by viewModel.bandGains.collectAsState()
     val mode by viewModel.mode.collectAsState()
+    val preampDb by viewModel.preampDb.collectAsState()
+    val balance by viewModel.balance.collectAsState()
+    val bassBoostDb by viewModel.bassBoostDb.collectAsState()
 
     Scaffold(
         topBar = {
@@ -130,7 +135,7 @@ fun AxionEqScreen(
                     modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
                     shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 ) {
-                    Text(stringResource(R.string.eq_custom))
+                    Text(stringResource(R.string.eq_master))
                 }
             }
 
@@ -173,22 +178,96 @@ fun AxionEqScreen(
                         }
                     )
                     else -> {
-                        // "Custom" — the full parametric editor (arbitrary bands, free
-                        // frequency/gain/Q, JSON/AutoEQ import, profile management).
-                        // This is the screen that used to live on its own at
-                        // settings/eq under the "Echo Equalizer" name; it's the same
-                        // EqualizerService/EQProfileRepository backend as Simple/
-                        // Advanced above, so a profile saved here shows up there too.
-                        val parametricContext = LocalContext.current
-                        val parametricViewModel: EQViewModel = viewModel(
-                            factory = EQViewModelFactory(parametricContext)
-                        )
-                        ParametricEqEditor(viewModel = parametricViewModel)
+                        // "Master" — master-bus rotary knobs (Preamp, Balance, Bass
+                        // Boost — the Poweramp/Wavelet/Neutron-style controls that sit
+                        // above the per-band curve) plus the full parametric band
+                        // editor below them (arbitrary bands, free frequency/gain/Q,
+                        // JSON/AutoEQ import, profile management). This used to live on
+                        // its own screen at settings/eq under the "Echo Equalizer"
+                        // name; it's the same EqualizerService/EQProfileRepository
+                        // backend as Simple/Advanced above, so a profile saved here
+                        // shows up there too.
+                        Column {
+                            MasterBusControls(
+                                preampDb = preampDb,
+                                balance = balance,
+                                bassBoostDb = bassBoostDb,
+                                enabled = enabled,
+                                accentColor = MaterialTheme.colorScheme.primary,
+                                onPreampChange = { viewModel.setPreampDb(it) },
+                                onBalanceChange = { viewModel.setBalance(it) },
+                                onBassBoostChange = { viewModel.setBassBoostDb(it) },
+                            )
+                            val parametricContext = LocalContext.current
+                            val parametricViewModel: EQViewModel = viewModel(
+                                factory = EQViewModelFactory(parametricContext)
+                            )
+                            ParametricEqEditor(viewModel = parametricViewModel)
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(60.dp))
+        }
+    }
+}
+
+/**
+ * Master-bus rotary knobs — Preamp, Balance, Bass Boost — sitting above the
+ * per-band parametric editor in the Master tab, styled after Poweramp/Wavelet/
+ * Neutron's own master-bus panels. Preamp feeds the active profile the same
+ * way Simple/Advanced do; Balance and Bass Boost apply directly at the audio
+ * processor, independent of which profile/curve is active — see
+ * AxionEqViewModel.setBalance/setBassBoostDb and EqualizerService.
+ */
+@Composable
+private fun MasterBusControls(
+    preampDb: Float,
+    balance: Float,
+    bassBoostDb: Float,
+    enabled: Boolean,
+    accentColor: Color,
+    onPreampChange: (Float) -> Unit,
+    onBalanceChange: (Float) -> Unit,
+    onBassBoostChange: (Float) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        PreferenceGroupTitle(title = stringResource(R.string.eq_master_bus))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            RotaryKnob(
+                value = ((preampDb + 12f) / 24f).coerceIn(0f, 1f),
+                onValueChange = { onPreampChange((it * 24f - 12f).coerceIn(-12f, 12f)) },
+                label = stringResource(R.string.eq_preamp),
+                valueLabel = "%+.1f dB".format(preampDb),
+                enabled = enabled,
+                accentColor = accentColor,
+            )
+            RotaryKnob(
+                value = ((balance + 1f) / 2f).coerceIn(0f, 1f),
+                onValueChange = { onBalanceChange((it * 2f - 1f).coerceIn(-1f, 1f)) },
+                label = stringResource(R.string.eq_balance),
+                valueLabel = when {
+                    balance > 0.02f -> "R %.0f%%".format(balance * 100)
+                    balance < -0.02f -> "L %.0f%%".format(-balance * 100)
+                    else -> stringResource(R.string.eq_balance_center)
+                },
+                enabled = enabled,
+                accentColor = accentColor,
+            )
+            RotaryKnob(
+                value = (bassBoostDb / 12f).coerceIn(0f, 1f),
+                onValueChange = { onBassBoostChange((it * 12f).coerceIn(0f, 12f)) },
+                label = stringResource(R.string.eq_bass_boost),
+                valueLabel = "+%.1f dB".format(bassBoostDb),
+                enabled = enabled,
+                accentColor = accentColor,
+            )
         }
     }
 }

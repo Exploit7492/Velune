@@ -20,6 +20,13 @@ class EqualizerService @Inject constructor() {
     private var pendingProfile: SavedEQProfile? = null
     private var shouldDisable: Boolean = false
 
+    // Master-bus controls (balance, bass boost) — independent of the per-band
+    // profile above, same as the master bus on a real mixer sits above the
+    // individual EQ channels. Remembered the same "pending" way profiles are,
+    // so they survive a processor being torn down/recreated (e.g. track change).
+    private var pendingBalance: Double = 0.0
+    private var pendingBassBoostDb: Double = 0.0
+
     companion object {
         private const val TAG = "EqualizerService"
     }
@@ -39,11 +46,27 @@ class EqualizerService @Inject constructor() {
             applyProfileToProcessor(processor, profile)
             
         }
+        processor.setBalance(pendingBalance)
+        processor.setBassBoost(pendingBassBoostDb)
     }
 
     
     fun removeAudioProcessor(processor: CustomEqualizerAudioProcessor) {
         audioProcessors.remove(processor)
+    }
+
+    /** -1.0 (full left) .. 0.0 (center) .. 1.0 (full right). */
+    @OptIn(UnstableApi::class)
+    fun setBalance(value: Double) {
+        pendingBalance = value.coerceIn(-1.0, 1.0)
+        audioProcessors.forEach { it.setBalance(pendingBalance) }
+    }
+
+    /** 0..12 dB shelf boost below ~120Hz, applied on top of whatever profile is active. */
+    @OptIn(UnstableApi::class)
+    fun setBassBoost(gainDb: Double) {
+        pendingBassBoostDb = gainDb.coerceIn(0.0, 12.0)
+        audioProcessors.forEach { it.setBassBoost(pendingBassBoostDb) }
     }
 
     

@@ -26,6 +26,13 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     private var preampGain: Double = 1.0
     private var pendingProfile: ParametricEQ? = null
 
+    // Master-bus controls — independent of the per-band profile, always applied
+    // on top of it (or on their own if no profile/filters are set), same as a
+    // real mixer's master bus sits above individual channel EQ.
+    private var balance: Double = 0.0 // -1.0 = full left, 0 = center, 1.0 = full right
+    private var bassBoostGainDb: Double = 0.0 // 0..12 dB shelf boost below ~120Hz
+    private var bassBoostFilter: BiquadFilter? = null
+
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
@@ -55,6 +62,31 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     }
 
     fun isEnabled(): Boolean = equalizerEnabled
+
+    @Synchronized
+    fun setBalance(value: Double) {
+        balance = value.coerceIn(-1.0, 1.0)
+    }
+
+    @Synchronized
+    fun setBassBoost(gainDb: Double) {
+        bassBoostGainDb = gainDb.coerceIn(0.0, 12.0)
+        rebuildBassBoostFilter()
+    }
+
+    private fun rebuildBassBoostFilter() {
+        bassBoostFilter = if (sampleRate > 0 && bassBoostGainDb > 0.01) {
+            BiquadFilter(
+                sampleRate = sampleRate,
+                frequency = 120.0,
+                gain = bassBoostGainDb,
+                q = 0.9,
+                filterType = com.nikhil.yt.eq.data.FilterType.LSC
+            )
+        } else {
+            null
+        }
+    }
 
     private fun createFilters(bands: List<com.nikhil.yt.eq.data.ParametricEQBand>) {
         if (sampleRate == 0) {
@@ -91,10 +123,12 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         }
 
         isActive = (encoding == C.ENCODING_PCM_16BIT || encoding == C.ENCODING_PCM_FLOAT)
+        rebuildBassBoostFilter()
         return inputAudioFormat
     }
 
-    override fun isActive(): Boolean = isActive && equalizerEnabled && filters.isNotEmpty()
+    override fun isActive(): Boolean =
+        isActive && ((equalizerEnabled && filters.isNotEmpty()) || bassBoostFilter != null || balance != 0.0)
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (!inputBuffer.hasRemaining()) return
@@ -122,6 +156,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     }
 
     private fun processShortBuffer(input: ByteBuffer, output: ByteBuffer, sampleCount: Int) {
+        val leftGain = preampGain * (1.0 - balance.coerceAtLeast(0.0))
+        val rightGain = preampGain * (1.0 + balance.coerceAtMost(0.0))
+        val bassFilter = bassBoostFilter
         for (i in 0 until sampleCount / channelCount) {
             if (channelCount == 2) {
                 var left = input.getShort().toDouble() / 32768.0
@@ -132,15 +169,21 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                     left = l
                     right = r
                 }
+                bassFilter?.let {
+                    val (l, r) = it.processStereo(left, right)
+                    left = l
+                    right = r
+                }
 
-                left *= preampGain
-                right *= preampGain
+                left *= leftGain
+                right *= rightGain
 
                 output.putShort((left * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             } else {
                 var sample = input.getShort().toDouble() / 32768.0
                 filters.forEach { sample = it.processSample(sample) }
+                bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
                 output.putShort((sample * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             }
@@ -148,6 +191,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     }
 
     private fun processFloatBuffer(input: ByteBuffer, output: ByteBuffer, sampleCount: Int) {
+        val leftGain = preampGain * (1.0 - balance.coerceAtLeast(0.0))
+        val rightGain = preampGain * (1.0 + balance.coerceAtMost(0.0))
+        val bassFilter = bassBoostFilter
         for (i in 0 until sampleCount / channelCount) {
             if (channelCount == 2) {
                 var left = input.getFloat().toDouble()
@@ -158,15 +204,21 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                     left = l
                     right = r
                 }
+                bassFilter?.let {
+                    val (l, r) = it.processStereo(left, right)
+                    left = l
+                    right = r
+                }
 
-                left *= preampGain
-                right *= preampGain
+                left *= leftGain
+                right *= rightGain
 
                 output.putFloat(left.coerceIn(-1.0, 1.0).toFloat())
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
             } else {
                 var sample = input.getFloat().toDouble()
                 filters.forEach { sample = it.processSample(sample) }
+                bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
                 output.putFloat(sample.coerceIn(-1.0, 1.0).toFloat())
             }
