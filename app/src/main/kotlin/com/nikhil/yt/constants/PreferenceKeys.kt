@@ -773,3 +773,25 @@ val ListenTogetherRoomCodeKey = stringPreferencesKey("listenTogetherRoomCode")
 val ListenTogetherUserIdKey = stringPreferencesKey("listenTogetherUserId")
 val ListenTogetherIsHostKey = booleanPreferencesKey("listenTogetherIsHost")
 val ListenTogetherSessionTimestampKey = longPreferencesKey("listenTogetherSessionTimestamp")
+
+// Dynamic app icon/branding — last-fetched remote config JSON (see
+// com.nikhil.yt.branding.AppIconRepository), cached so the admin-uploaded
+// icons/logos survive restarts without re-fetching before first paint.
+val AppIconConfigJsonKey = stringPreferencesKey("appIconConfigJson")
+val AppIconConfigFetchedAtKey = longPreferencesKey("appIconConfigFetchedAt")
+
+// EQ Advanced tab — per-band Q (bandwidth/quality), independent of gain.
+// Fixed at 1.41 for every band until now; stored the same per-band way
+// EqBandGain_$it already is. See AxionEqViewModel.setBandQ.
+val EqBandQPrefix = "eq_band_q_"
+
+// EQ Master tab — limiter and stereo width, additive to the existing
+// Balance/Bass Boost master-bus controls (see EqBalanceKey/EqBassBoostKey
+// above). Distinct responsibilities, so none of these duplicate each other:
+// Balance shifts L/R volume, Bass Boost shelves low frequencies, Stereo
+// Width narrows/widens the stereo image via mid/side processing, and the
+// Limiter caps final output level after everything else (preamp, per-band
+// gain, bass boost, balance, width) has already been applied.
+val EqLimiterEnabledKey = booleanPreferencesKey("eq_limiter_enabled")
+val EqLimiterCeilingKey = floatPreferencesKey("eq_limiter_ceiling_db")
+val EqStereoWidthKey = floatPreferencesKey("eq_stereo_width")

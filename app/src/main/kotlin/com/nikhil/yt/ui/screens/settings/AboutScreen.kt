@@ -255,11 +255,16 @@ private fun AboutAppCard() {
                 contentAlignment = Alignment.Center
             ) {
                 if (rotation <= 90f) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_launcher_nobg),
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(if (isDark) Color.White else Color(0xFFEA3829)),
-                        modifier = Modifier.fillMaxSize()
+                    // FIX: was a hardcoded Image(painterResource(R.drawable.ic_launcher_nobg)).
+                    // Now reflects whatever logo an admin has published for the
+                    // IN_APP_LOGO slot from the branding dashboard, falling back to
+                    // the same bundled ic_launcher_nobg (with the same tint) when no
+                    // override is configured — see com.nikhil.yt.branding.AppIconConfig.
+                    com.nikhil.yt.branding.DynamicAppLogo(
+                        slot = com.nikhil.yt.branding.AppIconSlot.IN_APP_LOGO,
+                        fallbackResId = R.drawable.ic_launcher_nobg,
+                        tint = if (isDark) Color.White else Color(0xFFEA3829),
+                        modifier = Modifier.fillMaxSize(),
                     )
                 } else {
                     coil3.compose.AsyncImage(
