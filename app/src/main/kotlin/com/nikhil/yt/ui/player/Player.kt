@@ -1082,15 +1082,46 @@ fun BottomSheetPlayer(
             // screen (which renders underneath, just hidden) until the user
             // presses back and the sheet's own BackHandler collapses it, which
             // looked like the EQ screen didn't open until you hit back.
-            IconButton(onClick = {
-                state.collapseSoft()
-                navController.navigate("eq/axion")
-            }) {
-                Icon(
-                    painter = painterResource(R.drawable.equalizer),
-                    contentDescription = stringResource(R.string.equalizer),
-                    tint = if (gradientColors.isNotEmpty()) pillAccentColor else MaterialTheme.colorScheme.onSurface,
-                )
+            //
+            // FIX: this used to be a bare IconButton floating directly on the
+            // player background — every other top-bar control (the Song/Video
+            // switch above) sits inside the same glassy pill treatment, so the
+            // EQ button looked inconsistent/unstyled next to it. Wrapped it in
+            // the identical pill container (same shape, backdrop-blur/tint
+            // fallback, and border) so it reads as a matching pair rather than
+            // one chip + one bare icon.
+            Row(
+                modifier = Modifier
+                    .clip(pillShape)
+                    .then(
+                        if (pillSupportsBackdrop) {
+                            Modifier.drawBackdrop(
+                                backdrop = pillBackdrop,
+                                shape = { pillShape },
+                                effects = {
+                                    vibrancy()
+                                    blur(with(density) { 14.dp.toPx() })
+                                },
+                                onDrawSurface = {
+                                    drawRect(pillAccentColor.copy(alpha = 0.10f))
+                                }
+                            )
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                        }
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), pillShape)
+            ) {
+                IconButton(onClick = {
+                    state.collapseSoft()
+                    navController.navigate("eq/axion")
+                }) {
+                    Icon(
+                        painter = painterResource(R.drawable.equalizer),
+                        contentDescription = stringResource(R.string.equalizer),
+                        tint = if (gradientColors.isNotEmpty()) pillAccentColor else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
         }
 
