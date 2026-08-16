@@ -45,15 +45,15 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     // bass boost/balance/width have already been applied, so it catches the
     // combined result of all of them rather than any one stage in isolation
     // (the same "output ceiling" position Poweramp's limiter and Neutron's
-    // final brickwall/lookahead limiter both use). Implemented as a smooth
-    // soft-knee saturation rather than a hard coerceIn clamp: a hard clamp
-    // (what this processor did before) creates audible digital clipping the
-    // instant any stage pushes a sample past full scale; a soft knee bends
-    // the transfer curve smoothly into the ceiling instead, which is what
-    // makes a limiter sound like a limiter rather than distortion.
-    private var limiterEnabled: Boolean = false
-    private var limiterCeiling: Double = 1.0 // linear amplitude, e.g. -1dB ≈ 0.891
-    private val kneeWidth: Double = 0.15 // fraction of ceiling where the soft knee begins
+    // final brickwall/lookahead limiter both use).
+    //
+    // This is a true lookahead limiter (see LookaheadLimiter): it holds audio
+    // back by a few milliseconds so the gain reduction is already ramped in
+    // by the time a transient reaches the output, instead of only reacting to
+    // the sample it's currently given. That's the difference between this and
+    // the previous instant soft-knee curve — the soft knee could still only
+    // bend *after* a peak arrived; it never saw it coming.
+    private val lookaheadLimiter = LookaheadLimiter(sampleRate = 44100)
 
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
@@ -103,32 +103,8 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
 
     @Synchronized
     fun setLimiter(enabled: Boolean, ceilingDb: Double) {
-        limiterEnabled = enabled
-        limiterCeiling = 10.0.pow(ceilingDb.coerceIn(-12.0, 0.0) / 20.0)
-    }
-
-    /**
-     * Soft-knee limiter: below `ceiling * (1 - kneeWidth)` the signal passes
-     * through unchanged; from there to the ceiling it's bent along a smooth
-     * quadratic curve that approaches but never crosses the ceiling, instead
-     * of the hard `coerceIn` clamp every output stage used before (which is
-     * a rectangular clip — audible as harsh distortion the instant a sample
-     * exceeds full scale, rather than the smooth "gluing" a limiter is
-     * supposed to sound like).
-     */
-    private fun limit(sample: Double): Double {
-        if (!limiterEnabled) return sample
-        val sign = if (sample < 0) -1.0 else 1.0
-        val magnitude = kotlin.math.abs(sample)
-        val kneeStart = limiterCeiling * (1.0 - kneeWidth)
-        if (magnitude <= kneeStart) return sample
-        val kneeRange = limiterCeiling - kneeStart
-        if (kneeRange <= 0.0) return sign * limiterCeiling
-        val over = ((magnitude - kneeStart) / kneeRange).coerceIn(0.0, 1.0)
-        // Quadratic ease-out: fast approach to the ceiling, asymptotically
-        // flattening rather than snapping straight to it.
-        val eased = 1.0 - (1.0 - over) * (1.0 - over)
-        return sign * (kneeStart + eased * kneeRange)
+        lookaheadLimiter.setCeilingDb(ceilingDb)
+        lookaheadLimiter.setEnabled(enabled)
     }
 
     private fun applyStereoWidth(left: Double, right: Double): Pair<Double, Double> {
@@ -188,6 +164,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
 
         isActive = (encoding == C.ENCODING_PCM_16BIT || encoding == C.ENCODING_PCM_FLOAT)
         rebuildBassBoostFilter()
+        lookaheadLimiter.configure(sampleRate)
         return inputAudioFormat
     }
 
@@ -197,7 +174,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 bassBoostFilter != null ||
                 balance != 0.0 ||
                 kotlin.math.abs(stereoWidth - 1.0) >= 0.001 ||
-                limiterEnabled
+                lookaheadLimiter.enabled
             )
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -252,8 +229,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left *= leftGain
                 right *= rightGain
 
-                left = limit(left)
-                right = limit(right)
+                val limited = lookaheadLimiter.process(left, right)
+                left = limited.first
+                right = limited.second
 
                 output.putShort((left * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
@@ -262,7 +240,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
-                sample = limit(sample)
+                sample = lookaheadLimiter.processMono(sample)
                 output.putShort((sample * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             }
         }
@@ -295,8 +273,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left *= leftGain
                 right *= rightGain
 
-                left = limit(left)
-                right = limit(right)
+                val limited = lookaheadLimiter.process(left, right)
+                left = limited.first
+                right = limited.second
 
                 output.putFloat(left.coerceIn(-1.0, 1.0).toFloat())
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
@@ -305,7 +284,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
                 sample *= preampGain
-                sample = limit(sample)
+                sample = lookaheadLimiter.processMono(sample)
                 output.putFloat(sample.coerceIn(-1.0, 1.0).toFloat())
             }
         }
@@ -324,6 +303,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         outputBuffer = EMPTY_BUFFER
         inputEnded = false
         filters.forEach { it.reset() }
+        lookaheadLimiter.reset()
     }
 
     override fun reset() {
