@@ -43,7 +43,13 @@ fun VideoMorphingThumbnail(
                     PlayerView(context).apply {
                         this.player = videoPlayer
                         useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        // RESIZE_MODE_FIT letterboxes/pillarboxes the video to preserve its
+                        // aspect ratio within the frame, which leaves the cover art behind
+                        // it visible in the gaps whenever the video's aspect ratio doesn't
+                        // match the frame — the video is meant to fully take over the frame
+                        // the same way the cover art (ContentScale.Crop) does, not float in
+                        // the middle of it. ZOOM crops to fill instead, matching that.
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         visibility = android.view.View.VISIBLE
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)

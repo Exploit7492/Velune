@@ -166,6 +166,7 @@ fun BottomSheetPlayer(
 
     // ─── Video morphing state ────────────────────────────────────────────────────
     var isVideoMode by remember { mutableStateOf(false) }
+    var isLoadingVideo by remember { mutableStateOf(false) }
 
     // The video stream URL resolved for the toggle always comes from the IOS
     // client (see YTPlayerUtils.resolveVideoStreamUrl), and googlevideo.com
@@ -203,7 +204,10 @@ fun BottomSheetPlayer(
         )
     }
 
-    // Slave video player (audio disabled, muted)
+    // Slave video player (audio disabled, muted) — this only ever plays the
+    // picture; the real audio always comes from playerConnection.player. Every
+    // control (play/pause, next, previous, seek) is meant to keep driving the
+    // master audio player exactly as it always has — the slave just follows it.
     val player = remember(context, slaveMediaSourceFactory) {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(slaveMediaSourceFactory)
@@ -220,49 +224,105 @@ fun BottomSheetPlayer(
         onDispose { player.release() }
     }
 
-    // Stop slave when song changes
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
-    LaunchedEffect(mediaMetadata?.id) {
-        isVideoMode = false
-        player.stop()
-        player.clearMediaItems()
-    }
+    val isPlaying by playerConnection.isPlaying.collectAsState()
 
-    // Toggle function – manages slave video player
-    val toggleVideo: () -> Unit = {
-        val targetVideoMode = !isVideoMode
-        if (targetVideoMode) {
-            val videoId = mediaMetadata?.id
-            if (videoId != null) {
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                    // FIX: getVideoStreamUrl() was a cache-only read, and that cache is
-                    // only populated when the client used for the currently-playing audio
-                    // happened to also return video formats — music-only clients (e.g.
-                    // WEB_REMIX) never do, so the cache missed most of the time and this
-                    // toggle silently did nothing. resolveVideoStreamUrl() falls back to
-                    // an active fetch on a cache miss so the video actually loads.
-                    val videoUrl = try {
-                        com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(videoId)
-                    } catch (e: Exception) { null }
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        if (videoUrl != null) {
-                            isVideoMode = true
-                            player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
-                            player.prepare()
-                            player.seekTo(playerConnection.player.currentPosition + 200)
-                            player.playWhenReady = true
-                        } else {
-                            isVideoMode = false
-                        }
-                    }
-                }
-            } else {
-                isVideoMode = false
-            }
+    suspend fun loadVideoForCurrentTrack() {
+        val videoId = mediaMetadata?.id
+        if (videoId == null) {
+            isVideoMode = false
+            return
+        }
+        isLoadingVideo = true
+        val videoUrl = withContext(Dispatchers.IO) {
+            try {
+                com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(videoId)
+            } catch (e: Exception) { null }
+        }
+        isLoadingVideo = false
+        if (videoUrl != null) {
+            player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
+            player.prepare()
+            player.seekTo(playerConnection.player.currentPosition)
+            player.playWhenReady = isPlaying
         } else {
             isVideoMode = false
             player.stop()
             player.clearMediaItems()
+        }
+    }
+
+    // Song changed. If the user was already in video mode, load the *new*
+    // track's video and stay in video mode instead of unconditionally dropping
+    // back to audio — that unconditional drop was the reason pressing next/
+    // previous while watching video silently kicked you back to audio-only:
+    // every control that changes tracks (next/previous buttons anywhere in the
+    // app, the notification, a headset button, the queue) changes
+    // mediaMetadata.id the same way, so this one effect covers all of them.
+    LaunchedEffect(mediaMetadata?.id) {
+        player.stop()
+        player.clearMediaItems()
+        if (isVideoMode) {
+            loadVideoForCurrentTrack()
+        }
+    }
+
+    // Keep the muted slave's play/pause mirroring the master's — for *any*
+    // control that changed it, not just this screen's own button. That's what
+    // makes "press pause while in video mode -> video pauses too" work
+    // regardless of whether pause came from this screen, the mini player, the
+    // notification, or a headset button.
+    LaunchedEffect(isPlaying, isVideoMode) {
+        if (isVideoMode) {
+            player.playWhenReady = isPlaying
+        }
+    }
+
+    // Two independently-clocked players drift apart over time even when both
+    // are set to play at the same moment — periodically nudge the video back
+    // in line with the audio's actual position while both are in video mode.
+    LaunchedEffect(isVideoMode) {
+        if (!isVideoMode) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            if (!isVideoMode) break
+            val drift = playerConnection.player.currentPosition - player.currentPosition
+            if (kotlin.math.abs(drift) > 700) {
+                player.seekTo(playerConnection.player.currentPosition)
+            }
+        }
+    }
+
+    // Toggle function – manages slave video player
+    val toggleVideo: () -> Unit = {
+        if (isVideoMode) {
+            isVideoMode = false
+            player.stop()
+            player.clearMediaItems()
+        } else {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                val videoId = mediaMetadata?.id
+                if (videoId == null) {
+                    isVideoMode = false
+                    return@launch
+                }
+                isLoadingVideo = true
+                val videoUrl = withContext(Dispatchers.IO) {
+                    try {
+                        com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(videoId)
+                    } catch (e: Exception) { null }
+                }
+                isLoadingVideo = false
+                if (videoUrl != null) {
+                    isVideoMode = true
+                    player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
+                    player.prepare()
+                    player.seekTo(playerConnection.player.currentPosition + 200)
+                    player.playWhenReady = isPlaying
+                } else {
+                    isVideoMode = false
+                }
+            }
         }
     }
 
@@ -699,6 +759,7 @@ fun BottomSheetPlayer(
         val onSliderValueChangeFinished: () -> Unit = {
             sliderPosition?.let {
                 playerConnection.player.seekTo(it)
+                if (isVideoMode) player.seekTo(it)
                 position = it
             }
             sliderPosition = null
@@ -1219,7 +1280,11 @@ private fun MetroPlayerContent(
                     1f
                 ),
                 valueRange = 0f..1f,
-                onValueChange = { fraction -> playerConnection.player.seekTo((durationMs * fraction).toLong()) },
+                onValueChange = { fraction ->
+                    val target = (durationMs * fraction).toLong()
+                    playerConnection.player.seekTo(target)
+                    if (isVideoMode) videoPlayer?.seekTo(target)
+                },
                 onValueChangeFinished = {},
                 activeColor = textColor,
                 isPlaying = isPlaying,
