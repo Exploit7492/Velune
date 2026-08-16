@@ -1,5 +1,9 @@
 package com.nikhil.yt.ui.screens.equalizer.axion
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -44,6 +48,27 @@ import com.nikhil.yt.ui.utils.backToMain
 import kotlin.math.abs
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
+/**
+ * Resolves a picked document Uri's user-facing file name via the standard
+ * SAF OpenableColumns query, falling back to the last path segment for
+ * providers that don't report DISPLAY_NAME. UI-layer concern only — the
+ * name is purely for display/persistence, never used to reopen the file
+ * (the copy made in AxionEqViewModel.importImpulseResponse is what gets
+ * reopened).
+ */
+private fun resolveDisplayName(context: android.content.Context, uri: Uri): String {
+    var name: String? = null
+    runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                name = cursor.getString(nameIndex)
+            }
+        }
+    }
+    return name ?: uri.lastPathSegment ?: "impulse_response.wav"
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AxionEqScreen(
@@ -60,6 +85,19 @@ fun AxionEqScreen(
     val stereoWidth by viewModel.stereoWidth.collectAsState()
     val limiterEnabled by viewModel.limiterEnabled.collectAsState()
     val limiterCeilingDb by viewModel.limiterCeilingDb.collectAsState()
+    val convolutionEnabled by viewModel.convolutionEnabled.collectAsState()
+    val impulseResponseInfo by viewModel.impulseResponseInfo.collectAsState()
+    val convolutionImporting by viewModel.convolutionImporting.collectAsState()
+    val convolutionImportError by viewModel.convolutionImportError.collectAsState()
+
+    val context = LocalContext.current
+    val irPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.importImpulseResponse(it, resolveDisplayName(context, it))
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -213,6 +251,26 @@ fun AxionEqScreen(
                                 onLimiterEnabledChange = { viewModel.setLimiterEnabled(it) },
                                 onLimiterCeilingChange = { viewModel.setLimiterCeilingDb(it) },
                             )
+                            ConvolutionSection(
+                                enabled = enabled,
+                                convolutionEnabled = convolutionEnabled,
+                                impulseResponseInfo = impulseResponseInfo,
+                                importing = convolutionImporting,
+                                importError = convolutionImportError,
+                                onLoadClick = {
+                                    // audio/x-wav and audio/wav cover most
+                                    // providers; application/octet-stream is
+                                    // included since many Android file
+                                    // pickers report WAV files under that
+                                    // generic type instead of a proper
+                                    // audio/* MIME.
+                                    irPickerLauncher.launch(
+                                        arrayOf("audio/x-wav", "audio/wav", "audio/*", "application/octet-stream")
+                                    )
+                                },
+                                onEnabledChange = { viewModel.setConvolutionEnabled(it) },
+                                onClearClick = { viewModel.clearImpulseResponse() },
+                            )
                             val parametricContext = LocalContext.current
                             val parametricViewModel: EQViewModel = viewModel(
                                 factory = EQViewModelFactory(parametricContext)
@@ -335,6 +393,117 @@ private fun MasterBusControls(
                 checked = limiterEnabled,
                 onCheckedChange = onLimiterEnabledChange,
                 enabled = enabled,
+            )
+        }
+    }
+}
+
+/**
+ * Convolution (impulse-response) tone shaping — the UI for the engine
+ * built in the previous session (Fft/PartitionedConvolver/
+ * ConvolutionAudioProcessor/ImpulseResponse), which had no screen wired to
+ * it at all until now. Sits in the Master tab below the rotary knobs,
+ * since it's the same "master bus" layer conceptually — it runs ahead of
+ * the per-band EQ, the same way the limiter runs after it.
+ */
+@Composable
+private fun ConvolutionSection(
+    enabled: Boolean,
+    convolutionEnabled: Boolean,
+    impulseResponseInfo: ImpulseResponseInfo?,
+    importing: Boolean,
+    importError: String?,
+    onLoadClick: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    onClearClick: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        PreferenceGroupTitle(title = stringResource(R.string.eq_convolution))
+        Text(
+            text = stringResource(R.string.eq_convolution_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+
+        if (impulseResponseInfo == null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onLoadClick,
+                    enabled = enabled && !importing,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (importing) stringResource(R.string.eq_convolution_loading)
+                        else stringResource(R.string.eq_convolution_load_ir)
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = impulseResponseInfo.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.eq_convolution_ir_info,
+                            impulseResponseInfo.durationSeconds,
+                            impulseResponseInfo.channels,
+                            impulseResponseInfo.sampleRateHz,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = convolutionEnabled,
+                    onCheckedChange = onEnabledChange,
+                    enabled = enabled && !importing,
+                )
+                com.nikhil.yt.ui.component.IconButton(
+                    onClick = onClearClick,
+                    onLongClick = {},
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.delete),
+                        contentDescription = stringResource(R.string.eq_convolution_clear),
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                TextButton(onClick = onLoadClick, enabled = enabled && !importing) {
+                    Text(
+                        text = if (importing) stringResource(R.string.eq_convolution_loading)
+                        else stringResource(R.string.eq_convolution_replace_ir)
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = importError != null) {
+            Text(
+                text = importError.orEmpty(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
     }

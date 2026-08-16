@@ -1,24 +1,31 @@
 package com.nikhil.yt.ui.screens.equalizer.axion
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nikhil.yt.constants.EqBalanceKey
 import com.nikhil.yt.constants.EqBassBoostKey
 import com.nikhil.yt.constants.EqBandQPrefix
+import com.nikhil.yt.constants.EqConvolutionEnabledKey
+import com.nikhil.yt.constants.EqConvolutionIrNameKey
+import com.nikhil.yt.constants.EqConvolutionIrPathKey
 import com.nikhil.yt.constants.EqLimiterCeilingKey
 import com.nikhil.yt.constants.EqLimiterEnabledKey
 import com.nikhil.yt.constants.EqStereoWidthKey
 import com.nikhil.yt.constants.ParametricEQEnabledKey
+import com.nikhil.yt.R
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
 import com.nikhil.yt.eq.data.FilterType
+import com.nikhil.yt.eq.data.ImpulseResponseLoader
 import com.nikhil.yt.eq.data.ParametricEQBand
 import com.nikhil.yt.eq.data.SavedEQProfile
 import com.nikhil.yt.utils.dataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -26,7 +33,26 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
 import javax.inject.Inject
+
+/**
+ * Metadata surfaced to the Convolution UI about the currently-loaded
+ * impulse response. Read once at import (and again at app start, to
+ * re-validate the persisted copy) — see
+ * [AxionEqViewModel.importImpulseResponse] and the convolution restore
+ * block in [AxionEqViewModel.init]. Deliberately doesn't carry the parsed
+ * sample data itself (that lives only inside the DSP layer, via
+ * [EqualizerService.loadImpulseResponse]) — this is display-only.
+ */
+data class ImpulseResponseInfo(
+    val displayName: String,
+    val durationSeconds: Float,
+    val channels: Int,
+    val sampleRateHz: Int,
+)
 
 @HiltViewModel
 class AxionEqViewModel @Inject constructor(
@@ -98,6 +124,28 @@ class AxionEqViewModel @Inject constructor(
     private val _limiterCeilingDb = MutableStateFlow(-0.3f)
     val limiterCeilingDb = _limiterCeilingDb.asStateFlow()
 
+    // Convolution (impulse-response) tone shaping — the UI-facing half of
+    // the engine built in the previous session. The DSP itself
+    // (EqualizerService.loadImpulseResponse/setConvolutionEnabled) already
+    // existed; nothing here duplicates it, this just drives it from a
+    // picked file and remembers the result. currentIrFile is the
+    // app-private copy backing whatever's in _impulseResponseInfo — kept
+    // as a plain var (not state) since the UI only needs to know *that*
+    // something is loaded and its metadata, not the File itself.
+    private var currentIrFile: File? = null
+
+    private val _convolutionEnabled = MutableStateFlow(false)
+    val convolutionEnabled = _convolutionEnabled.asStateFlow()
+
+    private val _impulseResponseInfo = MutableStateFlow<ImpulseResponseInfo?>(null)
+    val impulseResponseInfo = _impulseResponseInfo.asStateFlow()
+
+    private val _convolutionImporting = MutableStateFlow(false)
+    val convolutionImporting = _convolutionImporting.asStateFlow()
+
+    private val _convolutionImportError = MutableStateFlow<String?>(null)
+    val convolutionImportError = _convolutionImportError.asStateFlow()
+
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
         profiles.filter { it.isCustom && it.id != "echo_tuning" }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -123,6 +171,36 @@ class AxionEqViewModel @Inject constructor(
             equalizerService.setBassBoost(_bassBoostDb.value.toDouble())
             equalizerService.setStereoWidth(_stereoWidth.value.toDouble())
             equalizerService.setLimiter(_limiterEnabled.value, _limiterCeilingDb.value.toDouble())
+        }
+        // Restore a previously-imported impulse response, off the main
+        // thread since it means re-reading and re-parsing a WAV file (IR
+        // files are small, per ImpulseResponseLoader's own doc, but still
+        // more work than a prefs read). Re-parsing rather than trusting
+        // the persisted metadata verifies the copy is still valid — if
+        // app storage was cleared externally or the file's gone, this
+        // just leaves convolution unloaded instead of claiming a file
+        // that no longer works.
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefsSnapshot = context.dataStore.data.first()
+            val irPath = prefsSnapshot[EqConvolutionIrPathKey] ?: return@launch
+            val irName = prefsSnapshot[EqConvolutionIrNameKey] ?: irPath.substringAfterLast('/')
+            val persistedEnabled = prefsSnapshot[EqConvolutionEnabledKey] ?: false
+            val file = File(irPath)
+            if (!file.exists()) return@launch
+            val ir = runCatching {
+                FileInputStream(file).use { ImpulseResponseLoader.load(it, targetSampleRate = 48000) }
+            }.getOrNull() ?: return@launch
+
+            currentIrFile = file
+            _impulseResponseInfo.value = ImpulseResponseInfo(
+                displayName = irName,
+                durationSeconds = ir.left.size.toFloat() / ir.sampleRate,
+                channels = if (ir.right != null) 2 else 1,
+                sampleRateHz = ir.sampleRate,
+            )
+            _convolutionEnabled.value = persistedEnabled
+            equalizerService.loadImpulseResponse(file)
+            equalizerService.setConvolutionEnabled(persistedEnabled)
         }
         if (_enabled.value) {
             applyToService()
@@ -175,6 +253,92 @@ class AxionEqViewModel @Inject constructor(
             context.dataStore.edit { it[EqLimiterCeilingKey] = db }
         }
         equalizerService.setLimiter(_limiterEnabled.value, db.toDouble())
+    }
+
+    /**
+     * Imports a picked impulse-response file: copies it out of the
+     * (possibly permission-revocable, stream-only) [uri] into app-private
+     * storage — the same import-time-copy pattern Wavelet/Neutron use —
+     * then validates it's actually a readable WAV before touching any
+     * state, so a bad file surfaces an error instead of silently
+     * "loading" something the DSP layer will just fail on later. On
+     * success, replaces any previously-imported IR and enables
+     * convolution immediately, matching how loading a correction curve
+     * behaves in those apps.
+     */
+    fun importImpulseResponse(uri: Uri, displayName: String) {
+        _convolutionImportError.value = null
+        _convolutionImporting.value = true
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(context.filesDir, "impulse_responses").apply { mkdirs() }
+                    val dest = File(dir, "ir_${System.currentTimeMillis()}.wav")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw java.io.IOException("Could not open the selected file")
+
+                    // targetSampleRate here only affects the resample step,
+                    // not validation or the metadata read back below — the
+                    // real device rate is applied again when
+                    // EqualizerService hands the file to the DSP layer.
+                    val ir = FileInputStream(dest).use {
+                        ImpulseResponseLoader.load(it, targetSampleRate = 48000)
+                    }
+                    dest to ir
+                }
+            }
+
+            result.onSuccess { (file, ir) ->
+                // Now that the new IR has validated, drop the old copy —
+                // otherwise app storage accumulates one .wav per import.
+                currentIrFile?.takeIf { it.exists() && it != file }?.delete()
+                currentIrFile = file
+                _impulseResponseInfo.value = ImpulseResponseInfo(
+                    displayName = displayName,
+                    durationSeconds = ir.left.size.toFloat() / ir.sampleRate,
+                    channels = if (ir.right != null) 2 else 1,
+                    sampleRateHz = ir.sampleRate,
+                )
+                _convolutionEnabled.value = true
+                context.dataStore.edit {
+                    it[EqConvolutionIrPathKey] = file.absolutePath
+                    it[EqConvolutionIrNameKey] = displayName
+                    it[EqConvolutionEnabledKey] = true
+                }
+                equalizerService.loadImpulseResponse(file)
+                equalizerService.setConvolutionEnabled(true)
+            }
+            result.onFailure { e ->
+                _convolutionImportError.value = e.message?.takeIf { it.isNotBlank() }
+                    ?: context.getString(R.string.eq_convolution_error_generic)
+            }
+            _convolutionImporting.value = false
+        }
+    }
+
+    fun setConvolutionEnabled(enabled: Boolean) {
+        _convolutionEnabled.value = enabled
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqConvolutionEnabledKey] = enabled }
+        }
+        equalizerService.setConvolutionEnabled(enabled)
+    }
+
+    fun clearImpulseResponse() {
+        currentIrFile?.takeIf { it.exists() }?.delete()
+        currentIrFile = null
+        _impulseResponseInfo.value = null
+        _convolutionEnabled.value = false
+        _convolutionImportError.value = null
+        viewModelScope.launch {
+            context.dataStore.edit {
+                it.remove(EqConvolutionIrPathKey)
+                it.remove(EqConvolutionIrNameKey)
+                it[EqConvolutionEnabledKey] = false
+            }
+        }
+        equalizerService.clearImpulseResponse()
     }
 
     fun setBandQ(index: Int, q: Float) {

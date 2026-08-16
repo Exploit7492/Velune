@@ -795,3 +795,15 @@ val EqBandQPrefix = "eq_band_q_"
 val EqLimiterEnabledKey = booleanPreferencesKey("eq_limiter_enabled")
 val EqLimiterCeilingKey = floatPreferencesKey("eq_limiter_ceiling_db")
 val EqStereoWidthKey = floatPreferencesKey("eq_stereo_width")
+
+// EQ Master tab — convolution-based tone shaping (impulse response
+// correction, see ConvolutionAudioProcessor/EqualizerService). The picked
+// IR is copied into app-private storage at import time rather than kept as
+// a content:// Uri — the same pattern Wavelet/Neutron use, since a
+// scoped-storage Uri's permission can be revoked later and the DSP layer
+// needs a stable file it can reopen on every processor recreation, not a
+// one-shot stream. These keys persist that copy's path plus the original
+// picked file name so the UI survives process death without re-importing.
+val EqConvolutionEnabledKey = booleanPreferencesKey("eq_convolution_enabled")
+val EqConvolutionIrPathKey = stringPreferencesKey("eq_convolution_ir_path")
+val EqConvolutionIrNameKey = stringPreferencesKey("eq_convolution_ir_name")
