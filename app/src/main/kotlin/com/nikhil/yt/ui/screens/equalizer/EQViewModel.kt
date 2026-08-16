@@ -21,6 +21,7 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -46,6 +47,14 @@ class EQViewModel(private val context: Context) : ViewModel() {
 
     init {
         loadProfiles()
+        loadEnabledState()
+    }
+
+    private fun loadEnabledState() {
+        viewModelScope.launch {
+            val persisted = context.dataStore.data.first()[ParametricEQEnabledKey] ?: false
+            _state.update { it.copy(enabled = persisted) }
+        }
     }
 
     fun loadProfiles() {

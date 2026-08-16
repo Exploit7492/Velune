@@ -1,13 +1,16 @@
 package com.nikhil.yt.ui.screens.equalizer.axion
 
 import android.content.Context
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nikhil.yt.constants.ParametricEQEnabledKey
 import com.nikhil.yt.eq.EqualizerService
 import com.nikhil.yt.eq.data.EQProfileRepository
 import com.nikhil.yt.eq.data.FilterType
 import com.nikhil.yt.eq.data.ParametricEQBand
 import com.nikhil.yt.eq.data.SavedEQProfile
+import com.nikhil.yt.utils.dataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +30,13 @@ class AxionEqViewModel @Inject constructor(
 
     private val prefs = context.getSharedPreferences("echo_eq_prefs", Context.MODE_PRIVATE)
 
+    // "Enabled" is shared with the Custom tab's ParametricEqEditor/EQViewModel via the
+    // same ParametricEQEnabledKey DataStore entry — Simple, Advanced, and Custom used
+    // to each track their own independent on/off flag (this one in SharedPreferences,
+    // Custom's in DataStore), so the three tabs could silently disagree about whether
+    // the equalizer was even on, and switching tabs could look like the EQ "stopped
+    // working" even though whichever tab you'd last touched was still applying fine.
+    // One flag now, read/written the same way both places.
     private val _enabled = MutableStateFlow(prefs.getBoolean("enabled", false))
     val enabled = _enabled.asStateFlow()
 
@@ -48,6 +58,15 @@ class AxionEqViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
+        viewModelScope.launch {
+            context.dataStore.data
+                .map { it[ParametricEQEnabledKey] ?: prefs.getBoolean("enabled", false) }
+                .collect { fromDataStore ->
+                    if (fromDataStore != _enabled.value) {
+                        _enabled.value = fromDataStore
+                    }
+                }
+        }
         if (_enabled.value) {
             applyToService()
         }
@@ -56,6 +75,9 @@ class AxionEqViewModel @Inject constructor(
     fun setEnabled(enabled: Boolean) {
         _enabled.value = enabled
         prefs.edit().putBoolean("enabled", enabled).apply()
+        viewModelScope.launch {
+            context.dataStore.edit { it[ParametricEQEnabledKey] = enabled }
+        }
         if (enabled) {
             applyToService()
         } else {
