@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v6)
+# Velune EQ/DSP Handover (v7)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,28 +93,34 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v6), the **real GitHub `main`** was last confirmed
+As of this handover (v7), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-406f514 feat(eq): overlap, ballistics, peak-hold, and frequency labels for the spectrum analyzer
+ee25ce6 fix(ci): restore VeluneLoader import dropped by the lyrics-cache patch (#146)
 ```
 
-That's patch `0014` (spectrum analyzer refinements) plus its
-`HANDOVER.md` update, both already merged. One more patch was built
-after that commit in the v6 session — `0015`, the tempo/pitch engine —
-but **you have no way to know from here whether the user has applied it
-yet.** Check the log after cloning:
+That includes patch `0015` (tempo/pitch engine) merged, plus three more
+commits (`aed244d`, `2adc975`, `ee25ce6`) that landed via normal GitHub PRs
+rather than this session's `git am`-patch workflow — a lyrics-cache bug fix
+and its own follow-up CI fix, unrelated to the EQ/DSP work this handover
+tracks. Don't confuse that PR-number commit style (`(#146)`) with the
+numbered `.patch` file sequence — they're two different, unrelated
+histories that happen to share the same `main` branch.
 
-- If `main` still tops out at `406f514` → `0015` not applied yet. Ask if
+One more patch was built after that commit in the v7 session — `0016`, a
+rotary-knob/spectrum-meter visual restyle (no DSP changes, UI-only) — but
+**you have no way to know from here whether the user has applied it yet.**
+Check the log after cloning:
+
+- If `main` still tops out at `ee25ce6` → `0016` not applied yet. Ask if
   the user still has the file, or regenerate it from §2 below if needed.
-- If `main` already has a commit titled `feat(eq): independent tempo/
-  pitch engine (WSOLA + resampler)` → applied, build on top of that
-  history directly. This file (`HANDOVER.md`) is updated in that same
-  patch, so if that commit landed, this version of the file is already
-  on `main` too.
+- If `main` already has a commit titled `feat(ui): neon restyle for
+  rotary knobs and spectrum meter` → applied, build on top of that
+  history directly. This file is updated in that same patch, so if that
+  commit landed, this version of the file is already on `main` too.
 
-Number your next patch accordingly.
+Number your next patch `0017`.
 
 ## 2. What's been done so far (in order)
 
@@ -450,6 +456,33 @@ low-end device with the analyzer toggled on.
      `EqTempoKey`/`EqPitchSemitonesKey` (`constants/PreferenceKeys.kt`),
      restored in `init{}` the same way balance/bass boost/width/limiter
      already are.
+10. **Rotary knob / spectrum meter neon restyle** (patch `0016`, this
+    session) — UI-only, no DSP/behavior changes, in response to a direct
+    "make the knobs and meter slicker/futuristic, glow that follows
+    rotation" ask:
+    - **`ui/screens/equalizer/axion/RotaryKnob.kt`**: value arc, indicator
+      dot, and a new radial under-glow behind the whole knob are each
+      drawn as multiple layered passes (wide+dim, then narrower+brighter)
+      instead of one flat stroke/dot — the standard fake-glow trick for a
+      `Canvas` with no real blur/bloom pass. Under-glow opacity is tied to
+      the knob's own value, so it visibly brightens as it's turned up
+      (the "light under it that goes with what it's rotating" ask). Value
+      display is now `animateFloatAsState`-driven (spring) so external
+      value changes sweep into place instead of snapping.
+    - **`MasterBusControls` (`AxionEqScreen.kt`)**: knobs now pass
+      explicit, varied `size` values instead of all defaulting to the
+      same 64dp — Preamp 88dp (largest, primary tone control) down to
+      Limiter Ceiling 64dp (smallest, secondary/trim control), Balance
+      68dp, Bass Boost/Width 76dp, Tempo/Pitch 80dp each.
+    - **`SpectrumBarsCanvas` (`AxionEqScreen.kt`)**: bars are now a
+      vertical gradient (dim at baseline, bright at current level)
+      instead of a flat fill; the peak-hold cap gets the same
+      halo-plus-core treatment as the knob's indicator dot instead of a
+      plain line.
+    - Deliberately **not** touched: the rest of the screen's background/
+      panel chrome, the Simple/Advanced tabs, and the parametric band
+      editor. Scoped to exactly what was named (knobs + meter) rather
+      than restyling the whole screen unasked.
 
 ### How the tempo/pitch engine specifically was verified
 
@@ -560,6 +593,18 @@ analyzer (base + refinements) all exist:**
 - **Preset library's licensing status** — see §2's licensing note. Ask
   the user directly if this hasn't come up: is Velune ever going to be
   monetized in a way that conflicts with CC BY-NC-SA 4.0?
+- **Neon restyle (patch `0016`) has never rendered on a screen.** This is
+  pure Compose `Canvas` drawing code, reviewed carefully but not run —
+  the sandbox has no way to render Compose UI at all (no Android SDK, no
+  emulator). Specifically unconfirmed: whether the layered-alpha glow
+  passes actually read as "glowing" at real device pixel density and
+  brightness rather than just muddy, whether the varied knob sizes look
+  intentional or just inconsistent in the actual row layout, whether
+  `animateFloatAsState` on the display value fights visibly with the
+  drag gesture's own immediate feedback, and general legibility of the
+  smaller (64dp) knobs at arm's length. This is a "does it look good"
+  question a JVM harness can't answer at all — genuinely needs eyes on a
+  real screen before trusting it.
 
 **Still-live, not-yet-started options** (offer if asked "what's next"):
 - Tempo/pitch engine (bigger, separate subsystem).

@@ -22,6 +22,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
@@ -402,6 +405,7 @@ private fun MasterBusControls(
                 valueLabel = "%+.1f dB".format(preampDb),
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 88.dp,
             )
             RotaryKnob(
                 value = ((balance + 1f) / 2f).coerceIn(0f, 1f),
@@ -414,6 +418,7 @@ private fun MasterBusControls(
                 },
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 68.dp,
             )
             RotaryKnob(
                 value = (bassBoostDb / 12f).coerceIn(0f, 1f),
@@ -422,6 +427,7 @@ private fun MasterBusControls(
                 valueLabel = "+%.1f dB".format(bassBoostDb),
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 76.dp,
             )
         }
         // Stereo width and limiter — the Neutron-style "mastering" half of
@@ -443,6 +449,7 @@ private fun MasterBusControls(
                 valueLabel = "%.0f%%".format(stereoWidth * 100),
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 76.dp,
             )
             RotaryKnob(
                 value = ((limiterCeilingDb + 12f) / 12f).coerceIn(0f, 1f),
@@ -451,6 +458,7 @@ private fun MasterBusControls(
                 valueLabel = "%.1f dB".format(limiterCeilingDb),
                 enabled = enabled && limiterEnabled,
                 accentColor = accentColor,
+                size = 64.dp,
             )
         }
         Row(
@@ -493,6 +501,7 @@ private fun MasterBusControls(
                 valueLabel = "x%.2f".format(tempoRatio),
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 80.dp,
             )
             RotaryKnob(
                 value = ((pitchSemitones + 12f) / 24f).coerceIn(0f, 1f),
@@ -501,6 +510,7 @@ private fun MasterBusControls(
                 valueLabel = "%+.0f st".format(pitchSemitones),
                 enabled = enabled,
                 accentColor = accentColor,
+                size = 80.dp,
             )
         }
     }
@@ -587,6 +597,12 @@ private fun SpectrumSection(
  * against real audio time by the DSP layer, so redoing any of that here
  * (like the old frame-rate-coupled decay this replaced) would just double
  * up on it and desync from the analyzer's own timing.
+ *
+ * Styled to match the rotary knobs: each bar is a vertical neon gradient
+ * (dim at the baseline, bright at its current level) rather than a flat
+ * fill, and the peak cap gets the same layered-glow treatment as the
+ * knobs' indicator dot, so a hot transient visibly lights up instead of
+ * just leaving a thin line.
  */
 @Composable
 private fun SpectrumBarsCanvas(
@@ -608,24 +624,55 @@ private fun SpectrumBarsCanvas(
             val level = levels[i].coerceIn(0f, 1f)
             val barHeight = size.height * level
             val x = i * (barWidth + gap)
+            val top = size.height - barHeight
+
+            // Vertical neon gradient: dim near the baseline, bright at the
+            // current level — reads as a bar that's "lit" from the level
+            // it's actually at, the same idea as the knobs' under-glow.
             drawRect(
-                color = barColor.copy(alpha = 0.35f + 0.65f * level),
-                topLeft = androidx.compose.ui.geometry.Offset(x, size.height - barHeight),
-                size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        barColor.copy(alpha = 0.9f),
+                        barColor.copy(alpha = 0.35f + 0.4f * level),
+                    ),
+                    startY = top,
+                    endY = size.height,
+                ),
+                topLeft = Offset(x, top),
+                size = Size(barWidth, barHeight),
             )
-            // Peak-hold cap: a thin bright line sitting at the bar's
-            // recent peak, trailing above the bar itself as it releases —
-            // the standard RTA "peak indicator" look (Neutron/Poweramp
-            // both draw this). Only worth drawing once it's visibly above
-            // the bar; right at/below the bar it'd just double-paint the
-            // top pixel.
+            // A faint bright cap right at the bar's own top edge, separate
+            // from the peak-hold line below — makes the live level itself
+            // read as slightly luminous rather than a flat-topped block.
+            drawRect(
+                color = barColor.copy(alpha = 0.6f),
+                topLeft = Offset(x, top),
+                size = Size(barWidth, (1.5.dp.toPx()).coerceAtMost(barHeight)),
+            )
+
+            // Peak-hold cap: a thin bright line at the bar's recent peak,
+            // trailing above the bar as it releases — the standard RTA
+            // "peak indicator" look (Neutron/Poweramp both draw this).
+            // Given a soft halo above/below it so it reads as a small glow
+            // riding the bar rather than a plain ruled line.
             val peak = peaks.getOrElse(i) { level }.coerceIn(0f, 1f)
             if (peak > level + 0.01f) {
                 val peakY = size.height - size.height * peak
+                val capCenter = Offset(x + barWidth / 2f, peakY)
+                drawRect(
+                    color = peakColor.copy(alpha = 0.25f),
+                    topLeft = Offset(x, peakY - peakCapHeight * 2f),
+                    size = Size(barWidth, peakCapHeight * 4f),
+                )
                 drawRect(
                     color = peakColor,
-                    topLeft = androidx.compose.ui.geometry.Offset(x, peakY - peakCapHeight / 2f),
-                    size = androidx.compose.ui.geometry.Size(barWidth, peakCapHeight),
+                    topLeft = Offset(x, peakY - peakCapHeight / 2f),
+                    size = Size(barWidth, peakCapHeight),
+                )
+                drawCircle(
+                    color = peakColor.copy(alpha = 0.5f),
+                    radius = barWidth * 0.7f,
+                    center = capCenter,
                 )
             }
         }
