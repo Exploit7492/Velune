@@ -158,14 +158,31 @@ class EqualizerService @Inject constructor() {
     }
 
     /**
-     * Latest spectrum analysis, [SpectrumAnalyzer.BAR_COUNT] bars each
-     * normalized 0f..1f. Reads from whichever processor is currently
-     * active; in the normal single-player case there's exactly one.
+     * Latest spectrum analysis — ballistics-smoothed bar levels plus their
+     * peak-hold caps, [SpectrumAnalyzer.BAR_COUNT] of each, normalized
+     * 0f..1f. See [SpectrumAnalyzer]'s class doc for what "ballistics-
+     * smoothed" means here (instant attack, rate-limited release) and why
+     * it isn't just a raw per-block magnitude dump. Reads from whichever
+     * processor is currently active; in the normal single-player case
+     * there's exactly one.
      */
     @OptIn(UnstableApi::class)
-    fun spectrumSnapshot(): FloatArray =
+    fun spectrumSnapshot(): com.nikhil.yt.eq.audio.SpectrumSnapshot =
         audioProcessors.firstOrNull()?.spectrumAnalyzer?.snapshot()
-            ?: FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+            ?: com.nikhil.yt.eq.audio.SpectrumSnapshot(
+                FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT),
+                FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+            )
+
+    /**
+     * Bar index closest to [frequencyHz], for the spectrum UI's axis
+     * labels (see [SpectrumAnalyzer.LABEL_FREQUENCIES_HZ] for the "nice"
+     * frequencies it's meant to be called with). -1 if no processor is
+     * configured yet.
+     */
+    @OptIn(UnstableApi::class)
+    fun spectrumBarIndexForLabel(frequencyHz: Double): Int =
+        audioProcessors.firstOrNull()?.spectrumAnalyzer?.barIndexForLabel(frequencyHz) ?: -1
 
     @OptIn(UnstableApi::class)
     fun applyProfile(profile: SavedEQProfile): Result<Unit> {

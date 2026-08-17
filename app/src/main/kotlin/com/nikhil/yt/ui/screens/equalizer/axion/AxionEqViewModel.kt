@@ -150,11 +150,27 @@ class AxionEqViewModel @Inject constructor(
     // the toggles above: this is view-visibility, not a setting, so it
     // resets to off every time the screen opens rather than remembering
     // the user's last choice. See setSpectrumVisible for why polling only
-    // runs while something's actually observing it.
-    private val _spectrumBars = MutableStateFlow(
-        FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+    // runs while something's actually observing it. Levels+peaks come
+    // together as one SpectrumSnapshot (see EqualizerService/
+    // SpectrumAnalyzer) so a single poll always has a matching pair, never
+    // a bar level from one block paired with a peak from another.
+    private val _spectrumSnapshot = MutableStateFlow(
+        com.nikhil.yt.eq.audio.SpectrumSnapshot(
+            FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT),
+            FloatArray(com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT)
+        )
     )
-    val spectrumBars = _spectrumBars.asStateFlow()
+    val spectrumSnapshot = _spectrumSnapshot.asStateFlow()
+
+    // Axis labels ("20", "100", "1k", ...) paired with the bar index each
+    // one sits above — computed once when the analyzer first becomes
+    // visible (needs a configured sample rate, which a freshly-opened EQ
+    // screen may not have yet the very first frame) rather than every
+    // poll, since the mapping only changes if the track's sample rate
+    // changes mid-session.
+    private val _spectrumLabels = MutableStateFlow<List<Pair<String, Int>>>(emptyList())
+    val spectrumLabels = _spectrumLabels.asStateFlow()
+
     private var spectrumPollJob: kotlinx.coroutines.Job? = null
 
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
@@ -493,15 +509,40 @@ class AxionEqViewModel @Inject constructor(
         equalizerService.setSpectrumAnalyzerEnabled(visible)
         if (!visible) {
             spectrumPollJob = null
+            _spectrumLabels.value = emptyList()
             return
         }
         spectrumPollJob = viewModelScope.launch {
             while (true) {
-                _spectrumBars.value = equalizerService.spectrumSnapshot()
+                _spectrumSnapshot.value = equalizerService.spectrumSnapshot()
+                // Cheap to re-check every poll (a handful of lookups) and
+                // self-correcting: the very first poll after opening the
+                // screen may land before the audio processor has a
+                // sample rate yet (barIndexForLabel returns -1 for all of
+                // them until then), so keep trying until it resolves
+                // instead of only trying once and leaving the axis blank
+                // for the rest of the session.
+                if (_spectrumLabels.value.isEmpty()) {
+                    val labels = com.nikhil.yt.eq.audio.SpectrumAnalyzer.LABEL_FREQUENCIES_HZ
+                        .map { freq -> freq to equalizerService.spectrumBarIndexForLabel(freq) }
+                        .filter { (_, bar) -> bar >= 0 }
+                        .map { (freq, bar) -> formatSpectrumLabel(freq) to bar }
+                    if (labels.isNotEmpty()) {
+                        _spectrumLabels.value = labels
+                    }
+                }
                 kotlinx.coroutines.delay(50)
             }
         }
     }
+
+    private fun formatSpectrumLabel(hz: Double): String =
+        if (hz >= 1000.0) {
+            val k = hz / 1000.0
+            if (k == k.toInt().toDouble()) "${k.toInt()}k" else "${k}k"
+        } else {
+            hz.toInt().toString()
+        }
 
     fun clearImpulseResponse() {
         currentIrFile?.takeIf { it.exists() }?.delete()

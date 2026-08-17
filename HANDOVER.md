@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v4)
+# Velune EQ/DSP Handover (v5)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,24 +93,26 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v4), the **real GitHub `main`** was last confirmed
+As of this handover (v5), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-27ba1d3 docs: add HANDOVER.md to the repo itself
+0c49bc9 feat(eq): add FFT spectrum analyzer to the Master tab
 ```
 
-That's patch `0012` (preset IR library) plus this file, both already
-merged. One more patch was built after that commit in the v4 session —
-`0013`, the spectrum analyzer — but **you have no way to know from here
-whether the user has applied it yet.** Check the log after cloning:
+That's patch `0013` (spectrum analyzer v1) plus its `HANDOVER.md` update,
+both already merged. One more patch was built after that commit in the v5
+session — `0014`, spectrum analyzer refinements — but **you have no way
+to know from here whether the user has applied it yet.** Check the log
+after cloning:
 
-- If `main` still tops out at `27ba1d3` → `0013` not applied yet. Ask if
+- If `main` still tops out at `0c49bc9` → `0014` not applied yet. Ask if
   the user still has the file, or regenerate it from §2 below if needed.
-- If `main` already has a commit titled `feat(eq): add FFT spectrum
-  analyzer to the Master tab` → applied, build on top of that history
-  directly. This file (`HANDOVER.md`) is updated in that same patch, so if
-  that commit landed, this version of the file is already on `main` too.
+- If `main` already has a commit titled `feat(eq): overlap, ballistics,
+  peak-hold, and frequency labels for the spectrum analyzer` → applied,
+  build on top of that history directly. This file (`HANDOVER.md`) is
+  updated in that same patch, so if that commit landed, this version of
+  the file is already on `main` too.
 
 Number your next patch accordingly.
 
@@ -178,8 +180,8 @@ All of this lives under `app/src/main/kotlin/com/nikhil/yt/eq/` and
      confirming Velune's monetization status before this ships**, and if
      it's ever monetized, this specific integration needs to be swapped
      for a permissively-licensed source instead.
-7. **Spectrum analyzer** (patch `0013`, this session, pending user apply)
-   — closes the "spectrum analyzer feeding the EQ UI" item from §3:
+7. **Spectrum analyzer** (patch `0013`, merged) — closes the "spectrum
+   analyzer feeding the EQ UI" item from §3:
    - **`eq/audio/SpectrumAnalyzer.kt`** (new): reuses the existing `Fft`
      class (built for the convolution engine) rather than a second FFT
      implementation. 1024-sample non-overlapping blocks, Hann-windowed,
@@ -234,6 +236,109 @@ composable's actual on-device rendering, frame pacing, or whether 20fps
 polling feels smooth — same "nothing touched a real phone yet" caveat as
 everything else in this file, see below.
 
+8. **Spectrum analyzer refinements** (patch `0014`, this session, pending
+   user apply) — the user explicitly asked for "pro level, like Neutron
+   and Poweramp." Doing that properly turned out to require more than the
+   three items originally flagged in §3/§4 (overlap, peak-hold, frequency
+   labels) — a block-aligned analyzer with no ballistics wouldn't actually
+   look professional no matter how you labeled its axis, so bar smoothing
+   (ballistics) came along as a necessary fourth piece:
+   - **`eq/audio/SpectrumAnalyzer.kt` — restructured**:
+     - **75% overlapping analysis** (hop = FFT_SIZE/4 = 256 samples,
+       ~5.8ms @44.1kHz, ~172 analyses/sec) instead of one FFT per full
+       1024-sample block. `accept()` now just writes into a circular
+       history buffer and bumps a counter — cheap, no windowing on the
+       per-sample hot path; windowing + FFT only happen once per hop, in
+       `analyzeBlock()`, over the last FFT_SIZE samples read out of the
+       circular buffer. This is what actually produces continuous-looking
+       motion rather than a visible ~23ms step, and catches a transient
+       that would've landed on an old block boundary.
+     - **Ballistic bar smoothing** — instant attack (a rising level shows
+       immediately), rate-limited release (`BAR_RELEASE_DB_PER_SEC = 24.0`
+       dB/sec). Without this, 172 analyses/sec of raw magnitude looks like
+       static, not a musical display — every real RTA applies some form
+       of this, it's not optional polish.
+     - **Peak-hold caps** — per-bar peak latches on a new high, holds flat
+       for `PEAK_HOLD_MS = 1200.0`ms, then decays at its own slower
+       `PEAK_DECAY_DB_PER_SEC = 10.0` dB/sec, trailing visibly above the
+       bar. Standard RTA feature (see Neutron/Poweramp's own spectrum
+       views).
+     - Both ballistics are driven by **elapsed audio-domain time**
+       (`hopSize/sampleRate` seconds per block) computed once in
+       `configure()`, not wall-clock or UI frame timing — so the decay
+       rate is exact regardless of how often (or unevenly) the UI happens
+       to poll `snapshot()`.
+     - **`snapshot()` now returns `SpectrumSnapshot`** (new data class:
+       `levels` + `peaks`, both `FloatArray`), not a bare `FloatArray` —
+       published as one atomic pair so a reader never gets a level from
+       one block matched with a peak from another.
+     - **Frequency labeling**: `barCenterHz` computed per bar in
+       `configure()` (geometric mean of its edge frequencies),
+       `barIndexForLabel(hz)` resolves a frequency to the nearest bar by
+       log-distance, `LABEL_FREQUENCIES_HZ` is the "nice" tick set
+       (20/50/100/200/500/1k/2k/5k/10k/20k) a UI is expected to call it
+       with. `isConfigured()` added so a caller can tell -1 (not
+       configured) apart from a legitimate lookup.
+     - **A real bug caught by the JVM harness, not by inspection**:
+       `configure()` reset all the internal ballistics arrays on a sample-
+       rate change but never re-published to the `AtomicReference` —
+       `snapshot()` kept returning the *stale pre-reconfigure* result
+       until the next analysis block completed. Invisible in a quick read
+       of the code; the reconfigure test in the harness caught it
+       immediately (`peaks cleared by reconfigure` failed) because it
+       calls `snapshot()` right after `configure()`, before any new
+       samples arrive. Fixed by publishing a cleared snapshot inside
+       `configure()` itself, same as `reset()` already did.
+   - **`EqualizerService.kt`**: `spectrumSnapshot()` now returns
+     `SpectrumSnapshot`; added `spectrumBarIndexForLabel(hz)` forwarding
+     to the active processor's analyzer.
+   - **`AxionEqViewModel.kt`**: `spectrumBars: StateFlow<FloatArray>`
+     replaced with `spectrumSnapshot: StateFlow<SpectrumSnapshot>`. New
+     `spectrumLabels: StateFlow<List<Pair<String, Int>>>` (label text to
+     bar index), computed lazily inside the existing poll loop — retried
+     every poll until it resolves, since the very first poll after
+     opening the screen can land before the audio processor has a sample
+     rate yet — and cleared when the analyzer is hidden so a sample-rate
+     change while hidden doesn't leave stale bar indices cached.
+   - **`AxionEqScreen.kt`**: `SpectrumBarsCanvas` now draws both the
+     smoothed bar and a peak-hold cap (a thin bright line above the bar,
+     only drawn once it's visibly separated from the bar itself) —
+     no smoothing logic of its own anymore, since ballistics now live
+     correctly in the DSP layer against real audio time; the old
+     per-recomposition decay hack this replaced was frame-rate-dependent
+     (`peaks[i] = max(bars[i], peaks[i] - 0.04f)` — literally wrong,
+     would've decayed at different real-world speeds on different
+     devices/frame rates) and is gone entirely. New `SpectrumLabelRow`
+     renders the axis tick text under an equal-weight `Row` of cells —
+     approximates the canvas's own bar-gap geometry rather than sharing
+     exact pixel math with it, which is a fine trade-off for label
+     alignment (real graphic EQs do this loosely too).
+
+### How the spectrum analyzer refinements were verified
+
+Same JVM-harness method as `SpectrumAnalyzer` v1 (§ above), expanded to
+cover what's new: confirmed one hop's worth of samples (not a full block)
+is enough to trigger a new analysis, proving overlap actually engages;
+confirmed the 1kHz-tone-lands-in-the-right-bar check still holds against
+the now-ballistics-smoothed `levels`; confirmed attack is effectively
+instant (a strong bar shows after just one hop from cold); confirmed a
+peak-hold cap stays flat through a handful of silent hops (well inside the
+1200ms hold window) while the bar level itself has already started
+falling; confirmed the peak visibly decays once enough silent hops blow
+past the hold window, and that the bar itself decays all the way back to
+near-silence at its slower, separate rate; confirmed `barIndexForLabel`
+is monotonic across low/mid/high test frequencies and resolves every
+`LABEL_FREQUENCIES_HZ` entry to a valid bar; confirmed `isConfigured()`
+flips correctly; confirmed `reset()` clears both `levels` and `peaks`;
+confirmed reconfiguring to a different sample rate mid-session both
+re-analyzes correctly *and* (after the bug fix above) immediately
+publishes a cleared snapshot rather than a stale one. 30 checks, all
+passed after the one real bug fix above. **Not verified, same as v1**:
+the Canvas's actual on-device rendering, frame pacing, whether the peak-
+hold cap and label row are legible/well-positioned on a real screen, and
+whether ~172 analyses/sec (up from ~43) has any noticeable CPU cost on a
+low-end device with the analyzer toggled on.
+
 ### How the DSP/logic was verified (and how you should verify yours)
 
 Same approach every session: `apt-get install -y kotlin`, extract the
@@ -278,17 +383,19 @@ explicitly-out-of-scope list from v1/v2: tempo/pitch, bit-perfect/USB-DAC
 output, decoder-level gapless, "a decade of tuning."
 
 **Still open, now that convolution + its preset library + the spectrum
-analyzer all exist:**
-- **Never tested on-device**, at all, across four patches now (`0010`,
-  `0011`, `0012`, `0013`): the ~23ms convolution latency's interaction with
-  `flush()` on seek/track-change, actual CPU cost for realistic IR
-  lengths, whether the SAF picker actually works across different file
-  managers/providers, whether the preset browser sheet renders/scrolls
-  sensibly, whether downloads actually complete reliably on a real
-  network, and now also whether the spectrum analyzer's Canvas actually
-  renders smoothly at the intended 20fps poll rate and whether the extra
-  per-sample analyzer cost is noticeable on a low-end device while it's
-  toggled on. This is arguably the single biggest gap left in the EQ
+analyzer (base + refinements) all exist:**
+- **Never tested on-device**, at all, across five patches now (`0010`,
+  `0011`, `0012`, `0013`, `0014`): the ~23ms convolution latency's
+  interaction with `flush()` on seek/track-change, actual CPU cost for
+  realistic IR lengths, whether the SAF picker actually works across
+  different file managers/providers, whether the preset browser sheet
+  renders/scrolls sensibly, whether downloads actually complete reliably
+  on a real network, whether the spectrum analyzer's Canvas actually
+  renders smoothly at the intended 20fps poll rate, whether the peak-hold
+  cap and frequency-label row are legible and well-positioned on a real
+  screen, and whether ~172 analyses/sec (up from ~43 in the non-
+  overlapping v1) has any noticeable CPU cost on a low-end device while
+  it's toggled on. This is arguably the single biggest gap left in the EQ
   feature set as a whole — a lot has been built and JVM-verified, nothing
   has been touched on a real phone.
 - **Preset library's licensing status** — see §2's licensing note. Ask
@@ -297,11 +404,6 @@ analyzer all exist:**
 
 **Still-live, not-yet-started options** (offer if asked "what's next"):
 - Tempo/pitch engine (bigger, separate subsystem).
-- Spectrum analyzer refinements, if the user wants them after seeing it
-  on-device: overlap between FFT blocks (currently non-overlapping, so
-  there's a small chance of missing a very short transient between
-  blocks), a peak-hold line instead of/alongside the decay fill, or a
-  frequency-axis label row under the bars.
 
 ## 4. Suggested next step
 
@@ -309,12 +411,9 @@ Ask the user directly, `ask_user_input_v0` style:
 
 1. **On-device verification pass** — nothing convolution- or spectrum-
    related has ever run on an actual phone; this is arguably overdue
-   given how much has been built on top of it across four patches.
+   given how much has been built on top of it across five patches.
 2. **Tempo/pitch engine** — separate, larger DSP subsystem.
-3. **Spectrum analyzer refinements** — overlap, peak-hold, frequency
-   labels (see §3) — only worth it after an on-device look at what's
-   there already.
-4. Something else the user names.
+3. Something else the user names.
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered

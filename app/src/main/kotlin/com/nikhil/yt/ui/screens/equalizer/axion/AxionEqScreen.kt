@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nikhil.yt.R
@@ -46,7 +47,6 @@ import com.nikhil.yt.ui.screens.equalizer.EQViewModelFactory
 import com.nikhil.yt.ui.screens.equalizer.ParametricEqEditor
 import com.nikhil.yt.ui.utils.backToMain
 import kotlin.math.abs
-import kotlin.math.max
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
 /**
@@ -97,7 +97,8 @@ fun AxionEqScreen(
     val presetBrowserError by viewModel.presetBrowserError.collectAsState()
     val presetDownloadingName by viewModel.presetDownloadingName.collectAsState()
     var showPresetSheet by remember { mutableStateOf(false) }
-    val spectrumBars by viewModel.spectrumBars.collectAsState()
+    val spectrumSnapshot by viewModel.spectrumSnapshot.collectAsState()
+    val spectrumLabels by viewModel.spectrumLabels.collectAsState()
     var spectrumShown by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -262,7 +263,8 @@ fun AxionEqScreen(
                             SpectrumSection(
                                 enabled = enabled,
                                 shown = spectrumShown,
-                                bars = spectrumBars,
+                                snapshot = spectrumSnapshot,
+                                labels = spectrumLabels,
                                 onShownChange = { spectrumShown = it },
                             )
                             MasterBusControls(
@@ -474,14 +476,17 @@ private fun MasterBusControls(
  * Unverified beyond compiling, same caveat as the rest of this screen (see
  * HANDOVER.md §3): the DSP behind it (SpectrumAnalyzer) was checked with a
  * JVM harness — windowing, dB scaling, log-frequency binning, a real 1kHz
- * tone landing in the expected bar — but this Canvas's actual on-device
- * rendering/frame pacing has not been.
+ * tone landing in the expected bar, ballistics (instant attack, timed
+ * release) and peak-hold decaying on schedule against simulated elapsed
+ * audio time — but this Canvas's actual on-device rendering/frame pacing
+ * has not been.
  */
 @Composable
 private fun SpectrumSection(
     enabled: Boolean,
     shown: Boolean,
-    bars: FloatArray,
+    snapshot: com.nikhil.yt.eq.audio.SpectrumSnapshot,
+    labels: List<Pair<String, Int>>,
     onShownChange: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -511,47 +516,54 @@ private fun SpectrumSection(
             )
         }
         AnimatedVisibility(visible = shown && enabled) {
-            SpectrumBarsCanvas(
-                bars = bars,
-                barColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .height(120.dp),
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SpectrumBarsCanvas(
+                    snapshot = snapshot,
+                    barColor = MaterialTheme.colorScheme.primary,
+                    peakColor = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .height(120.dp),
+                )
+                SpectrumLabelRow(
+                    labels = labels,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                )
+            }
         }
     }
 }
 
 /**
- * Draws [bars] (each already normalized 0f..1f by SpectrumAnalyzer) as a
- * simple vertical bar graph with a lightweight peak-decay on top of the raw
- * values — the DSP layer publishes a fresh block every ~23ms with no
- * smoothing of its own (see SpectrumAnalyzer's class doc for why that
- * split), so the decay purely a presentation concern that belongs here, not
- * in the analyzer.
+ * Draws the analyzer's bar levels (already ballistics-smoothed by
+ * [com.nikhil.yt.eq.audio.SpectrumAnalyzer] — instant attack, timed
+ * release) plus a peak-hold cap per bar. This composable does no
+ * smoothing of its own: both curves it draws are already correctly paced
+ * against real audio time by the DSP layer, so redoing any of that here
+ * (like the old frame-rate-coupled decay this replaced) would just double
+ * up on it and desync from the analyzer's own timing.
  */
 @Composable
 private fun SpectrumBarsCanvas(
-    bars: FloatArray,
+    snapshot: com.nikhil.yt.eq.audio.SpectrumSnapshot,
     barColor: Color,
+    peakColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    // One peak-hold value per bar, decayed a little every recomposition so
-    // it falls back toward the current level instead of snapping straight
-    // down — cheap enough not to need its own animation framework.
-    val peaks = remember(bars.size) { FloatArray(bars.size) }
-    for (i in bars.indices) {
-        peaks[i] = max(bars[i], peaks[i] - 0.04f)
-    }
     androidx.compose.foundation.Canvas(modifier = modifier) {
-        if (peaks.isEmpty()) return@Canvas
-        val barCount = peaks.size
+        val levels = snapshot.levels
+        val peaks = snapshot.peaks
+        if (levels.isEmpty()) return@Canvas
+        val barCount = levels.size
         val gap = 3.dp.toPx()
         val totalGap = gap * (barCount - 1)
         val barWidth = ((size.width - totalGap) / barCount).coerceAtLeast(1f)
+        val peakCapHeight = 2.dp.toPx()
         for (i in 0 until barCount) {
-            val level = peaks[i].coerceIn(0f, 1f)
+            val level = levels[i].coerceIn(0f, 1f)
             val barHeight = size.height * level
             val x = i * (barWidth + gap)
             drawRect(
@@ -559,6 +571,55 @@ private fun SpectrumBarsCanvas(
                 topLeft = androidx.compose.ui.geometry.Offset(x, size.height - barHeight),
                 size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
             )
+            // Peak-hold cap: a thin bright line sitting at the bar's
+            // recent peak, trailing above the bar itself as it releases —
+            // the standard RTA "peak indicator" look (Neutron/Poweramp
+            // both draw this). Only worth drawing once it's visibly above
+            // the bar; right at/below the bar it'd just double-paint the
+            // top pixel.
+            val peak = peaks.getOrElse(i) { level }.coerceIn(0f, 1f)
+            if (peak > level + 0.01f) {
+                val peakY = size.height - size.height * peak
+                drawRect(
+                    color = peakColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(x, peakY - peakCapHeight / 2f),
+                    size = androidx.compose.ui.geometry.Size(barWidth, peakCapHeight),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Axis labels ("20", "100", "1k", ...) under the bars they correspond to
+ * — the frequencies in [com.nikhil.yt.eq.audio.SpectrumAnalyzer.LABEL_FREQUENCIES_HZ],
+ * each already resolved to a bar index by
+ * [AxionEqViewModel.setSpectrumVisible]. Approximates the bar canvas's own
+ * geometry with equal-weight cells rather than sharing exact pixel math
+ * with it — close enough for axis labels (same loose alignment
+ * Poweramp's own graphic-EQ band labels use), and avoids a second Layout
+ * pass just to line up text under a bar-gap canvas exactly.
+ */
+@Composable
+private fun SpectrumLabelRow(
+    labels: List<Pair<String, Int>>,
+    modifier: Modifier = Modifier,
+) {
+    if (labels.isEmpty()) return
+    val labelByBar = remember(labels) { labels.toMap() }
+    Row(modifier = modifier) {
+        for (bar in 0 until com.nikhil.yt.eq.audio.SpectrumAnalyzer.BAR_COUNT) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                val text = labelByBar.entries.firstOrNull { it.value == bar }?.key
+                if (text != null) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
