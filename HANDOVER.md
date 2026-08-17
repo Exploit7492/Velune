@@ -616,24 +616,71 @@ or download reliability on-device (flaky connection mid-download, etc —
       behavior, no math to unit-test in isolation the way the DSP classes
       above are). Worth an on-device pass specifically watching the video
       toggle for a few minutes on a track long enough to accumulate drift.
-    - **Still outstanding from the same conversation, not yet started**:
-      the user's full ask this session was five pieces — this video fix
-      was #1. Still open: (2) tempo/pitch reportedly "not working" (may be
-      a real regression in patch `0015`'s engine, per that patch's own
-      "never tested on-device" flag above — investigate before assuming
-      it's the same kind of fix as this one); (3) EQ screen restructure —
-      collapse Simple/Advanced/Master three-tab layout down to just
-      Simple+Master (fold Advanced's contents into Master), with a single
-      persistent on/off toggle for the whole DSP chain that both tabs
-      share and that immediately audibly affects whatever's currently
-      playing, local or streaming; (4) spectrum analyzer visibility —
-      user says it "isn't showing" a virtualizer/peak-frequency display;
-      spectrum analyzer + peak-hold already exist per items 7–8 above, so
-      this needs investigating as a possible regression or a UI-visibility
-      bug, not necessarily a from-scratch build; (5) flanger effect wired
-      into the Simple tab, with a preset-selector button at the top of
-      Simple. None of these four have been scoped or started yet.
+    - **Still outstanding from the same conversation**: the user's full ask
+      this session was five pieces — this video fix was #1, tempo/pitch was
+      #2, done as patch `0018` (see item 12 below). Still open: (3) EQ
+      screen restructure — collapse Simple/Advanced/Master three-tab layout
+      down to just Simple+Master (fold Advanced's contents into Master),
+      with a single persistent on/off toggle for the whole DSP chain that
+      both tabs share and that immediately audibly affects whatever's
+      currently playing, local or streaming; (4) spectrum analyzer
+      visibility — user says it "isn't showing" a virtualizer/peak-frequency
+      display; spectrum analyzer + peak-hold already exist per items 7–8
+      above, so this needs investigating as a possible regression or a
+      UI-visibility bug, not necessarily a from-scratch build; (5) flanger
+      effect wired into the Simple tab, with a preset-selector button at the
+      top of Simple. None of these three have been scoped or started yet.
 
+12. **Tempo/pitch changes silently did nothing on the currently playing
+    track** (patch `0018`, this session) — `eq/audio/TempoPitchAudioProcessor.kt`.
+    Root cause confirmed against the real Media3 source
+    (`androidx/media`, `AudioProcessingPipeline.java`, fetched fresh from
+    `raw.githubusercontent.com` and read directly — not guessed from
+    memory) rather than assumed from the class's own doc comments:
+    `AudioProcessingPipeline` only re-checks every processor's
+    `isActive()` inside `flush()`, which only runs after a `configure()`
+    (a format change — i.e. a new track). `TempoPitchAudioProcessor.isActive()`
+    used to be `isActiveFormat && (tempoRatio or pitchRatio deviates from
+    1.0/0)` — looked like a reasonable "skip processing when there's
+    nothing to do" optimization, but since every track *starts* at
+    tempo=1.0/pitch=0, the processor was excluded from the active chain
+    at that first flush. Opening the Tempo & Pitch dialog and moving a
+    slider correctly updated the ratios via `EqualizerService`'s normal
+    pending-state path (this part was never broken), but the pipeline
+    was never routing audio through the processor for the track already
+    playing — nothing audible happened until the *next* track's own
+    flush, by which point the already-nondefault ratio made `isActive()`
+    true. This is why it likely looked like it "sometimes" worked
+    depending on when in a session it was tried.
+    - **Fix**: `isActive()` now returns `true` whenever the format is
+      supported, unconditionally — the processor is in the chain from
+      the very first flush of every track, so a later tempo/pitch change
+      always takes effect immediately, not just on the next track. Small
+      constant CPU cost even when tempo/pitch is never touched by the
+      user; already justified by patch `0015`'s own verification that
+      tempo=1.0/pitch=0 reproduces near-identity to a bypass, so there's
+      no audible quality cost, just CPU.
+    - Removed the now-unused `kotlin.math.abs` import that was only used
+      by the old threshold check.
+    - **Why the old Sonic-backed dialog never had this bug**: it drove
+      `player.playbackParameters =`, which Media3 specifically forces a
+      sink reconfigure for on every call. Replacing Sonic with this
+      processor (required for independent tempo/pitch — see item 9
+      above) meant bypassing that mechanism entirely, which is what
+      silently reintroduced this class of bug. Worth remembering for any
+      *other* control that might someday move off `playbackParameters`.
+    - **Not verified on-device** — same caveat as the rest of the
+      tempo/pitch engine (item 9): confirmed by reading Media3's real
+      source and reasoning through the exact call sequence, not by
+      running it. The theory is about as confirmable as it gets without
+      a real device (it's not app-specific math a JVM harness could
+      re-derive — it's "does the framework actually behave the way its
+      own source says it does at runtime"), but still flag it as
+      unverified rather than certain. If tempo/pitch *still* doesn't
+      audibly change mid-track after this patch, the next thing to check
+      is whether `DefaultAudioSink` caches `AudioProcessingPipeline`
+      instances across `flush()` calls in some path that isn't the one
+      read here, since only one code path was traced.
 
 
 Neutron/Poweramp/UAPP/Wavelet feature parity, with the same

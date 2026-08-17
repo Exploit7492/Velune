@@ -6,7 +6,6 @@ import androidx.media3.common.util.UnstableApi
 import timber.log.Timber
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.abs
 import kotlin.math.pow
 
 /**
@@ -100,8 +99,31 @@ class TempoPitchAudioProcessor : AudioProcessor {
         return inputAudioFormat
     }
 
-    override fun isActive(): Boolean =
-        isActiveFormat && (abs(tempoRatio - 1.0) >= 0.001 || abs(pitchRatio - 1.0) >= 0.001)
+    /**
+     * Was `isActiveFormat && (ratio deviates from 1.0)` — looked like a
+     * reasonable "skip processing when there's nothing to do" optimization,
+     * but it broke the feature entirely. Media3's `AudioProcessingPipeline`
+     * only re-checks `isActive()` on a `flush()` following a `configure()`
+     * (i.e. a format change / new track) — confirmed against the real
+     * source (androidx/media, `AudioProcessingPipeline#flush`), not assumed.
+     * A track starts at tempo=1.0/pitch=0, so this processor was excluded
+     * from the active chain at that flush; calling setTempo/setPitchSemitones
+     * afterward updated the ratios, but the pipeline was never routing audio
+     * through this processor for the *current* track anymore, so nothing
+     * audible happened until the next track's own flush picked up the
+     * already-changed values. That's the "tempo/pitch not working" bug —
+     * this now stays active whenever the format is supported, so it's in
+     * the chain from the very first flush and later changes take effect
+     * immediately on whatever's currently playing. The old Sonic-backed
+     * dialog didn't have this problem because it went through
+     * `player.playbackParameters =`, which Media3 specifically forces a
+     * sink reconfigure for — bypassing that (required, since Sonic is
+     * gone) lost that automatic trigger, so this compensates for it
+     * instead. The cost is a small constant CPU overhead even when
+     * untouched, already justified: patch 0015's own verification confirmed
+     * tempo=1.0 reproduces near-identity to a bypass.
+     */
+    override fun isActive(): Boolean = isActiveFormat
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (!inputBuffer.hasRemaining()) return
