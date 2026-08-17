@@ -568,7 +568,73 @@ but unconfirmed), on-device MIME-type behavior for real file providers,
 or download reliability on-device (flaky connection mid-download, etc —
 `PresetIrRepository.download` doesn't currently retry or resume).
 
-## 3. The end goal — what we're actually trying to reach
+11. **Muted slave video / master audio: soft-sync speed nudge instead of
+    hard-seek resync** (patch `0017`, this session) — `ui/player/Player.kt`,
+    not the EQ/DSP package this handover otherwise tracks, but flagged here
+    since it's the same "professional feel" bar the rest of this doc holds
+    to. User reported the video toggle "keeps hitching / not smooth" and
+    correctly self-diagnosed the cause before asking for a fix: the
+    pre-existing master/slave video sync (silent second `ExoPlayer`,
+    `volume = 0f` + audio track disabled, always following the real audio
+    player's position/play-state — this part already existed and is sound
+    design, don't rebuild it) had a periodic drift-correction loop that
+    hard-`seekTo`'d the slave every 3s if it drifted >700ms. A `seekTo` on a
+    network-streamed video forces a re-buffer — a visible freeze — so that
+    "fix" was itself the stutter being complained about.
+    - Removed the hard-seek loop entirely, then rebuilt drift correction as
+      a **soft playback-speed nudge** — the same technique YouTube/Netflix/
+      Twitch use for a silent secondary video track glued to a master
+      timeline: nudge `PlaybackParameters` speed a few percent instead of
+      seeking. No re-buffer, and imperceptible since the slave has no audio
+      to reveal a pitch shift. Checked every 400ms; dead zone below 60ms
+      drift (no correction — avoids constant micro-jitter); proportional
+      nudge clamped to ±6% between 60ms–1500ms drift, ramping back to 1.0x
+      once back in the dead zone; only above 1500ms (a real stall, not
+      routine clock drift) does it fall back to one hard `seekTo` — that
+      threshold should be rare in practice.
+    - Initial load-time seek offset (compensates for the async
+      resolve-URL-then-prepare latency before the slave's first frame)
+      unified to `+500ms` in both places it's used (was `+200ms` in one,
+      unset in the other) — explicit user instruction, not a guess.
+    - Tuning constants (`SOFT_SYNC_CHECK_INTERVAL_MS`,
+      `SOFT_DRIFT_DEAD_ZONE_MS`, `MAX_SOFT_DRIFT_MS`, `SOFT_SYNC_RAMP_MS`,
+      `SOFT_SYNC_MAX_RATE`) are file-scope constants at the top of
+      `Player.kt`, not magic numbers inline in the loop — retune there if
+      a real device still shows drift artifacts.
+    - **Explicitly not done, and shouldn't be**: the user's original,
+      broader description of this feature included "toggle to unmute the
+      video and pause the audio pipeline." Pushed back on that in-chat and
+      the user didn't insist — swapping *which* stream provides audio
+      would itself introduce an audible gap/glitch at the switch moment.
+      The muted-slave-always-follows-master design stays as it is.
+    - **Not verified on-device, same caveat as everything else in this
+      file**: whether 400ms polling / a ±6% speed range is actually enough
+      to keep pace with real-world clock drift on a real phone without the
+      slave visibly falling behind between checks, and whether a ±6% speed
+      change is genuinely invisible to a user's eye on a real screen (JVM
+      harness can't test either — this is Compose+ExoPlayer runtime
+      behavior, no math to unit-test in isolation the way the DSP classes
+      above are). Worth an on-device pass specifically watching the video
+      toggle for a few minutes on a track long enough to accumulate drift.
+    - **Still outstanding from the same conversation, not yet started**:
+      the user's full ask this session was five pieces — this video fix
+      was #1. Still open: (2) tempo/pitch reportedly "not working" (may be
+      a real regression in patch `0015`'s engine, per that patch's own
+      "never tested on-device" flag above — investigate before assuming
+      it's the same kind of fix as this one); (3) EQ screen restructure —
+      collapse Simple/Advanced/Master three-tab layout down to just
+      Simple+Master (fold Advanced's contents into Master), with a single
+      persistent on/off toggle for the whole DSP chain that both tabs
+      share and that immediately audibly affects whatever's currently
+      playing, local or streaming; (4) spectrum analyzer visibility —
+      user says it "isn't showing" a virtualizer/peak-frequency display;
+      spectrum analyzer + peak-hold already exist per items 7–8 above, so
+      this needs investigating as a possible regression or a UI-visibility
+      bug, not necessarily a from-scratch build; (5) flanger effect wired
+      into the Simple tab, with a preset-selector button at the top of
+      Simple. None of these four have been scoped or started yet.
+
+
 
 Neutron/Poweramp/UAPP/Wavelet feature parity, with the same
 explicitly-out-of-scope list from v1/v2: tempo/pitch, bit-perfect/USB-DAC

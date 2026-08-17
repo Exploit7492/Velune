@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_BUFFERING
 import androidx.media3.common.Player.STATE_READY
@@ -143,6 +144,16 @@ import kotlin.math.roundToInt
 
 // ─── Import video morphing component ───────────────────────────────────────────
 import com.nikhil.yt.ui.player.VideoMorphingThumbnail
+
+// ─── Muted slave video / master audio soft-sync tuning ──────────────────────────
+// See the LaunchedEffect(isVideoMode) sync-correction block below for how these
+// are used. Kept file-scope (not inline magic numbers) so they're easy to find
+// and retune together without hunting through the sync loop's body.
+private const val SOFT_SYNC_CHECK_INTERVAL_MS = 400L
+private const val SOFT_DRIFT_DEAD_ZONE_MS = 60
+private const val MAX_SOFT_DRIFT_MS = 1500
+private const val SOFT_SYNC_RAMP_MS = 800f
+private const val SOFT_SYNC_MAX_RATE = 0.06f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -248,7 +259,7 @@ fun BottomSheetPlayer(
         if (videoUrl != null) {
             player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
             player.prepare()
-            player.seekTo(playerConnection.player.currentPosition)
+            player.seekTo(playerConnection.player.currentPosition + 500)
             player.playWhenReady = isPlaying
         } else {
             isVideoMode = false
@@ -283,19 +294,60 @@ fun BottomSheetPlayer(
         }
     }
 
-    // Two independently-clocked players drift apart over time even when both
-    // are set to play at the same moment — periodically nudge the video back
-    // in line with the audio's actual position while both are in video mode.
+    // Soft sync correction — the same approach YouTube's own clients (and
+    // Netflix, Twitch, etc) use to keep a silent secondary video pipeline
+    // glued to a master timeline: nudge *playback speed* by a tiny amount
+    // rather than ever calling `seekTo` during normal playback. A `seekTo`
+    // on a network-streamed video forces a re-buffer — a visible freeze —
+    // which is what caused the "keeps hitching" complaint when this used to
+    // hard-seek every 3s. A speed nudge has no re-buffer at all: the
+    // decoder just renders frames a few percent faster or slower for a
+    // moment, which is imperceptible on a muted video track (no pitch to
+    // give it away, unlike doing this to audible audio).
+    //
+    // - Dead zone below SOFT_DRIFT_DEAD_ZONE_MS: do nothing. Sub-frame drift
+    //   is inaudible/invisible and correcting it constantly would just be
+    //   jitter for no benefit.
+    // - Between the dead zone and MAX_SOFT_DRIFT_MS: proportional speed
+    //   nudge, clamped to +/-SOFT_SYNC_MAX_RATE so it's never enough to be
+    //   noticeable, and reset back to 1.0x the moment we're back inside the
+    //   dead zone.
+    // - Above MAX_SOFT_DRIFT_MS: something more than clock drift happened
+    //   (a real stall, a dropped seek, etc) — a speed nudge would take too
+    //   long to close that gap, so this is the one case that still falls
+    //   back to a hard `seekTo`. This should be rare in practice; routine
+    //   drift is handled entirely by the speed nudge above.
     LaunchedEffect(isVideoMode) {
         if (!isVideoMode) return@LaunchedEffect
         while (true) {
-            kotlinx.coroutines.delay(3000)
+            kotlinx.coroutines.delay(SOFT_SYNC_CHECK_INTERVAL_MS)
             if (!isVideoMode) break
+            if (!isPlaying) continue // nothing to correct while paused
+
             val drift = playerConnection.player.currentPosition - player.currentPosition
-            if (kotlin.math.abs(drift) > 700) {
-                player.seekTo(playerConnection.player.currentPosition)
+            val absDrift = kotlin.math.abs(drift)
+
+            when {
+                absDrift > MAX_SOFT_DRIFT_MS -> {
+                    player.seekTo(playerConnection.player.currentPosition)
+                    player.setPlaybackParameters(PlaybackParameters(1f))
+                }
+                absDrift > SOFT_DRIFT_DEAD_ZONE_MS -> {
+                    // Behind master (drift > 0) -> speed up slightly to catch up.
+                    // Ahead of master (drift < 0) -> slow down slightly to fall back.
+                    val correction = (drift.toFloat() / SOFT_SYNC_RAMP_MS) * SOFT_SYNC_MAX_RATE
+                    val rate = 1f + correction.coerceIn(-SOFT_SYNC_MAX_RATE, SOFT_SYNC_MAX_RATE)
+                    player.setPlaybackParameters(PlaybackParameters(rate))
+                }
+                else -> {
+                    player.setPlaybackParameters(PlaybackParameters(1f))
+                }
             }
         }
+        // Leaving video mode (or the loop otherwise exiting) — always leave
+        // the slave at normal speed so a stale nudge never lingers into the
+        // next video load.
+        player.setPlaybackParameters(PlaybackParameters(1f))
     }
 
     // Toggle function – manages slave video player
@@ -322,7 +374,7 @@ fun BottomSheetPlayer(
                     isVideoMode = true
                     player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
                     player.prepare()
-                    player.seekTo(playerConnection.player.currentPosition + 200)
+                    player.seekTo(playerConnection.player.currentPosition + 500)
                     player.playWhenReady = isPlaying
                 } else {
                     isVideoMode = false
