@@ -114,6 +114,9 @@
     <string name="view_all">View all</string>
     <string name="more">more</string>
     <string name="refetch">Refetch</string>
+    <string name="lyrics_import">Import</string>
+    <string name="lyrics_import_success">Lyrics imported</string>
+    <string name="lyrics_import_failed">Couldn\'t read that file</string>
     <string name="share">Share</string>
     <string name="delete">Delete</string>
     <string name="together_participants">Participants</string>

@@ -8,7 +8,8 @@
 
 package com.nikhil.yt.ui.menu
 
-import com.nikhil.yt.ui.component.VeluneLoader
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.app.SearchManager
 import android.content.Intent
 import android.content.res.Configuration
@@ -97,6 +98,34 @@ fun LyricsMenu(
 
     var showTranslateDialog by rememberSaveable { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    // Import lyrics from a file (.lrc synced lyrics or plain .txt) picked from the
+    // user's device via the system file picker (SAF), same OpenDocument pattern
+    // used for EQ profile import. Read as plain text and handed to the same
+    // updateLyrics() the manual Edit dialog and search-result picker already use --
+    // display already auto-detects synced ("[mm:ss.xx]"-prefixed) vs plain lyrics,
+    // so no separate LRC parsing is needed here, just getting the text in.
+    val importLyricsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch(Dispatchers.IO) {
+            val text = try {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            } catch (_: Exception) {
+                null
+            }
+            withContext(Dispatchers.Main) {
+                if (text.isNullOrBlank()) {
+                    Toast.makeText(context, context.getString(R.string.lyrics_import_failed), Toast.LENGTH_SHORT).show()
+                } else {
+                    viewModel.updateLyrics(mediaMetadataProvider(), text)
+                    Toast.makeText(context, context.getString(R.string.lyrics_import_success), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
 
     if (showEditDialog) {
         TextFieldDialog(
@@ -575,6 +604,20 @@ fun LyricsMenu(
                         },
                         text = stringResource(R.string.edit),
                         onClick = { showEditDialog = true }
+                    ),
+                    NewAction(
+                        icon = {
+                            Icon(
+                                painter = painterResource(R.drawable.playlist_import),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        text = stringResource(R.string.lyrics_import),
+                        onClick = {
+                            importLyricsLauncher.launch(arrayOf("text/*", "application/octet-stream"))
+                        }
                     ),
                     NewAction(
                         icon = {
