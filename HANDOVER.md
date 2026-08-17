@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v5)
+# Velune EQ/DSP Handover (v6)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,26 +93,26 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v5), the **real GitHub `main`** was last confirmed
+As of this handover (v6), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-0c49bc9 feat(eq): add FFT spectrum analyzer to the Master tab
+406f514 feat(eq): overlap, ballistics, peak-hold, and frequency labels for the spectrum analyzer
 ```
 
-That's patch `0013` (spectrum analyzer v1) plus its `HANDOVER.md` update,
-both already merged. One more patch was built after that commit in the v5
-session — `0014`, spectrum analyzer refinements — but **you have no way
-to know from here whether the user has applied it yet.** Check the log
-after cloning:
+That's patch `0014` (spectrum analyzer refinements) plus its
+`HANDOVER.md` update, both already merged. One more patch was built
+after that commit in the v6 session — `0015`, the tempo/pitch engine —
+but **you have no way to know from here whether the user has applied it
+yet.** Check the log after cloning:
 
-- If `main` still tops out at `0c49bc9` → `0014` not applied yet. Ask if
+- If `main` still tops out at `406f514` → `0015` not applied yet. Ask if
   the user still has the file, or regenerate it from §2 below if needed.
-- If `main` already has a commit titled `feat(eq): overlap, ballistics,
-  peak-hold, and frequency labels for the spectrum analyzer` → applied,
-  build on top of that history directly. This file (`HANDOVER.md`) is
-  updated in that same patch, so if that commit landed, this version of
-  the file is already on `main` too.
+- If `main` already has a commit titled `feat(eq): independent tempo/
+  pitch engine (WSOLA + resampler)` → applied, build on top of that
+  history directly. This file (`HANDOVER.md`) is updated in that same
+  patch, so if that commit landed, this version of the file is already
+  on `main` too.
 
 Number your next patch accordingly.
 
@@ -338,6 +338,165 @@ the Canvas's actual on-device rendering, frame pacing, whether the peak-
 hold cap and label row are legible/well-positioned on a real screen, and
 whether ~172 analyses/sec (up from ~43) has any noticeable CPU cost on a
 low-end device with the analyzer toggled on.
+
+9. **Independent tempo/pitch engine** (patch `0015`, this session) —
+   closes the "tempo/pitch engine" item from §3's not-yet-started list.
+   User explicitly chose the "real WSOLA/phase-vocoder-family engine"
+   option over wiring up Media3's built-in `SonicAudioProcessor` (offered
+   both, see the `ask_user_input_v0` at the start of this session) — this
+   is the same algorithm family SoundTouch/Neutron/Poweramp use, not the
+   cheaper approach stock Android players ship. Also explicitly asked for
+   tempo and pitch to be **fully independent** (change one without
+   affecting the other), not linked/varispeed.
+   - **`eq/audio/SampleQueue.kt`** (new): a small growable/compacting
+     `DoubleArray`-backed queue, shared by both classes below since both
+     need to buffer input across `queueInput` call boundaries (neither
+     Media3 chunk size nor a WSOLA analysis window line up with anything
+     predictable).
+   - **`eq/audio/WsolaTimeStretcher.kt`** (new): the actual time-stretch
+     engine — changes duration without changing pitch. Streaming WSOLA:
+     40ms Hann windows at 50% overlap (hop = 20ms), ±10ms similarity
+     search per hop against the *previous* chosen segment's tail (cosine
+     similarity on a per-hop basis, not a full correlation over the whole
+     window) to avoid the audible phase glitching of naive fixed-hop
+     overlap-add. Multi-channel aware: the similarity search always runs
+     against a channel *mixdown*, and the resulting offset is applied
+     identically to every channel, so stereo content can't have its
+     channels searched independently and drift out of phase with each
+     other (verified — see below). `speed` is a pure time-axis ratio,
+     `1.0` = unchanged.
+   - **`eq/audio/LinearResampler.kt`** (new): streaming linear-
+     interpolation resampler — reading at `rate != 1.0` is classic
+     varispeed (pitch and duration change together). Not independent
+     pitch control on its own; see below for how it's composed with WSOLA
+     to become that.
+   - **How independent tempo/pitch is actually achieved**: resample by
+     the desired `pitchRatio` first (shifts pitch, incidentally changes
+     duration by `1/pitchRatio`), then WSOLA-stretch the result by
+     `tempoRatio / pitchRatio` to land on the actually-desired duration.
+     This is the standard approach every consumer time-stretch library
+     uses (not two independent WSOLA passes, which would compound
+     artifacts) — verified directly (see below) that pitch-only, tempo-
+     only, and simultaneous-but-different ratios all land on their
+     independently-expected duration and pitch, not some coupled/blended
+     result.
+   - **`eq/audio/TempoPitchAudioProcessor.kt`** (new): the Media3
+     `AudioProcessor` wiring the above into the actual playback chain.
+     Handles PCM16/PCM_FLOAT, mono/stereo, same as
+     `CustomEqualizerAudioProcessor`. Unlike every other processor in
+     this package, this one's output frame count is **not** 1:1 with its
+     input — that's the whole point of tempo change — so it's a
+     standalone `AudioProcessor`, not folded into
+     `CustomEqualizerAudioProcessor`'s existing tight 1:1 sample loop.
+     `setTempo(ratio)` (coerced 0.25x–3.0x) and `setPitchSemitones(st)`
+     (coerced ±12, converted to a ratio via `2^(st/12)`) are independent
+     setters — changing one recomputes `wsola.speed =
+     tempoRatio/pitchRatio` without touching `resampler.rate`, and vice
+     versa. `queueEndOfStream()` pushes a little silence through to flush
+     WSOLA's held-back final window rather than losing it — see the
+     class doc for the on-device caveat that comes with that. Tracks
+     cumulative input/output frame counts for `mediaDurationForPlayoutDuration`
+     (see the chain class below).
+   - **`eq/audio/TempoPitchAudioProcessorChain.kt`** (new): **the actual
+     reason this needed real thought, not just a new `AudioProcessor`.**
+     Media3's `DefaultAudioSink` doesn't infer position/seek-bar tracking
+     from "audio changed length" automatically — it asks the installed
+     `AudioSink.AudioProcessorChain` for `getMediaDuration(playoutDuration)`
+     to convert playback time into source-media time, and
+     `DefaultAudioProcessorChain`'s own implementation just forwards that
+     to its internal `SonicAudioProcessor`. Since this patch's engine
+     isn't Sonic, a custom `AudioProcessorChain` was required, routing
+     `getMediaDuration` to `TempoPitchAudioProcessor.mediaDurationForPlayoutDuration`
+     instead — which itself uses the *observed* cumulative input/output
+     frame ratio (not the nominal `tempoRatio`), same reasoning Sonic's
+     own implementation uses byte counts rather than trusting the
+     parameter, since WSOLA's windowing/rounding means the real ratio
+     drifts very slightly from the theoretical one over a long track.
+     Confirmed via GitHub source (`androidx/media`, not guessed from
+     memory or stale ExoPlayer2 docs) before writing this — see the
+     class's own doc comment for the exact reasoning. `SilenceSkippingAudioProcessor`
+     (backs the app's existing, unrelated "Skip silence" player setting)
+     is preserved exactly as `DefaultAudioProcessorChain` would have
+     wired it. `SonicAudioProcessor` is dropped entirely — nothing else
+     in the app used it.
+   - **`MusicService.kt`**: `tempoPitchAudioProcessor` (lazy, registered
+     with `EqualizerService` the same way `customEqAudioProcessor` is),
+     `buildAudioSink`'s `setAudioProcessorChain(...)` now builds
+     `TempoPitchAudioProcessorChain` instead of
+     `DefaultAudioSink.DefaultAudioProcessorChain`, `onDestroy()`
+     unregisters it alongside the existing EQ processor.
+   - **`EqualizerService.kt`**: `registerTempoPitchProcessor`/
+     `unregisterTempoPitchProcessor`, `setTempo`/`setPitchSemitones`,
+     `currentTempo`/`currentPitchSemitones` — same "pending state"
+     registry pattern as every other control here, a separate list from
+     `audioProcessors` since this is a standalone processor type.
+   - **`ui/menu/PlayerMenu.kt` — `TempoPitchDialog` rewired, not new**:
+     the app already had a tempo/pitch dialog here, driving
+     `player.playbackParameters = PlaybackParameters(...)` straight into
+     Media3's Sonic processor. Since that processor is gone from the
+     chain now, leaving this dialog untouched would've silently broken
+     it (sliders that move but do nothing). Same UI/UX, same value
+     ranges, now calls `EqualizerService.setTempo`/`setPitchSemitones`
+     via the `EqEntryPoint` Hilt entry point (already existed, used
+     elsewhere) instead — and persists through the *same*
+     `EqTempoKey`/`EqPitchSemitonesKey` DataStore entries the Axion
+     screen's Master tab uses (next item), specifically so neither entry
+     point's `init`/open logic can silently stomp a value the other one
+     just set.
+   - **`ui/screens/equalizer/axion/AxionEqViewModel.kt` /
+     `AxionEqScreen.kt`**: tempo/pitch also exposed as a second entry
+     point — a new "Tempo & Pitch" rotary-knob row in the Master tab's
+     `MasterBusControls`, DataStore-backed via the new
+     `EqTempoKey`/`EqPitchSemitonesKey` (`constants/PreferenceKeys.kt`),
+     restored in `init{}` the same way balance/bass boost/width/limiter
+     already are.
+
+### How the tempo/pitch engine specifically was verified
+
+Same JVM-harness method as every other patch. For `WsolaTimeStretcher`
+specifically (mono, 3 seconds of a 440Hz sine, `speed` unmodified by
+pitch): confirmed `speed=1.0` reproduces very close to the original
+duration, RMS, and frequency (near-identity, proving the OLA/windowing
+machinery itself is correct before testing any actual stretching);
+confirmed `speed=2.0` produces ~0.5x duration with pitch unchanged;
+confirmed `speed=0.5` produces ~2.0x duration with pitch unchanged;
+confirmed stereo input with identical L/R channels stays *exactly*
+identical after stretching (proves the mixdown-search-then-apply-to-all-
+channels design actually keeps channels coherent, rather than each
+channel drifting independently). For the combined resample+WSOLA
+pipeline (`LinearResampler` + `WsolaTimeStretcher` together, mirroring
+exactly what `TempoPitchAudioProcessor` does): confirmed pitch-only
+(`pitchRatio=1.5, tempoRatio=1.0`) preserves duration and shifts pitch by
+~1.5x; confirmed tempo-only (`tempoRatio=2.0, pitchRatio=1.0`) halves
+duration with pitch unchanged; confirmed a simultaneous, *different*
+combination (`pitchRatio=0.8, tempoRatio=1.3`) lands independently on
+both the tempo-implied duration and the pitch-implied frequency, not some
+coupled/averaged result — this was the actual point of the whole patch
+(the user specifically wanted them decoupled) and it's the one test that
+would fail if the resample/WSOLA composition math were wrong. All passed
+(frequency estimated via zero-crossing rate on a trimmed, edge-padding-
+excluded window; length via direct sample count). Re-ran the full suite
+against the exact files as committed (not just the scratch harness copies)
+immediately before generating the patch, to catch anything that might
+have diverged during doc-comment cleanup.
+
+**What this did NOT verify, and can't from a JVM harness**: anything
+requiring an actual `ByteBuffer`/Media3 `AudioProcessor` runtime —
+`TempoPitchAudioProcessor`'s PCM16/PCM_FLOAT encode/decode correctness,
+`queueEndOfStream()`'s flush behavior, and the whole
+`TempoPitchAudioProcessorChain`/`getMediaDuration` position-tracking
+mechanism have only been checked by reading Media3's real source
+(confirmed via GitHub, not assumed) and careful manual review, not by
+running any of it. **This is the single biggest unverified risk in this
+patch** — if `getMediaDuration` is subtly wrong, or if a real device's
+audio thread hits a case the WSOLA algorithm's search/discard logic
+doesn't handle cleanly (extremely short buffers, a seek landing mid-
+window, a format change mid-track), the failure mode could be anywhere
+from "seek bar drifts" to "audio glitches" to a hard crash, and none of
+that would show up in a JVM harness that only ever exercised the pure-
+math classes with clean synthetic sine waves. Prioritize an on-device
+test of this specifically, probably above the already-overdue
+convolution/spectrum on-device pass from patch `0010`–`0014`.
 
 ### How the DSP/logic was verified (and how you should verify yours)
 

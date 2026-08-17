@@ -47,6 +47,17 @@ class EqualizerService @Inject constructor() {
     // processor exists.
     private var pendingSpectrumEnabled: Boolean = false
 
+    // Tempo/pitch — a separate registry from [audioProcessors] above since
+    // it's a standalone AudioProcessor (see TempoPitchAudioProcessor's class
+    // doc for why), not another feature of CustomEqualizerAudioProcessor.
+    // Same "pending" pattern as everything else: remembered here so a
+    // processor torn down/recreated on track change picks the same tempo/
+    // pitch back up without the user having to reset it.
+    @SuppressLint("UnsafeOptInUsageError")
+    private val tempoPitchProcessors = mutableListOf<com.nikhil.yt.eq.audio.TempoPitchAudioProcessor>()
+    private var pendingTempoRatio: Double = 1.0
+    private var pendingPitchSemitones: Double = 0.0
+
     companion object {
         private const val TAG = "EqualizerService"
     }
@@ -79,6 +90,35 @@ class EqualizerService @Inject constructor() {
     fun removeAudioProcessor(processor: CustomEqualizerAudioProcessor) {
         audioProcessors.remove(processor)
     }
+
+    @OptIn(UnstableApi::class)
+    fun registerTempoPitchProcessor(processor: com.nikhil.yt.eq.audio.TempoPitchAudioProcessor) {
+        tempoPitchProcessors.add(processor)
+        processor.setTempo(pendingTempoRatio)
+        processor.setPitchSemitones(pendingPitchSemitones)
+        Timber.tag(TAG).d("Tempo/pitch processor added. Total: ${tempoPitchProcessors.size}")
+    }
+
+    fun unregisterTempoPitchProcessor(processor: com.nikhil.yt.eq.audio.TempoPitchAudioProcessor) {
+        tempoPitchProcessors.remove(processor)
+    }
+
+    /** `1.0` = unchanged, independent of [setPitchSemitones]. Coerced to 0.25x..3.0x. */
+    @OptIn(UnstableApi::class)
+    fun setTempo(ratio: Double) {
+        pendingTempoRatio = ratio
+        tempoPitchProcessors.forEach { it.setTempo(ratio) }
+    }
+
+    /** Semitones, independent of [setTempo]. Coerced to -12..+12. */
+    @OptIn(UnstableApi::class)
+    fun setPitchSemitones(semitones: Double) {
+        pendingPitchSemitones = semitones
+        tempoPitchProcessors.forEach { it.setPitchSemitones(semitones) }
+    }
+
+    fun currentTempo(): Double = pendingTempoRatio
+    fun currentPitchSemitones(): Double = pendingPitchSemitones
 
     /** -1.0 (full left) .. 0.0 (center) .. 1.0 (full right). */
     @OptIn(UnstableApi::class)

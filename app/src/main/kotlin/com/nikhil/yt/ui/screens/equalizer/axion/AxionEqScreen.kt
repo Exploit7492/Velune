@@ -86,6 +86,8 @@ fun AxionEqScreen(
     val stereoWidth by viewModel.stereoWidth.collectAsState()
     val limiterEnabled by viewModel.limiterEnabled.collectAsState()
     val limiterCeilingDb by viewModel.limiterCeilingDb.collectAsState()
+    val tempoRatio by viewModel.tempoRatio.collectAsState()
+    val pitchSemitones by viewModel.pitchSemitones.collectAsState()
     val convolutionEnabled by viewModel.convolutionEnabled.collectAsState()
     val impulseResponseInfo by viewModel.impulseResponseInfo.collectAsState()
     val convolutionImporting by viewModel.convolutionImporting.collectAsState()
@@ -274,6 +276,8 @@ fun AxionEqScreen(
                                 stereoWidth = stereoWidth,
                                 limiterEnabled = limiterEnabled,
                                 limiterCeilingDb = limiterCeilingDb,
+                                tempoRatio = tempoRatio,
+                                pitchSemitones = pitchSemitones,
                                 enabled = enabled,
                                 accentColor = MaterialTheme.colorScheme.primary,
                                 onPreampChange = { viewModel.setPreampDb(it) },
@@ -282,6 +286,8 @@ fun AxionEqScreen(
                                 onStereoWidthChange = { viewModel.setStereoWidth(it) },
                                 onLimiterEnabledChange = { viewModel.setLimiterEnabled(it) },
                                 onLimiterCeilingChange = { viewModel.setLimiterCeilingDb(it) },
+                                onTempoChange = { viewModel.setTempoRatio(it) },
+                                onPitchChange = { viewModel.setPitchSemitones(it) },
                             )
                             ConvolutionSection(
                                 enabled = enabled,
@@ -368,6 +374,8 @@ private fun MasterBusControls(
     stereoWidth: Float,
     limiterEnabled: Boolean,
     limiterCeilingDb: Float,
+    tempoRatio: Float,
+    pitchSemitones: Float,
     enabled: Boolean,
     accentColor: Color,
     onPreampChange: (Float) -> Unit,
@@ -376,6 +384,8 @@ private fun MasterBusControls(
     onStereoWidthChange: (Float) -> Unit,
     onLimiterEnabledChange: (Boolean) -> Unit,
     onLimiterCeilingChange: (Float) -> Unit,
+    onTempoChange: (Float) -> Unit,
+    onPitchChange: (Float) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PreferenceGroupTitle(title = stringResource(R.string.eq_master_bus))
@@ -459,6 +469,38 @@ private fun MasterBusControls(
                 checked = limiterEnabled,
                 onCheckedChange = onLimiterEnabledChange,
                 enabled = enabled,
+            )
+        }
+        // Pro-level independent tempo/pitch (WSOLA time-stretch + resampler,
+        // see TempoPitchAudioProcessor) — genuinely orthogonal knobs, unlike
+        // the classic single "speed" slider most players offer: tempo alone
+        // changes duration without touching pitch, pitch alone transposes
+        // without touching duration, same as Neutron/Poweramp's tempo/pitch
+        // tools. This replaced the old Sonic-backed tempo/pitch dialog in the
+        // player menu, which now drives the same EqTempoKey/EqPitchSemitonesKey
+        // this does (see PlayerMenu.kt's TempoPitchDialog).
+        PreferenceGroupTitle(title = stringResource(R.string.eq_tempo_pitch))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            RotaryKnob(
+                value = ((tempoRatio - 0.25f) / 2.75f).coerceIn(0f, 1f),
+                onValueChange = { onTempoChange((0.25f + it * 2.75f).coerceIn(0.25f, 3f)) },
+                label = stringResource(R.string.eq_tempo),
+                valueLabel = "x%.2f".format(tempoRatio),
+                enabled = enabled,
+                accentColor = accentColor,
+            )
+            RotaryKnob(
+                value = ((pitchSemitones + 12f) / 24f).coerceIn(0f, 1f),
+                onValueChange = { onPitchChange((it * 24f - 12f).coerceIn(-12f, 12f)) },
+                label = stringResource(R.string.eq_pitch),
+                valueLabel = "%+.0f st".format(pitchSemitones),
+                enabled = enabled,
+                accentColor = accentColor,
             )
         }
     }

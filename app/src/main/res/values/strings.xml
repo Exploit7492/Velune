@@ -509,6 +509,9 @@
     <string name="eq_stereo_width">Width</string>
     <string name="eq_limiter">Output limiter</string>
     <string name="eq_limiter_ceiling">Ceiling</string>
+    <string name="eq_tempo_pitch">Tempo &amp; Pitch</string>
+    <string name="eq_tempo">Tempo</string>
+    <string name="eq_pitch">Pitch</string>
     <string name="eq_convolution">Impulse response</string>
     <string name="eq_convolution_summary">Load a measured correction curve (e.g. from AutoEQ) to shape tone ahead of the bands above</string>
     <string name="eq_convolution_load_ir">Load impulse response</string>

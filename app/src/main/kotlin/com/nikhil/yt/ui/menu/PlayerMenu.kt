@@ -66,13 +66,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
-import androidx.media3.common.PlaybackParameters
+import androidx.datastore.preferences.core.edit
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
+import com.nikhil.yt.di.EqEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.LocalDatabase
+import com.nikhil.yt.utils.dataStore
 import com.nikhil.yt.LocalDownloadUtil
 import com.nikhil.yt.LocalListenTogetherManager
 import com.nikhil.yt.LocalPlayerConnection
@@ -96,9 +99,9 @@ import com.nikhil.yt.ui.component.VolumeSlider
 import com.nikhil.yt.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.math.log2
-import kotlin.math.pow
 import kotlin.math.round
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun PlayerMenu(
@@ -785,15 +788,47 @@ fun PlayerMenu(
 @Composable
 fun TempoPitchDialog(onDismiss: () -> Unit) {
     val playerConnection = LocalPlayerConnection.current ?: return
+    val context = LocalContext.current
+    // Backed by the pro-level WSOLA/resampler engine (TempoPitchAudioProcessor)
+    // now, not player.playbackParameters -- see EqualizerService.setTempo/
+    // setPitchSemitones and TempoPitchAudioProcessorChain for why tempo/pitch
+    // moved off Media3's built-in Sonic-based playback params.
+    val equalizerService = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, EqEntryPoint::class.java)
+            .equalizerService()
+    }
     var tempo by remember {
-        mutableFloatStateOf(playerConnection.player.playbackParameters.speed)
+        mutableFloatStateOf(equalizerService.currentTempo().toFloat())
     }
     var transposeValue by remember {
-        mutableIntStateOf(round(12 * log2(playerConnection.player.playbackParameters.pitch)).toInt())
+        mutableIntStateOf(equalizerService.currentPitchSemitones().roundToInt())
     }
-    val updatePlaybackParameters = {
-        playerConnection.player.playbackParameters =
-            PlaybackParameters(tempo, 2f.pow(transposeValue.toFloat() / 12))
+    val scope = rememberCoroutineScope()
+    // Tempo/pitch is also settable from the Axion EQ screen's Master tab
+    // (AxionEqViewModel), which is DataStore-backed via EqTempoKey/
+    // EqPitchSemitonesKey. Read the same keys here on open and write back
+    // on every change, rather than only touching EqualizerService's
+    // in-memory state -- otherwise, whichever of this dialog or the Axion
+    // screen's init block runs first each session would win, and the
+    // other could silently clobber it back to a stale value later.
+    LaunchedEffect(Unit) {
+        val prefsSnapshot = context.dataStore.data.first()
+        val persistedTempo = prefsSnapshot[com.nikhil.yt.constants.EqTempoKey] ?: 1f
+        val persistedPitch = prefsSnapshot[com.nikhil.yt.constants.EqPitchSemitonesKey] ?: 0f
+        tempo = persistedTempo
+        transposeValue = persistedPitch.roundToInt()
+        equalizerService.setTempo(persistedTempo.toDouble())
+        equalizerService.setPitchSemitones(persistedPitch.toDouble())
+    }
+    val updateTempoPitch = {
+        equalizerService.setTempo(tempo.toDouble())
+        equalizerService.setPitchSemitones(transposeValue.toDouble())
+        scope.launch {
+            context.dataStore.edit {
+                it[com.nikhil.yt.constants.EqTempoKey] = tempo
+                it[com.nikhil.yt.constants.EqPitchSemitonesKey] = transposeValue.toFloat()
+            }
+        }
     }
     val listenTogetherManager = com.nikhil.yt.LocalListenTogetherManager.current
     val isInRoom = listenTogetherManager?.isInRoom ?: false
@@ -809,7 +844,7 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
                 onClick = {
                     tempo = 1f
                     transposeValue = 0
-                    updatePlaybackParameters()
+                    updateTempoPitch()
                 },
             ) {
                 Text(stringResource(R.string.reset))
@@ -831,7 +866,7 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
                         values = (0..35).map { round((0.25f + it * 0.05f) * 100) / 100 },
                         onValueUpdate = {
                             tempo = it
-                            updatePlaybackParameters()
+                            updateTempoPitch()
                         },
                         valueText = { "x$it" },
                         modifier = Modifier.padding(bottom = 12.dp),
@@ -843,7 +878,7 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
                     values = (-12..12).toList(),
                     onValueUpdate = {
                         transposeValue = it
-                        updatePlaybackParameters()
+                        updateTempoPitch()
                     },
                     valueText = { "${if (it > 0) "+" else ""}$it" },
                 )

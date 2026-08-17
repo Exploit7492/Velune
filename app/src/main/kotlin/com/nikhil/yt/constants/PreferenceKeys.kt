@@ -796,6 +796,14 @@ val EqLimiterEnabledKey = booleanPreferencesKey("eq_limiter_enabled")
 val EqLimiterCeilingKey = floatPreferencesKey("eq_limiter_ceiling_db")
 val EqStereoWidthKey = floatPreferencesKey("eq_stereo_width")
 
+// EQ Master tab — pro-level independent tempo/pitch (WSOLA time-stretch +
+// resampler; see TempoPitchAudioProcessor). Tempo is a ratio (1.0 =
+// unchanged); pitch is semitones (0.0 = unchanged) rather than a ratio,
+// matching how the old Sonic-backed tempo/pitch dialog exposed it, since
+// this replaces that dialog's engine rather than adding a second control.
+val EqTempoKey = floatPreferencesKey("eq_tempo_ratio")
+val EqPitchSemitonesKey = floatPreferencesKey("eq_pitch_semitones")
+
 // EQ Master tab — convolution-based tone shaping (impulse response
 // correction, see ConvolutionAudioProcessor/EqualizerService). The picked
 // IR is copied into app-private storage at import time rather than kept as

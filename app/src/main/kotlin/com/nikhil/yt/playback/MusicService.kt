@@ -53,7 +53,6 @@ import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.REPEAT_MODE_ONE
 import androidx.media3.common.Player.STATE_IDLE
 import androidx.media3.common.Timeline
-import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -262,6 +261,17 @@ class MusicService :
     private val customEqAudioProcessor by lazy {
         com.nikhil.yt.eq.audio.CustomEqualizerAudioProcessor().also {
             equalizerService.addAudioProcessor(it)
+        }
+    }
+
+    // Pro-level independent tempo/pitch (WSOLA + resampler) — replaces the
+    // old Sonic-backed tempo/pitch dialog. See TempoPitchAudioProcessor and
+    // TempoPitchAudioProcessorChain for why this needs its own chain
+    // implementation rather than just sitting in the DefaultAudioProcessorChain
+    // list like customEqAudioProcessor does.
+    private val tempoPitchAudioProcessor by lazy {
+        com.nikhil.yt.eq.audio.TempoPitchAudioProcessor().also {
+            equalizerService.registerTempoPitchProcessor(it)
         }
     }
 
@@ -4373,16 +4383,16 @@ class MusicService :
                 .setEnableFloatOutput(enableFloatOutput)
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .setAudioProcessorChain(
-                    DefaultAudioSink.DefaultAudioProcessorChain(
-                        SilenceSkippingAudioProcessor(
+                    com.nikhil.yt.eq.audio.TempoPitchAudioProcessorChain(
+                        tempoPitchProcessor = tempoPitchAudioProcessor,
+                        userDefinedAudioProcessors = arrayOf(customEqAudioProcessor),
+                        silenceSkippingAudioProcessor = SilenceSkippingAudioProcessor(
                             1_500_000L,
                             0.35f,
                             500_000L,
                             10,
                             150.toShort(),
                         ),
-                        SonicAudioProcessor(),
-                    customEqAudioProcessor,
                     ),
                 ).build()
         }
@@ -4616,6 +4626,9 @@ class MusicService :
         super.onDestroy()
         try {
             equalizerService.removeAudioProcessor(customEqAudioProcessor)
+        } catch (_: Exception) {}
+        try {
+            equalizerService.unregisterTempoPitchProcessor(tempoPitchAudioProcessor)
         } catch (_: Exception) {}
         unregisterBluetoothReceiver()
         try {

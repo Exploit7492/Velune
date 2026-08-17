@@ -14,6 +14,8 @@ import com.nikhil.yt.constants.EqConvolutionIrPathKey
 import com.nikhil.yt.constants.EqLimiterCeilingKey
 import com.nikhil.yt.constants.EqLimiterEnabledKey
 import com.nikhil.yt.constants.EqStereoWidthKey
+import com.nikhil.yt.constants.EqTempoKey
+import com.nikhil.yt.constants.EqPitchSemitonesKey
 import com.nikhil.yt.constants.ParametricEQEnabledKey
 import com.nikhil.yt.R
 import com.nikhil.yt.eq.EqualizerService
@@ -124,6 +126,19 @@ class AxionEqViewModel @Inject constructor(
     private val _limiterCeilingDb = MutableStateFlow(-0.3f)
     val limiterCeilingDb = _limiterCeilingDb.asStateFlow()
 
+    // Pro-level independent tempo/pitch (WSOLA time-stretch + resampler,
+    // see TempoPitchAudioProcessor) — replaces the old Sonic-backed dialog
+    // in the player menu, which now reads/writes the same EqTempoKey/
+    // EqPitchSemitonesKey DataStore entries this does (see PlayerMenu.kt's
+    // TempoPitchDialog) so the two entry points can't clobber each other.
+    // Tempo is a ratio (1.0 = unchanged); pitch is semitones (0.0 =
+    // unchanged), independent of tempo.
+    private val _tempoRatio = MutableStateFlow(1f)
+    val tempoRatio = _tempoRatio.asStateFlow()
+
+    private val _pitchSemitones = MutableStateFlow(0f)
+    val pitchSemitones = _pitchSemitones.asStateFlow()
+
     // Convolution (impulse-response) tone shaping — the UI-facing half of
     // the engine built in the previous session. The DSP itself
     // (EqualizerService.loadImpulseResponse/setConvolutionEnabled) already
@@ -194,10 +209,14 @@ class AxionEqViewModel @Inject constructor(
             _stereoWidth.value = prefsSnapshot[EqStereoWidthKey] ?: 1f
             _limiterEnabled.value = prefsSnapshot[EqLimiterEnabledKey] ?: false
             _limiterCeilingDb.value = prefsSnapshot[EqLimiterCeilingKey] ?: -0.3f
+            _tempoRatio.value = prefsSnapshot[EqTempoKey] ?: 1f
+            _pitchSemitones.value = prefsSnapshot[EqPitchSemitonesKey] ?: 0f
             equalizerService.setBalance(_balance.value.toDouble())
             equalizerService.setBassBoost(_bassBoostDb.value.toDouble())
             equalizerService.setStereoWidth(_stereoWidth.value.toDouble())
             equalizerService.setLimiter(_limiterEnabled.value, _limiterCeilingDb.value.toDouble())
+            equalizerService.setTempo(_tempoRatio.value.toDouble())
+            equalizerService.setPitchSemitones(_pitchSemitones.value.toDouble())
         }
         // Restore a previously-imported impulse response, off the main
         // thread since it means re-reading and re-parsing a WAV file (IR
@@ -280,6 +299,27 @@ class AxionEqViewModel @Inject constructor(
             context.dataStore.edit { it[EqLimiterCeilingKey] = db }
         }
         equalizerService.setLimiter(_limiterEnabled.value, db.toDouble())
+    }
+
+    fun setTempoRatio(ratio: Float) {
+        _tempoRatio.value = ratio
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqTempoKey] = ratio }
+        }
+        equalizerService.setTempo(ratio.toDouble())
+    }
+
+    fun setPitchSemitones(semitones: Float) {
+        _pitchSemitones.value = semitones
+        viewModelScope.launch {
+            context.dataStore.edit { it[EqPitchSemitonesKey] = semitones }
+        }
+        equalizerService.setPitchSemitones(semitones.toDouble())
+    }
+
+    fun resetTempoPitch() {
+        setTempoRatio(1f)
+        setPitchSemitones(0f)
     }
 
     /**
