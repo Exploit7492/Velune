@@ -142,10 +142,16 @@ class TempoPitchAudioProcessor : AudioProcessor {
 
     private fun writeOutput(frames: Array<DoubleArray>, outFrames: Int, bytesPerSample: Int) {
         val outBytes = outFrames * bytesPerSample * channelCount
+        // FIX: `outputBuffer.clear()` resolves to `java.nio.Buffer.clear()` (not the
+        // ByteBuffer-covariant override) against Android's bootclasspath, so without
+        // the explicit cast this `if` infers its common branch type as `Buffer`
+        // instead of `ByteBuffer` -- losing putFloat/putShort and failing the
+        // `outputBuffer = out` assignment below. Same class of issue as flip()/
+        // limit()/position() everywhere else in this file already casts around it.
         val out = if (outputBuffer.capacity() < outBytes) {
             ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
         } else {
-            outputBuffer.clear()
+            outputBuffer.clear() as ByteBuffer
         }
         when (encoding) {
             C.ENCODING_PCM_FLOAT ->

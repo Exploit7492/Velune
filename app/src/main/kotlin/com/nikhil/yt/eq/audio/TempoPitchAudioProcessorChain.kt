@@ -3,7 +3,7 @@ package com.nikhil.yt.eq.audio
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 
 /**
@@ -41,7 +41,7 @@ class TempoPitchAudioProcessorChain(
     private val tempoPitchProcessor: TempoPitchAudioProcessor,
     userDefinedAudioProcessors: Array<AudioProcessor>,
     private val silenceSkippingAudioProcessor: SilenceSkippingAudioProcessor = SilenceSkippingAudioProcessor(),
-) : AudioSink.AudioProcessorChain {
+) : DefaultAudioSink.AudioProcessorChain {
 
     private val audioProcessors: Array<AudioProcessor> =
         userDefinedAudioProcessors + arrayOf(silenceSkippingAudioProcessor, tempoPitchProcessor)
