@@ -867,19 +867,55 @@ checked against `AxionEqViewModel`'s existing, already-working version,
 but the actual timing behavior on a real phone at real app-startup speed
 is unconfirmed.
 
+## 2d. This session's other work — single preset picker button on Simple
+
+Simple's presets used to render as ~5 stacked rows of ToggleButton chips
+(Custom, Echo chunked 4-wide, Dolby, Dirac) below the bass/mid/treble
+triangle and Save button. Replaced with one `OutlinedButton` at the very
+top of the tab (above the triangle) showing whichever preset currently
+matches the live bands, opening a `ModalBottomSheet`
+(`SimplePresetPickerSheet`) with everything in one grouped, scrollable
+list instead. Selecting a preset still calls the exact same
+`viewModel.setBandsGains(bands)` every chip used to — only the UI
+changed, not which presets exist or how a match is detected/highlighted.
+Old `PresetSection` composable deleted outright (confirmed via grep, no
+remaining callers) — same pattern as `AdvancedEqMode`'s deletion in the
+tab-merge patch.
+
+Two real things worth knowing if you touch this again:
+- First draft had a genuine compile-breaking mistake: called
+  `stringResource()` directly inside a `LazyColumn` content lambda's
+  `forEach` (the `LazyListScope` DSL body is not itself a composable
+  context — only `item{}`/`items{}` blocks inside it are). Fixed by
+  resolving the one label needed (`eq_label_custom`) once, in
+  `SimplePresetPickerSheet`'s own composable scope right after
+  `ModalBottomSheet {`, and comparing group titles against that
+  captured `String` inside the `forEach` instead of calling
+  `stringResource()` there. If you add more per-group logic to that
+  `forEach`, remember the same constraint applies.
+- List item keys use `"preset_${title}_${index}_${name}"`, not just
+  name — a name-only key would `IllegalArgumentException` (duplicate
+  key) the moment a user saves two custom profiles with the same name,
+  since `LazyColumn`'s `key` must be unique across the whole list.
+
+**Not verified on-device** — same caveat as literally everything else
+in this file: whether the sheet actually opens/scrolls/dismisses
+correctly, and whether the "which preset is currently active" label on
+the top button updates promptly as bands change, is Compose+Material3
+bottom-sheet runtime behavior with no JVM-testable equivalent.
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 
-1. **On-device verification pass** — nothing convolution-, spectrum-, or
-   canonical-engine-related has ever run on an actual phone; this is
-   arguably overdue given how much has been built on top of it.
-2. **Preset picker moved to the top of Simple** — asked for, not yet
-   done (see chat history around the Advanced-tab-removal decision).
-3. **Flanger effect for Simple** — asked for; confirmed via grep there is
+1. **On-device verification pass** — nothing convolution-, spectrum-,
+   canonical-engine-, or preset-picker-related has ever run on an actual
+   phone; this is arguably overdue given how much has been built on top
+   of it.
+2. **Flanger effect for Simple** — asked for; confirmed via grep there is
    currently zero flanger implementation anywhere in the codebase, so
    this is a genuine from-scratch DSP build, not a "make it work" fix.
-4. **Spectrum-not-showing investigation** — user reported the spectrum
+3. **Spectrum-not-showing investigation** — user reported the spectrum
    analyzer "isn't showing"; the code path looks correct (there's already
    a disabled-state hint text when the master EQ toggle is off), but this
    was never confirmed against an actual repro — could be the master
@@ -887,7 +923,9 @@ Ask the user directly, `ask_user_input_v0` style:
    on-device rendering bug across the never-verified spectrum patches.
    Get a repro (are BOTH the master toggle and the spectrum's own switch
    on?) before touching code here.
-5. Something else the user names.
+4. Something else the user names.
+
+(Preset picker moved to the top of Simple is now done — see §2d.)
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered

@@ -13,9 +13,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1029,6 +1032,7 @@ private fun SimpleEqMode(
 
     val customProfiles by viewModel.customProfiles.collectAsState()
     var showManageDialog by remember { mutableStateOf(false) }
+    var showPresetPicker by remember { mutableStateOf(false) }
 
     if (showManageDialog) {
         ManagePresetsDialog(
@@ -1041,10 +1045,78 @@ private fun SimpleEqMode(
         )
     }
 
+    // Single categorized preset picker, replacing what used to be four+
+    // rows of ToggleButton chips (custom / echo / dolby / dirac) stacked
+    // inline down the whole tab — asked to be one button at the top
+    // instead. Selecting a preset here calls the exact same
+    // viewModel.setBandsGains(bands) every chip used to, so which presets
+    // exist and how a match is detected against the current bands is
+    // unchanged; only how you get to them changed.
+    val allPresetGroups = buildList {
+        if (customProfiles.isNotEmpty()) {
+            add(
+                stringResource(R.string.eq_label_custom) to
+                    customProfiles.map { it.name to it.bands.map { b -> b.gain.toFloat() * 50f }.toFloatArray() }
+            )
+        }
+        add(stringResource(R.string.eq_label_echo) to echoPresets.map { (res, bands) -> stringResource(res) to bands })
+        add(stringResource(R.string.eq_label_dolby) to dolbyPresets.map { (res, bands) -> stringResource(res) to bands })
+        add(stringResource(R.string.eq_label_dirac) to diracPresets.map { (res, bands) -> stringResource(res) to bands })
+    }
+    val flatPresets = remember(allPresetGroups) { allPresetGroups.flatMap { it.second } }
+    val activePresetName = remember(bandGains, flatPresets) {
+        flatPresets.firstOrNull { (_, bands) ->
+            bandGains.size == bands.size && bandGains.zip(bands).all { (g, b) -> abs(g - b) < 10f }
+        }?.first
+    }
+
+    if (showPresetPicker) {
+        SimplePresetPickerSheet(
+            groups = allPresetGroups,
+            activePresetName = activePresetName,
+            onPresetClick = { bands ->
+                viewModel.setBandsGains(bands)
+                showPresetPicker = false
+            },
+            onManageClick = {
+                showPresetPicker = false
+                showManageDialog = true
+            },
+            hasCustomProfiles = customProfiles.isNotEmpty(),
+            onDismiss = { showPresetPicker = false },
+        )
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp), 
     ) {
+        OutlinedButton(
+            onClick = { showPresetPicker = true },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            shape = MaterialTheme.shapes.medium,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Tune,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = activePresetName ?: stringResource(R.string.eq_presets),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Rounded.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+
         CircularEqControl(
             bass = bass, mid = mid, treble = treble,
             enabled = enabled,
@@ -1081,105 +1153,87 @@ private fun SimpleEqMode(
                 )
             }
         }
-
-        if (customProfiles.isNotEmpty()) {
-            PresetSection(
-                title = stringResource(R.string.eq_label_custom),
-                presets = customProfiles.map { -1 to it.bands.map { it.gain.toFloat() * 50f }.toFloatArray() },
-                presetNames = customProfiles.map { it.name },
-                enabled = enabled,
-                viewModel = viewModel,
-                bandGains = bandGains,
-                onEditClick = { showManageDialog = true }
-            )
-        }
-
-        echoPresets.chunked(4).forEach { chunk ->
-            PresetSection(
-                title = if (echoPresets.first() in chunk) stringResource(R.string.eq_label_echo) else "",
-                presets = chunk,
-                enabled = enabled,
-                viewModel = viewModel,
-                bandGains = bandGains
-            )
-        }
-        PresetSection(stringResource(R.string.eq_label_dolby), dolbyPresets, null, enabled, viewModel, bandGains)
-        PresetSection(stringResource(R.string.eq_label_dirac), diracPresets, null, enabled, viewModel, bandGains)
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PresetSection(
-    title: String,
-    presets: List<Pair<Int, FloatArray>>,
-    presetNames: List<String>? = null,
-    enabled: Boolean,
-    viewModel: AxionEqViewModel,
-    bandGains: FloatArray,
-    onEditClick: (() -> Unit)? = null
+private fun SimplePresetPickerSheet(
+    groups: List<Pair<String, List<Pair<String, FloatArray>>>>,
+    activePresetName: String?,
+    onPresetClick: (FloatArray) -> Unit,
+    onManageClick: () -> Unit,
+    hasCustomProfiles: Boolean,
+    onDismiss: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (title.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        val customLabel = stringResource(R.string.eq_label_custom)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            item {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    text = stringResource(R.string.eq_presets),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
-                
-                if (onEditClick != null && enabled) {
-                    androidx.compose.material3.IconButton(
-                        onClick = onEditClick,
-                        modifier = Modifier.size(24.dp)
+            }
+            groups.forEach { (title, presets) ->
+                val isCustomGroup = hasCustomProfiles && title == customLabel
+                item(key = "header_$title") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
                         )
+                        if (isCustomGroup) {
+                            androidx.compose.material3.IconButton(
+                                onClick = onManageClick,
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-        ) {
-            presets.forEachIndexed { index, (nameRes, bands) ->
-                val name = presetNames?.getOrNull(index) ?: stringResource(nameRes)
-                val isSelected = remember(bandGains) {
-                    bandGains.size == bands.size && 
-                    bandGains.zip(bands).all { (g, b) -> abs(g - b) < 10f }
-                }
-
-                ToggleButton(
-                    checked = isSelected,
-                    onCheckedChange = { if (enabled) viewModel.setBandsGains(bands) },
-                    enabled = enabled,
-                    shapes = when {
-                        presets.size == 1 || index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        index == presets.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    },
-                    modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
-                    )
+                itemsIndexed(presets, key = { index, item -> "preset_${title}_${index}_${item.first}" }) { _, (name, bands) ->
+                    val isSelected = activePresetName == name
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPresetClick(bands) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
