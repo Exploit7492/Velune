@@ -76,6 +76,15 @@ class AxionEqViewModel @Inject constructor(
     val enabled = _enabled.asStateFlow()
 
     private val bandFrequencies = doubleArrayOf(31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0)
+
+    // Tracks the exact profile object this ViewModel itself last pushed
+    // via applyToService(), so the reactive activeProfile collector below
+    // can tell "the repository echoing my own write back" (skip — nothing
+    // changed) apart from "Master's embedded editor (or anything else)
+    // changed the active profile" (adopt). Structural equality, not just
+    // id — Master can write under the SAME id ("echo_tuning") with
+    // DIFFERENT band content, which an id-only check would miss.
+    private var lastAppliedProfile: SavedEQProfile? = null
     
     private val _bandGains = MutableStateFlow(
         FloatArray(10) { prefs.getFloat("band_$it", 0f) }
@@ -250,6 +259,49 @@ class AxionEqViewModel @Inject constructor(
         }
         if (_enabled.value) {
             applyToService()
+        }
+        // Reactively adopt an externally-changed active profile — the
+        // "canonical, one engine" fix: without this, Simple only ever
+        // knew about its OWN edits (its own applyToService() calls), so
+        // editing bands in Master's embedded editor and switching back to
+        // Simple showed stale bass/mid/treble knob positions, and — worse
+        // — touching Simple's triangle again would silently overwrite
+        // whatever Master had just done, since Simple had no idea it had
+        // changed. See EQViewModel.applyCurrentProfile()'s matching fix,
+        // which makes Master persist+activate every edit instead of only
+        // applying it live — without that half, this collector would
+        // never see Master's edits at all.
+        viewModelScope.launch {
+            eqProfileRepository.activeProfile.collect { active ->
+                if (active == null || active == lastAppliedProfile) return@collect
+                lastAppliedProfile = active
+                val matchesCanonicalShape = active.bands.size == bandFrequencies.size &&
+                    active.bands.indices.all { i ->
+                        kotlin.math.abs(active.bands[i].frequency - bandFrequencies[i]) < 1.0
+                    }
+                if (matchesCanonicalShape) {
+                    val newGains = FloatArray(bandFrequencies.size) { i -> (active.bands[i].gain * 50.0).toFloat() }
+                    val newQ = FloatArray(bandFrequencies.size) { i -> active.bands[i].q.toFloat() }
+                    _bandGains.value = newGains
+                    _bandQ.value = newQ
+                    _preampDb.value = active.preamp.toFloat()
+                    val editor = prefs.edit()
+                    newGains.forEachIndexed { i, g -> editor.putFloat("band_$i", g) }
+                    newQ.forEachIndexed { i, q -> editor.putFloat("$EqBandQPrefix$i", q) }
+                    editor.putFloat("preamp_db", active.preamp.toFloat())
+                    editor.apply()
+                }
+                // Else: the externally-active profile doesn't have exactly
+                // these 10 fixed frequencies (e.g. Master's free editor
+                // added/removed a band, or the user picked an imported
+                // profile with a different band layout). Simple's
+                // bass/mid/treble triangle assumes this exact 10-band
+                // shape, so deliberately leave _bandGains/_bandQ/_preampDb
+                // untouched rather than misreading mismatched bands into
+                // them — the next Simple-side edit rebuilds and pushes a
+                // valid canonical 10-band profile, becoming the active one
+                // again.
+            }
         }
     }
 
@@ -728,6 +780,7 @@ class AxionEqViewModel @Inject constructor(
             eqProfileRepository.saveProfile(profile)
             eqProfileRepository.setActiveProfile(profile.id)
             
+            lastAppliedProfile = profile
             equalizerService.applyProfile(profile)
         }
     }

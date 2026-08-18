@@ -552,6 +552,21 @@ class MusicService :
         super.onCreate()
         ensureScopesActive()
 
+        // Restore persisted EQ/DSP settings (balance, bass boost, width,
+        // limiter, tempo/pitch, the active band profile, convolution)
+        // before the renderer chain below gets built — see
+        // EqStartupInitializer's doc for why this used to only happen
+        // once the EQ screen was opened, and why that was a real bug (a
+        // track played right after an app restart could play completely
+        // unequalized despite real saved settings existing).
+        ioScope.launch {
+            com.nikhil.yt.eq.restorePersistedEqState(
+                context = this@MusicService,
+                equalizerService = equalizerService,
+                eqProfileRepository = eqProfileRepository,
+            )
+        }
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val nm = getSystemService(NotificationManager::class.java)

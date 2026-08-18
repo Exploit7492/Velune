@@ -21,7 +21,8 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -45,30 +46,59 @@ class EQViewModel(private val context: Context) : ViewModel() {
     private val _state = MutableStateFlow(EQState())
     val state: StateFlow<EQState> = _state.asStateFlow()
 
+    // This ViewModel backs the parametric editor embedded in the Master
+    // tab of AxionEqScreen, but Simple's own edits (AxionEqViewModel) go
+    // through the SAME EQProfileRepository — a different ParametricEQBand
+    // representation (fixed 10 bands vs this editor's arbitrary bands),
+    // but the same "active profile" concept. Previously this class only
+    // ever read the repository's profiles/active-profile ONCE, in init{} —
+    // since this ViewModel instance survives across tab switches (cached
+    // by viewModel()'s ViewModelStore, not recreated when the user leaves
+    // and re-enters the Master tab), that one-shot snapshot went stale the
+    // moment the user touched Simple: switching back to Master and editing
+    // anything here would silently reapply the STALE profile, reverting
+    // whatever Simple had just done. Same problem for "enabled" via a
+    // one-shot DataStore read — an external toggle (the single master
+    // switch at the top of AxionEqScreen) wouldn't update this class's own
+    // `state.enabled`, so the AnimatedVisibility gating this editor's UI in
+    // EqScreen.kt could show/hide out of sync with the actual DSP state.
+    // Fixed by collecting both reactively instead of snapshotting once —
+    // repository.profiles/activeProfile are StateFlows on an
+    // already-synchronously-loaded @Singleton (see EQProfileRepository's
+    // own init{}), so the first collection is immediate, not async-empty.
     init {
-        loadProfiles()
-        loadEnabledState()
-    }
-
-    private fun loadEnabledState() {
         viewModelScope.launch {
-            val persisted = context.dataStore.data.first()[ParametricEQEnabledKey] ?: false
-            _state.update { it.copy(enabled = persisted) }
-        }
-    }
-
-    fun loadProfiles() {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-            val profiles = repository.getAllProfiles()
-            val activeProfile = repository.getActiveProfile()
-            _state.update {
-                it.copy(
-                    isLoading = false,
-                    profiles = profiles,
-                    selectedProfile = activeProfile ?: profiles.firstOrNull(),
-                )
+            repository.profiles.collect { profiles ->
+                _state.update { it.copy(profiles = profiles) }
             }
+        }
+        viewModelScope.launch {
+            repository.activeProfile.collect { active ->
+                _state.update { current ->
+                    // Only adopt when the id actually differs from what's
+                    // already showing. Without this guard, the echo of our
+                    // OWN selectProfile()/saveCurrentProfile() persisting
+                    // back through the repository would re-trigger this
+                    // collector and redundantly reapply — harmless since
+                    // it'd be the same profile, but pointless. The guard
+                    // also means an in-progress local edit here (which
+                    // never calls repository.setActiveProfile mid-drag —
+                    // see updateBandGain etc. below) is never clobbered by
+                    // this collector, since nothing emits a new value
+                    // during that edit in the first place.
+                    if (active?.id != current.selectedProfile?.id) {
+                        current.copy(selectedProfile = active ?: current.profiles.firstOrNull())
+                    } else current
+                }
+            }
+        }
+        viewModelScope.launch {
+            context.dataStore.data
+                .map { it[ParametricEQEnabledKey] ?: false }
+                .distinctUntilChanged()
+                .collect { persisted ->
+                    _state.update { it.copy(enabled = persisted) }
+                }
         }
     }
 
@@ -260,6 +290,25 @@ class EQViewModel(private val context: Context) : ViewModel() {
     private fun applyCurrentProfile() {
         val profile = _state.value.selectedProfile ?: return
         equalizerService.applyProfile(profile)
+        // Persist + activate on every edit, not only through the explicit
+        // "Save" flow (saveCurrentProfile) — mirrors exactly what
+        // AxionEqViewModel.applyToService() already does for Simple/
+        // Advanced's edits. Without this, a live band/preamp edit here
+        // only ever reached the DSP directly: the repository's
+        // activeProfile never changed, so nothing else observing it (see
+        // AxionEqViewModel's reactive sync) could ever find out, and an
+        // edit made here was lost on process death if the user hadn't
+        // explicitly hit Save. One known trade-off this doesn't solve:
+        // if the currently-selected profile happens to be a built-in/
+        // non-custom one, live-editing it now persists those edits into
+        // that profile's stored definition too (same as Simple already
+        // does for its own "echo_tuning" profile) — there's no
+        // read-only/"Save As only" concept in the data model to prevent
+        // that, and adding one is a separate, un-asked-for change.
+        viewModelScope.launch {
+            repository.saveProfile(profile)
+            repository.setActiveProfile(profile.id)
+        }
     }
 
     enum class ImportFormat {

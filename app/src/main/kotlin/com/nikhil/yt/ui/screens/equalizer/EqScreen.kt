@@ -40,7 +40,6 @@ import com.nikhil.yt.R
 import com.nikhil.yt.ui.component.EnumDialog
 import com.nikhil.yt.ui.component.PreferenceEntry
 import com.nikhil.yt.ui.component.PreferenceGroupTitle
-import com.nikhil.yt.ui.component.SwitchPreference
 import com.nikhil.yt.ui.component.TextFieldDialog
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -73,14 +72,13 @@ fun ParametricEqEditor(viewModel: EQViewModel) {
     Column {
         PreferenceGroupTitle(title = stringResource(R.string.parametric_eq))
 
-        // Enable toggle
-        SwitchPreference(
-            title = { Text(stringResource(R.string.enable_parametric_eq)) },
-            description = stringResource(R.string.enable_parametric_eq_desc),
-            icon = { Icon(painterResource(R.drawable.graphic_eq), null) },
-            checked = state.enabled,
-            onCheckedChange = { viewModel.setEnabled(it) },
-        )
+        // No local enable switch here — the single master toggle at the
+        // top of AxionEqScreen already drives the same ParametricEQEnabledKey
+        // this reads via EQViewModel's reactive collector, so a second
+        // switch here would just be a redundant, confusing second control
+        // for the exact same underlying flag. This composable used to have
+        // its own SwitchPreference; removed rather than left disabled/
+        // hidden, since state.enabled already reflects the master toggle.
 
         AnimatedVisibility(visible = state.enabled) {
             Column {

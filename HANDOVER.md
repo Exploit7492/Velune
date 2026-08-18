@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v7)
+# Velune EQ/DSP Handover (v8)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -720,17 +720,174 @@ analyzer (base + refinements) all exist:**
   real screen before trusting it.
 
 **Still-live, not-yet-started options** (offer if asked "what's next"):
-- Tempo/pitch engine (bigger, separate subsystem).
+- (Tempo/pitch engine was built in patch `0015` and a real activation bug
+  was fixed right after — see the new §2 entry below. This bullet used to
+  list it as not-yet-started; that was stale by the time this session
+  started. Nothing "not-yet-started" remains from the original v1
+  handover's list at this point — see §4 for what's actually still open.)
+
+## 2b. This session's work — collapsing Advanced into Master, and making
+Simple/Master genuinely one engine
+
+Two separate asks, tackled together since the second only became
+apparent while scoping the first:
+
+**1. UI: Advanced tab removed, Simple + Master only.** The three-way
+`ToggleButton` row (Simple/Advanced/Master) is now two-way. `mode` is a
+raw `Int` persisted in SharedPreferences (`prefs.getInt("mode", 0)`) —
+rather than renumbering Master from 2→1 (which would need a migration
+for anyone with `mode` already persisted as 1 or 2), the `when` dispatch
+just treats anything non-zero as Master via its existing `else` branch,
+so old persisted values fall through safely with zero migration code.
+`AdvancedEqMode` and its private `EqBandSlider` helper (134 lines, only
+caller) were deleted outright, not left dead in the file.
+
+**2. The real bug underneath "collapse Advanced into Master": Simple and
+Master's embedded parametric editor were two independent EQ systems
+that could silently overwrite each other**, not just a UI redundancy.
+Root cause: `EQualizerService.applyProfile(profile)` **fully replaces**
+whatever bands are live — it's not additive — and there were two
+separate ViewModels calling it:
+- `AxionEqViewModel` (Simple, and formerly Advanced) — fixed 10 bands at
+  canonical frequencies (31Hz..16kHz), builds a `SavedEQProfile` and
+  calls `eqProfileRepository.saveProfile()` + `setActiveProfile()` +
+  `equalizerService.applyProfile()` on every edit (`applyToService()`).
+  This part was already correct.
+- `EQViewModel` (Master's embedded `ParametricEqEditor`, arbitrary/
+  unlimited bands, JSON/AutoEQ import, named profiles) — **only** called
+  `equalizerService.applyProfile()` directly on every edit
+  (`applyCurrentProfile()`), never touching the repository. So a live
+  edit in Master updated the DSP but the repository's `activeProfile`
+  stayed pointing at whatever Simple had last set — meaning Master's
+  edits were invisible to Simple, invisible to a restart if not
+  explicitly Saved, and could get silently discarded the moment Simple
+  touched anything (Simple would rebuild from its own last-known
+  `_bandGains`, unaware Master had changed anything).
+- On top of that, `EQViewModel.init{}` only ever read the repository's
+  profiles/active-profile **once**, in a one-shot snapshot — and since
+  this ViewModel instance survives tab switches (cached by `viewModel()`'s
+  ViewModelStore), that snapshot went stale the first time Simple touched
+  anything. Same problem for `enabled`: a one-shot DataStore read meant
+  the outer master toggle (top of `AxionEqScreen`) could go out of sync
+  with what Master's editor thought was enabled.
+
+Fixed with three changes, meant to be read together:
+- `EQViewModel` now **reactively collects**
+  `repository.profiles`/`repository.activeProfile` and the
+  `ParametricEQEnabledKey` DataStore flow instead of one-shot reads —
+  `EQProfileRepository` is a `@Singleton` that loads synchronously in its
+  own `init{}` (confirmed — plain `SharedPreferences` read, not suspend),
+  so the first collection is immediate, not async-empty. A guard
+  (`active?.id != current.selectedProfile?.id`) stops this from
+  re-triggering off its own writes echoing back through the repository.
+- `EQViewModel.applyCurrentProfile()` now **also persists + activates on
+  every edit** (`repository.saveProfile()` + `setActiveProfile()`, not
+  just `equalizerService.applyProfile()`) — the write-path half of the
+  fix, mirroring exactly what Simple's `applyToService()` already did.
+  Known accepted trade-off, not solved here: if the currently-selected
+  profile is a built-in/non-custom one, live-editing it now persists
+  those edits into its stored definition (same as Simple already does
+  for its own `"echo_tuning"` id) — there's no read-only/"Save As only"
+  concept in the data model to prevent that.
+- `AxionEqViewModel` now **also reactively collects**
+  `eqProfileRepository.activeProfile`, adopting an externally-changed
+  profile into `_bandGains`/`_bandQ`/`_preampDb` (and persisting that to
+  its own SharedPreferences cache) — but **only when the incoming
+  profile has exactly the 10 canonical frequencies** (count AND per-band
+  frequency match, `<1.0` Hz tolerance). If Master's free editor changed
+  to a different band count/shape, Simple deliberately leaves its own
+  state untouched rather than misreading mismatched bands — the next
+  Simple-side edit rebuilds a valid canonical profile and becomes active
+  again. Dedup uses **structural equality** against the exact `Profile`
+  object this ViewModel itself last pushed (`lastAppliedProfile`), not
+  just `id` — an id-only check would miss Master editing the *same*
+  `"echo_tuning"` id with different band content, since both would share
+  an id.
+- Also removed the now-redundant second "Enable Parametric EQ"
+  `SwitchPreference` that used to render inside Master's embedded editor
+  (`EqScreen.kt`) — confirmed via grep it had exactly one caller (this
+  one) — since it drove the exact same `ParametricEQEnabledKey` the outer
+  master toggle at the top of `AxionEqScreen` already does; having two
+  visible switches for one flag was part of what made this feel like two
+  separate systems even after the state itself was unified.
+
+**Verified standalone**: the canonical-shape-matching guard (band count +
+per-band frequency tolerance) and the gain-scaling round-trip
+(`display = profile.gain * 50`, reversed on the way in) were pulled out
+and checked against a JVM harness — a real 10-band canonical profile is
+recognized, an 11-band profile is correctly rejected (not misread), a
+same-count-different-frequency profile is correctly rejected, the
+gain round-trip is exact, structural equality holds for two
+independently-built-but-identical profiles (the dedup case), and a
+same-id-different-content profile is correctly NOT deduped (the specific
+bug an id-only guard would have missed). **Not verified**: any of the
+actual Compose/StateFlow wiring, ViewModelStore lifetime assumptions, or
+whether this feels smooth/instant on a real device — none of that is
+testable without an Android runtime.
+
+## 2c. This session's other fix — the DSP wasn't initialized until the EQ
+screen was opened
+
+Separate bug, found while investigating why Simple/Master "felt
+disconnected": `EqualizerService` (the `@Singleton` holding the live
+audio-processor chain) has **zero self-initialization**. Every
+`pending*` field (balance, bass boost, width, limiter, tempo/pitch, the
+active profile, convolution) starts at a hardcoded default and stays
+there until something calls a setter. The *only* code that ever loaded
+persisted settings and called those setters lived inside
+`AxionEqViewModel.init{}`/`EQViewModel.init{}` — i.e., only ran once the
+user actually navigated to the EQ screen. A user who configured EQ
+settings, restarted the app, and played a track without opening the EQ
+screen first got completely unequalized audio (flat, no limiter, no bass
+boost, tempo/pitch at 1.0/0, no convolution) despite having real saved
+preferences sitting unused in DataStore.
+
+Fixed with a new file, `eq/EqStartupInitializer.kt`
+(`restorePersistedEqState()`), called from `MusicService.onCreate()`
+*before* `createRenderersFactory()` forces the lazy
+`customEqAudioProcessor`/`tempoPitchAudioProcessor` properties into
+existence. Restoration logic (which keys, which defaults, the
+re-validate-by-reparsing approach for convolution) is deliberately kept
+in sync with `AxionEqViewModel.init{}`'s own restore block — **if one
+changes, check the other**, they're not sharing code, just mirrored by
+hand.
+
+**Known, honestly-stated limitation, not solved here**: DataStore reads
+are suspend, so this can't be fully synchronous inside Android's
+synchronous `onCreate()`. It's launched on `ioScope`; there's a normally-
+tiny window between that coroutine being launched and it completing
+where a processor could already be attached with defaults still in
+effect. Every setter this calls is safe to call in either order (see
+`addAudioProcessor()`'s existing pending-state application, untouched by
+this), so the worst case is a brief unequalized start, never a stuck bad
+state — but this ordering has never been measured on a real device, only
+reasoned about. **Not verified on-device at all** — same caveat as
+everything else in this handover: the restore logic's *shape* was
+checked against `AxionEqViewModel`'s existing, already-working version,
+but the actual timing behavior on a real phone at real app-startup speed
+is unconfirmed.
 
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 
-1. **On-device verification pass** — nothing convolution- or spectrum-
-   related has ever run on an actual phone; this is arguably overdue
-   given how much has been built on top of it across five patches.
-2. **Tempo/pitch engine** — separate, larger DSP subsystem.
-3. Something else the user names.
+1. **On-device verification pass** — nothing convolution-, spectrum-, or
+   canonical-engine-related has ever run on an actual phone; this is
+   arguably overdue given how much has been built on top of it.
+2. **Preset picker moved to the top of Simple** — asked for, not yet
+   done (see chat history around the Advanced-tab-removal decision).
+3. **Flanger effect for Simple** — asked for; confirmed via grep there is
+   currently zero flanger implementation anywhere in the codebase, so
+   this is a genuine from-scratch DSP build, not a "make it work" fix.
+4. **Spectrum-not-showing investigation** — user reported the spectrum
+   analyzer "isn't showing"; the code path looks correct (there's already
+   a disabled-state hint text when the master EQ toggle is off), but this
+   was never confirmed against an actual repro — could be the master
+   toggle being off (a discoverability issue, not a bug) or a genuine
+   on-device rendering bug across the never-verified spectrum patches.
+   Get a repro (are BOTH the master toggle and the spectrum's own switch
+   on?) before touching code here.
+5. Something else the user names.
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered

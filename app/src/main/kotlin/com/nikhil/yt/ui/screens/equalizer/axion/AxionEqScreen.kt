@@ -81,7 +81,11 @@ fun AxionEqScreen(
 ) {
     val enabled by viewModel.enabled.collectAsState()
     val bandGains by viewModel.bandGains.collectAsState()
-    val bandQ by viewModel.bandQ.collectAsState()
+    // bandQ used to be collected here for the removed Advanced tab's
+    // per-band Q sliders. AxionEqViewModel.bandQ/setBandQ stay defined —
+    // Simple's applyToService()/saveCustomProfile() still read _bandQ.value
+    // when building the bands it pushes to the DSP — just nothing in this
+    // screen edits it directly anymore now that Advanced is gone.
     val mode by viewModel.mode.collectAsState()
     val preampDb by viewModel.preampDb.collectAsState()
     val balance by viewModel.balance.collectAsState()
@@ -171,6 +175,15 @@ fun AxionEqScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
             ) {
+                // Advanced used to be a third tab here (mode == 1), folded
+                // into Master below. Deliberately NOT renumbering Master
+                // from 2 down to 1 — mode is a raw Int persisted in
+                // SharedPreferences ("mode"), so a device that had Master
+                // (2) or the old Advanced (1) selected before this update
+                // both still fall through to the `else` branch in the
+                // `when` below and land on Master, with zero migration
+                // step needed. Don't "clean up" this to 0/1 later without
+                // adding an actual prefs migration.
                 ToggleButton(
                     checked = mode == 0,
                     onCheckedChange = { viewModel.setMode(0) },
@@ -180,16 +193,8 @@ fun AxionEqScreen(
                     Text(stringResource(R.string.eq_simple))
                 }
                 ToggleButton(
-                    checked = mode == 1,
+                    checked = mode != 0,
                     onCheckedChange = { viewModel.setMode(1) },
-                    modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                    shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
-                ) {
-                    Text(stringResource(R.string.eq_advanced))
-                }
-                ToggleButton(
-                    checked = mode == 2,
-                    onCheckedChange = { viewModel.setMode(2) },
                     modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
                     shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 ) {
@@ -224,20 +229,6 @@ fun AxionEqScreen(
                         viewModel = viewModel,
                         isDirty = isDirty,
                         onSaveClick = { showSaveDialog = true }
-                    )
-                    1 -> AdvancedEqMode(
-                        bandGains = bandGains,
-                        bandQ = bandQ,
-                        enabled = enabled,
-                        onBandChange = { band, value ->
-                            viewModel.setBandGain(band, value)
-                        },
-                        onBandQChange = { band, q ->
-                            viewModel.setBandQ(band, q)
-                        },
-                        onReset = {
-                            viewModel.reset()
-                        }
                     )
                     else -> {
                         // "Master" — master-bus rotary knobs (Preamp, Balance, Bass
@@ -1273,141 +1264,6 @@ private fun SavePresetDialog(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AdvancedEqMode(
-    bandGains: FloatArray,
-    bandQ: FloatArray,
-    enabled: Boolean,
-    onBandChange: (Int, Float) -> Unit,
-    onBandQChange: (Int, Float) -> Unit,
-    onReset: () -> Unit,
-) {
-    val bandLabels = arrayOf("31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k")
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.extraLarge)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(vertical = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                for (band in 0..9) {
-                    EqBandSlider(
-                        label = bandLabels[band],
-                        value = bandGains[band],
-                        qValue = bandQ.getOrElse(band) { 1.41f },
-                        enabled = enabled,
-                        onValueChange = { onBandChange(band, it) },
-                        onQChange = { onBandQChange(band, it) },
-                    )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            OutlinedButton(onClick = onReset) {
-                Icon(Icons.Rounded.Replay, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.eq_reset))
-            }
-        }
-    }
-}
-
-@Composable
-private fun EqBandSlider(
-    label: String,
-    value: Float,
-    qValue: Float,
-    enabled: Boolean,
-    onValueChange: (Float) -> Unit,
-    onQChange: (Float) -> Unit,
-) {
-    Column(
-        modifier = Modifier.width(56.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "%+.1f".format(value / 50f),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (enabled) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outline,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Box(
-            modifier = Modifier.height(200.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = -600f..600f,
-                enabled = enabled,
-                modifier = Modifier
-                    .width(200.dp)
-                    .layout { measurable, constraints ->
-                        val placeable = measurable.measure(
-                            constraints.copy(
-                                minWidth = constraints.minHeight,
-                                maxWidth = constraints.maxHeight,
-                            )
-                        )
-                        layout(placeable.height, placeable.width) {
-                            placeable.place(
-                                -placeable.width / 2 + placeable.height / 2,
-                                placeable.width / 2 - placeable.height / 2
-                            )
-                        }
-                    }
-                    .graphicsLayer { rotationZ = -90f },
-            )
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        // Per-band Q (bandwidth/quality) — the Poweramp-style "how narrow/
-        // wide is this band's bell curve" control, previously fixed at 1.41
-        // for every band regardless of what the user set gain to. Kept as a
-        // compact horizontal slider under each vertical fader rather than a
-        // second full-height slider, since Q is a secondary/occasional
-        // adjustment compared to gain.
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Q %.1f".format(qValue),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Slider(
-            value = qValue,
-            onValueChange = onQChange,
-            valueRange = 0.4f..4.0f,
-            enabled = enabled,
-            modifier = Modifier.width(56.dp),
-        )
     }
 }
 
