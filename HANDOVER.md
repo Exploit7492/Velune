@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v9)
+# Velune EQ/DSP Handover (v10)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1053,7 +1053,109 @@ If a future session gets on-device access, this specific number is worth
 sanity-checking against real measured startup timing, not just trusting
 the reasoning above.
 
+## 2g. This session's work — the startup restore was still a race, not a
+guarantee, and the user correctly called it out
+
+The user pushed back on §2f/§2c's fix, specifically: "the engine is not
+racing against renderer-chain creation but rather the creation chain
+itself so the init is guaranteed." They were right to push back. §2f's
+fix (`runBlocking` + `withTimeoutOrNull(750ms)` around a DataStore read
+in `MusicService.onCreate()`) is *bounded*, and provably all-or-nothing if
+the bound fires — but it is still, structurally, a race with a deadline
+attached. "Probably wins, with a documented fallback if it doesn't" is not
+the same claim as "cannot lose," and the user's phrasing made clear they
+wanted the stronger one.
+
+**The actual fix**: stop trying to win a race between two *separate*
+things (a restore call, and renderer-chain construction) and instead make
+restoration part of *construction itself*, so there's nothing left to
+race. Concretely:
+
+- `EqualizerService` (the `@Singleton` DSP engine both Simple and Master
+  funnel through — see §2b) now takes `@ApplicationContext Context` and
+  `EQProfileRepository` as constructor params and has an `init {}` block
+  that restores every persisted scalar (balance, bass boost, stereo
+  width, limiter enabled/ceiling, tempo, pitch, convolution
+  enabled/IR-path) synchronously, plus the active band profile if the
+  master toggle is on. This runs unconditionally as part of Kotlin object
+  construction — a language guarantee, not a scheduling outcome.
+- Those 8 scalars previously lived *only* in DataStore (suspend-only,
+  Flow-backed — the actual reason a race existed at all). They now also
+  live in a small private `SharedPreferences` file this class owns
+  (`eq_engine_state`), read/written synchronously, no coroutines
+  involved. DataStore is untouched and still written by the ViewModels —
+  it remains the reactive source the EQ screen's Compose state observes;
+  it's just no longer load-bearing for *this* class's own startup
+  correctness.
+- The band/profile data didn't need new plumbing: `EQProfileRepository`
+  already loads synchronously from plain `SharedPreferences` in its own
+  `init {}` (this was already correct, confirmed by reading it, not
+  assumed). The master on/off toggle didn't either:
+  `AxionEqViewModel.setEnabled()` already wrote a synchronous mirror to
+  its own `SharedPreferences` (`echo_eq_prefs`/`"enabled"`) alongside its
+  DataStore write. `EqualizerService.init{}` just reads that same
+  key/file directly instead of taking DataStore's copy of it — one fewer
+  duplicate value that could drift.
+- `MusicService.onCreate()`'s `runBlocking`/`withTimeoutOrNull`/fallback
+  block is gone entirely — deleted, not merely bypassed. There is nothing
+  left at that call site to time-bound, because by the time any code in
+  `onCreate()` runs, Hilt has already field-injected `equalizerService`
+  (during `super.onCreate()`, which runs first), and that object is fully
+  restored the moment it exists.
+- `EqStartupInitializer.kt` (the old external restore function) is
+  deleted outright — confirmed via grep there are no remaining callers
+  after removing the one in `MusicService.onCreate()`.
+
+**Why this is actually the stronger guarantee, not just a reworded
+version of the old one**: the old fix's safety argument was "the only
+suspend point is before any writes happen, so a timeout can't leave a
+half-applied state" — true, but it says nothing about *whether* the
+restore finishes before the renderer chain needs it; it only bounds how
+badly a failure degrades. The new version has no failure mode of that
+shape to bound, because there's no longer an asynchronous step in the
+dependency chain at all for these fields — Dagger/Hilt's own construction
+order (dependencies before dependents) is what's being relied on, the
+same mechanism that already made `EQProfileRepository`'s synchronous
+`init{}` safe.
+
+**Honest trade-off, stated plainly**: this `init {}` block — specifically
+the convolution branch, which does blocking `FileInputStream` +
+`ImpulseResponseLoader.load()` — now runs synchronously during Hilt's
+field-injection step, which for `MusicService` happens on the thread that
+calls `onCreate()` (normally the main thread for a started Service). This
+is not a new risk introduced by this change: the *previous* restore path
+did the exact same blocking IR-file parse inside its `runBlocking` block,
+which also ran on the main thread. This change doesn't make that better
+or worse — it was never fixed, isn't fixed now, and is worth flagging as
+a real "could this ANR on a huge IR file on a slow device" question for a
+future on-device pass, alongside everything else in §3 that's never run
+outside a sandbox.
+
+**Verified**: read every call site by hand (grep for `EqualizerService(`,
+`restorePersistedEqState`, `EqStartupInitializer` across the whole
+`app/src/main/kotlin` tree) to confirm nothing else constructs
+`EqualizerService` manually (it's exclusively Hilt-injected, always was)
+and nothing else references the deleted function/file. Brace/paren
+balance-checked both touched files. Confirmed `AxionEqViewModel`'s own
+existing DataStore-based restore-on-screen-open block is now fully
+redundant but harmless (idempotent re-application of values
+`EqualizerService` already has) — left untouched deliberately rather than
+ripped out, since it's not broken and touching ViewModel init behavior
+for a class that already works is unnecessary risk for this patch's
+actual goal.
+
+**Not verified, same as everything else in this file**: whether Hilt's
+field-injection-happens-inside-super.onCreate() ordering assumption holds
+for the actual generated `Hilt_MusicService` code in this project's
+specific AGP/Hilt version (this is standard, well-documented Hilt
+codegen behavior, not something specific to this app, but "standard
+documented behavior" and "confirmed by reading the actual generated
+code in this build" are different levels of certainty, and only the
+former was available here). Also not verified: real device timing for
+the convolution parse work described above.
+
 ## 4. Suggested next step
+
 
 Ask the user directly, `ask_user_input_v0` style:
 
