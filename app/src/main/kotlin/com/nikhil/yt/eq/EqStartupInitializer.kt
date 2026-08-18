@@ -49,20 +49,24 @@ private const val TAG = "EqStartupInitializer"
  * AxionEqViewModel.init{}'s own restore block — if one changes, check the
  * other.
  *
- * One honest caveat: DataStore reads are suspend, so this can't be fully
- * synchronous inside Android's synchronous onCreate() lifecycle callback.
- * There's an unavoidable, normally-tiny window between this coroutine
- * being launched and it completing where a processor could already be
- * attached with defaults still in effect. In practice this is far shorter
- * than the time Android takes to actually begin playback after
- * MusicService.onCreate() runs (media session setup, notification,
- * resolving a track), but it isn't provably zero. It's also not unsafe in
- * either ordering — every setter this calls (EqualizerService.setBalance
- * et al.) is safe to call whether a processor already exists or not (see
- * addAudioProcessor's pending-state application) — so the worst case is a
- * very brief unequalized start, never a stuck bad state. This has not
- * been verified on an actual device; only the restore logic's shape has
- * been checked against AxionEqViewModel's existing (working) version.
+ * One honest caveat: DataStore reads are suspend, so this can't be a truly
+ * synchronous read. `MusicService.onCreate()` calls this inside a bounded
+ * `runBlocking`/`withTimeoutOrNull` (see the call site) rather than firing
+ * it off with `launch{}` and moving on — so in the normal case, by the
+ * time `createRenderersFactory()` runs and processors are attached, this
+ * has already fully applied. The bound exists only so a pathological
+ * slow/stuck read (corrupted file, extreme disk contention) can't turn
+ * into a startup hang; if it's ever actually hit, the call site falls
+ * back to finishing this in the background instead, which is still safe
+ * — every setter here (`EqualizerService.setBalance` et al.) is safe to
+ * call whether a processor already exists or not (see
+ * `addAudioProcessor()`'s pending-state application), so the worst case
+ * in that rare fallback path is a very brief unequalized start, never a
+ * stuck bad state. This has not been verified on an actual device; only
+ * the restore logic's shape has been checked against `AxionEqViewModel`'s
+ * existing (working) version, and the blocking-with-timeout behavior at
+ * the call site has only been reasoned through, not measured against a
+ * real cold start's actual DataStore-read latency.
  */
 suspend fun restorePersistedEqState(
     context: Context,

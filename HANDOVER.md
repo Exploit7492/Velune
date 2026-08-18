@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v8)
+# Velune EQ/DSP Handover (v9)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,34 +93,46 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v7), the **real GitHub `main`** was last confirmed
+As of this handover (v9), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-ee25ce6 fix(ci): restore VeluneLoader import dropped by the lyrics-cache patch (#146)
+36d5518 fix(eq): spectrum analyzer could stay outside the active DSP chain even with its switch on
 ```
 
-That includes patch `0015` (tempo/pitch engine) merged, plus three more
-commits (`aed244d`, `2adc975`, `ee25ce6`) that landed via normal GitHub PRs
-rather than this session's `git am`-patch workflow — a lyrics-cache bug fix
-and its own follow-up CI fix, unrelated to the EQ/DSP work this handover
-tracks. Don't confuse that PR-number commit style (`(#146)`) with the
-numbered `.patch` file sequence — they're two different, unrelated
-histories that happen to share the same `main` branch.
+**Note on the stale pointer this replaced**: the previous version of this
+file was titled "v8" but this section still said "(v7)" and pointed at
+`ee25ce6`/patch `0016` — four real commits behind (`aed244d`, `2adc975`,
+`393d09c`, `861719d`, `d420a83`, `36d5518` — six, actually) by the time it
+was read. Whoever wrote §2b–§2e updated the content but not this pointer,
+likely because that session committed straight to a local clone without
+going through the `git am`-patch handoff (no separate session needed to
+know "which number is next"). If you're a session working from a pasted
+copy of this file rather than a fresh clone, **always verify against a
+real `git log`, don't trust this pointer blindly** — this is exactly the
+failure mode that bit the last session.
 
-One more patch was built after that commit in the v7 session — `0016`, a
-rotary-knob/spectrum-meter visual restyle (no DSP changes, UI-only) — but
-**you have no way to know from here whether the user has applied it yet.**
-Check the log after cloning:
+Also note: `aed244d`, `2adc975`, and `ee25ce6` landed via normal GitHub
+PRs (`(#144)`, `(#146)`) rather than this session's `git am`-patch
+workflow — don't confuse that PR-number commit style with the numbered
+`.patch` file sequence. `393d09c`, `861719d`, and `d420a83` appear to have
+been committed directly too (author `Pops <pops@velune.dev>`, no `.patch`
+file evidence) — the numbered-patch discipline isn't being followed with
+perfect consistency session to session; don't assume it always will be.
 
-- If `main` still tops out at `ee25ce6` → `0016` not applied yet. Ask if
-  the user still has the file, or regenerate it from §2 below if needed.
-- If `main` already has a commit titled `feat(ui): neon restyle for
-  rotary knobs and spectrum meter` → applied, build on top of that
-  history directly. This file is updated in that same patch, so if that
-  commit landed, this version of the file is already on `main` too.
+One more patch was built after that commit in the v9 session — `0018`,
+described in §2f below — but **you have no way to know from here whether
+the user has applied it yet.** Check the log after cloning:
 
-Number your next patch `0017`.
+- If `main` still tops out at `36d5518` → `0018` not applied yet. Ask if
+  the user still has the file, or regenerate it from §2f below if needed.
+- If `main` already has a commit titled `fix(eq): block startup EQ
+  restore (bounded) instead of racing the renderer chain` → applied,
+  build on top of that history directly. This file is updated in that
+  same patch, so if that commit landed, this version of the file is
+  already on `main` too.
+
+Number your next patch `0019`.
 
 ## 2. What's been done so far (in order)
 
@@ -949,6 +961,97 @@ bug the moment it's the only thing turned on.
 **Not verified on-device** — same caveat as everything above: confirmed
 by reading the real Media3 source and this class's own logic, not by
 watching bars actually move on a phone.
+
+## 2f. This session's work — user re-asked for the two things §2b/§2c
+already did, plus tightening the startup-restore race into a real
+guarantee
+
+The user's request this session was, in substance, "unify Simple/Master
+into one canonical engine" and "init the DSP pipeline at app startup with
+full persistence" — **both already done**, in §2b and §2c above, by the
+session before this one. First real step this session was verifying that
+against the actual current code (not just trusting the doc's own
+claims) — read `EqStartupInitializer.kt` and its exact call site in
+`MusicService.onCreate()` directly, confirmed the ordering and logic
+matched what §2c describes.
+
+One genuine gap, though, once checked closely: §2c's own restore call was
+`ioScope.launch { restorePersistedEqState(...) }` — fire-and-forget,
+*before* `createRenderersFactory()` on the next line, which is what forces
+the lazy `customEqAudioProcessor`/`tempoPitchAudioProcessor` properties
+into existence. That ordering makes it **likely** the restore wins the
+race (§2c's own doc comment reasoned through why), but not **guaranteed**
+— the user's phrasing ("the pipeline is already set", not "probably set
+in time") reads like they want the stronger guarantee, not the
+probabilistic one.
+
+Fixed in `MusicService.onCreate()`: the fire-and-forget `launch` is now a
+bounded blocking wait —
+
+```kotlin
+val eqStateRestored = kotlinx.coroutines.runBlocking {
+    kotlinx.coroutines.withTimeoutOrNull(RESTORE_EQ_STATE_TIMEOUT_MS) {
+        restorePersistedEqState(...)
+        true
+    }
+}
+if (eqStateRestored == null) {
+    // pathological slow/stuck read -- fall back to the old
+    // fire-and-forget behavior for this one cold start
+    ioScope.launch { restorePersistedEqState(...) }
+}
+```
+
+`RESTORE_EQ_STATE_TIMEOUT_MS = 750L`, a new companion-object constant.
+Why this shape specifically:
+- `restorePersistedEqState` has exactly **one** suspend point —
+  `context.dataStore.data.first()` at its very top. Every setter call
+  after that (`equalizerService.setBalance(...)` etc., including the
+  convolution file re-validation via blocking `FileInputStream`) is
+  synchronous Kotlin, not further suspend calls. That means
+  `withTimeoutOrNull` cancelling this coroutine can only ever happen
+  *while still waiting on that one Flow read* — never partway through
+  applying settings. A timeout here is provably all-or-nothing, never a
+  half-applied state. This was the actual thing worth double-checking
+  before adding a timeout at all — a timeout that could fire mid-way
+  through a sequence of stateful writes would be a real correctness risk;
+  one that can only fire before any writes happen isn't.
+- `runBlocking` on `onCreate()`'s thread is normally something to avoid on
+  Android (blocking main-thread I/O), but a local Preferences DataStore
+  read of a small file is a case where this trade-off is commonly made —
+  it's not network I/O, and the whole point here is that the *later* code
+  in the same `onCreate()` (building the renderer chain the restored
+  settings need to already be visible to) has a real ordering dependency
+  on this finishing first. 750ms is generous relative to the low-single-
+  digit-ms this should normally take; it exists purely as a backstop
+  against a pathological case (corrupted file, extreme disk contention),
+  not as an expected code path.
+
+**Verified**: the control-flow *shape* — not the literal
+`kotlinx.coroutines` APIs, which aren't available in this sandbox's JVM
+harness (no Maven Central in the network allowlist) — against a
+`java.util.concurrent`-based model of the same bounded-wait-with-fallback
+pattern (`CompletableFuture.get(timeout)` standing in for
+`runBlocking`/`withTimeoutOrNull`). Confirmed: a fast "read" (5ms)
+completes synchronously with every setting applied before the caller
+continues; a pathologically slow "read" (2000ms, past the 750ms bound)
+unblocks the caller at the bound with **nothing** applied yet (matching
+the all-or-nothing claim above), then the fallback path eventually
+finishes applying everything once the slow read actually completes. This
+confirms the *pattern* is sound; it does not confirm
+`kotlinx.coroutines.runBlocking`/`withTimeoutOrNull` behave identically to
+the `java.util.concurrent` stand-ins used here — that part is standard,
+well-documented library behavior, not something this session verified
+firsthand.
+
+**Not verified on-device, same as everything else in this file**: whether
+750ms is actually a sensible bound relative to a real device's real
+DataStore-file-read latency (could be far shorter in practice, making the
+bound irrelevantly generous — or, in some pathological low-end-device/
+cold-storage scenario, could conceivably matter more than assumed here).
+If a future session gets on-device access, this specific number is worth
+sanity-checking against real measured startup timing, not just trusting
+the reasoning above.
 
 ## 4. Suggested next step
 

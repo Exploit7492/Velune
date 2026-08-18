@@ -554,17 +554,48 @@ class MusicService :
 
         // Restore persisted EQ/DSP settings (balance, bass boost, width,
         // limiter, tempo/pitch, the active band profile, convolution)
-        // before the renderer chain below gets built — see
-        // EqStartupInitializer's doc for why this used to only happen
-        // once the EQ screen was opened, and why that was a real bug (a
-        // track played right after an app restart could play completely
-        // unequalized despite real saved settings existing).
-        ioScope.launch {
-            com.nikhil.yt.eq.restorePersistedEqState(
-                context = this@MusicService,
-                equalizerService = equalizerService,
-                eqProfileRepository = eqProfileRepository,
-            )
+        // *before* the renderer chain below is built, and — unlike the
+        // original fire-and-forget version of this call — actually block
+        // until it's done, bounded by a timeout. DataStore reads are
+        // suspend-only, so this can't be a truly synchronous read, but a
+        // bounded runBlocking here is the difference between "probably
+        // wins the race against createRenderersFactory() below" and
+        // "guaranteed to have already applied every pending* value before
+        // any processor is attached" — for a small local preferences file
+        // this should resolve in low single-digit ms, and RESTORE_TIMEOUT_MS
+        // exists purely so a pathological slow/stuck read (corrupted file,
+        // extreme disk contention) can't turn into a startup hang: it just
+        // falls back to the old best-effort behavior for that one cold
+        // start (the settings still apply moments later once the read
+        // does complete, same as before — EqualizerService's setters push
+        // to already-attached processors too, not just newly-registered
+        // ones). See EqStartupInitializer's doc for the full reasoning.
+        val eqStateRestored = kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(RESTORE_EQ_STATE_TIMEOUT_MS) {
+                com.nikhil.yt.eq.restorePersistedEqState(
+                    context = this@MusicService,
+                    equalizerService = equalizerService,
+                    eqProfileRepository = eqProfileRepository,
+                )
+                true
+            }
+        }
+        if (eqStateRestored == null) {
+            // Pathologically slow/stuck DataStore read (the only suspend
+            // point in restorePersistedEqState is the single .first() call
+            // at its top -- everything after that is synchronous, so a
+            // timeout here means genuinely nothing was applied yet, never
+            // a half-applied partial state). Fall back to the original
+            // fire-and-forget behavior for this one cold start rather than
+            // dropping the restore entirely.
+            Timber.tag("MusicService").w("EQ state restore exceeded ${RESTORE_EQ_STATE_TIMEOUT_MS}ms; finishing in the background")
+            ioScope.launch {
+                com.nikhil.yt.eq.restorePersistedEqState(
+                    context = this@MusicService,
+                    equalizerService = equalizerService,
+                    eqProfileRepository = eqProfileRepository,
+                )
+            }
         }
 
         try {
@@ -4865,6 +4896,12 @@ class MusicService :
         const val PERSISTENT_AUTOMIX_FILE = "persistent_automix.data"
         const val PERSISTENT_PLAYER_STATE_FILE = "persistent_player_state.data"
         const val MAX_CONSECUTIVE_ERR = 5
+        // Bound on the blocking DataStore read in onCreate() that restores
+        // EQ/DSP settings before the renderer chain is built (see the call
+        // site and EqStartupInitializer.kt). A local Preferences DataStore
+        // read normally resolves in low single-digit ms; this exists only
+        // so a pathological slow/stuck read can't turn into a startup hang.
+        const val RESTORE_EQ_STATE_TIMEOUT_MS = 750L
         const val MIN_PRESENCE_UPDATE_INTERVAL = 20_000L
     }
 }
