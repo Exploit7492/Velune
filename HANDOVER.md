@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v10)
+# Velune EQ/DSP Handover (v11)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,46 +93,58 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v9), the **real GitHub `main`** was last confirmed
+As of this handover (v11), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-36d5518 fix(eq): spectrum analyzer could stay outside the active DSP chain even with its switch on
+efaf9e0 fix(eq): make startup restore a construction-time guarantee, not a bounded race
 ```
+
+That includes both the bounded-race startup-restore fix (§2f, `0018`
+era) *and* its own follow-up in the same session that replaced it with a
+construction-time guarantee instead (§2g) — the user correctly pushed
+back on §2f's timeout-based approach and got the stronger version before
+that session ended, so don't be confused seeing both described below;
+only §2g's version is live in the actual code.
 
 **Note on the stale pointer this replaced**: the previous version of this
 file was titled "v8" but this section still said "(v7)" and pointed at
-`ee25ce6`/patch `0016` — four real commits behind (`aed244d`, `2adc975`,
-`393d09c`, `861719d`, `d420a83`, `36d5518` — six, actually) by the time it
-was read. Whoever wrote §2b–§2e updated the content but not this pointer,
-likely because that session committed straight to a local clone without
-going through the `git am`-patch handoff (no separate session needed to
-know "which number is next"). If you're a session working from a pasted
-copy of this file rather than a fresh clone, **always verify against a
-real `git log`, don't trust this pointer blindly** — this is exactly the
-failure mode that bit the last session.
+`ee25ce6`/patch `0016` — six real commits behind by the time it was read.
+Whoever wrote §2b–§2e updated the content but not this pointer, likely
+because that session committed straight to a local clone without going
+through the `git am`-patch handoff. If you're working from a pasted copy
+of this file rather than a fresh clone, **always verify against a real
+`git log`, don't trust this pointer blindly** — this is exactly the
+failure mode that bit that session, and very nearly repeated itself
+writing *this* update (v10's pointer said "(v9)"/`36d5518` while `main`
+was actually already four commits past that).
 
-Also note: `aed244d`, `2adc975`, and `ee25ce6` landed via normal GitHub
-PRs (`(#144)`, `(#146)`) rather than this session's `git am`-patch
-workflow — don't confuse that PR-number commit style with the numbered
-`.patch` file sequence. `393d09c`, `861719d`, and `d420a83` appear to have
-been committed directly too (author `Pops <pops@velune.dev>`, no `.patch`
-file evidence) — the numbered-patch discipline isn't being followed with
-perfect consistency session to session; don't assume it always will be.
+Also note: some commits land via normal GitHub PRs (`(#144)`, `(#146)`)
+rather than this session's `git am`-patch workflow, and some appear to
+have been committed directly (author `Pops <pops@velune.dev>`, no
+`.patch` file evidence) — the numbered-patch discipline isn't followed
+with perfect consistency session to session; don't assume it always
+will be.
 
-One more patch was built after that commit in the v9 session — `0018`,
-described in §2f below — but **you have no way to know from here whether
-the user has applied it yet.** Check the log after cloning:
+One more patch was built after that commit in the v11 session — `0019`,
+described in §2h below: `CustomEqualizerAudioProcessor.isActive()` had
+the *exact same* "only active if some control currently deviates from
+default" bug that `TempoPitchAudioProcessor` was fixed for in `0018`,
+just never generalized to this class too — very likely the real
+explanation for "tempo/pitch/knobs/sliders only take effect after
+leaving and reopening the app" reports that kept coming in even after
+`0018` landed. **You have no way to know from here whether the user has
+applied `0019` yet.** Check the log after cloning:
 
-- If `main` still tops out at `36d5518` → `0018` not applied yet. Ask if
-  the user still has the file, or regenerate it from §2f below if needed.
-- If `main` already has a commit titled `fix(eq): block startup EQ
-  restore (bounded) instead of racing the renderer chain` → applied,
+- If `main` still tops out at `efaf9e0` → `0019` not applied yet. Ask if
+  the user still has the file, or regenerate it from §2h below if needed.
+- If `main` already has a commit titled `fix(eq): CustomEqualizerAudioProcessor
+  had the same isActive() bug already fixed for tempo/pitch` → applied,
   build on top of that history directly. This file is updated in that
   same patch, so if that commit landed, this version of the file is
   already on `main` too.
 
-Number your next patch `0019`.
+Number your next patch `0020`.
 
 ## 2. What's been done so far (in order)
 
@@ -1153,6 +1165,100 @@ documented behavior" and "confirmed by reading the actual generated
 code in this build" are different levels of certainty, and only the
 former was available here). Also not verified: real device timing for
 the convolution parse work described above.
+
+## 2h. This session's work — the SAME isActive() bug from §2 item 12,
+just never generalized past TempoPitchAudioProcessor
+
+The user reported, after `0018` (item 12: the tempo/pitch `isActive()`
+fix) was already live: "if I change the tempo or pitch or anything
+buttons rotation knobs or the sliders it only reflects when I go and
+come back to the app." They also separately asked, comparing this
+session's startup-restore fix (§2g) against an alternative approach:
+paraphrased, "is there a way to do this the way industry standards do
+it, where the engine isn't racing against renderer-chain creation but
+the creation chain itself guarantees init" — which is exactly what §2g
+already *did* (Hilt's field-injection-before-`onCreate()`-body ordering
+guarantee, not a race with a deadline). That part just needed confirming
+against the actual committed code, not new work — see the answer given
+in chat, summarized: §2g's construction-time approach is strictly
+stronger than a bounded-timeout race, because a bounded race's safety
+argument is "bounded failure mode," while construction-order's argument
+is "no failure mode of that shape exists" — the former still has a
+window where the deadline fires, the latter has no window at all.
+
+**The live-tweak report was a different, real, still-open bug** — same
+root cause and same fix shape as item 12, just in the other DSP class:
+
+`CustomEqualizerAudioProcessor.isActive()` (which every one of preamp,
+per-band gain/Q, bass boost, balance, stereo width, the limiter, the
+convolver, and the spectrum tap all live behind) still had the exact
+"true only if some specific control currently deviates from default"
+OR-chain pattern that was *already diagnosed and fixed* for
+`TempoPitchAudioProcessor` in item 12/`0018`. It had in fact already been
+patched *once* more since — see item 7/§2e's `spectrumAnalyzer.enabled`
+clause, added specifically because the spectrum toggle hit this same bug
+— but that patch added one more clause to the OR-chain rather than
+recognizing the OR-chain itself as the actual defect. Preamp gain was
+never covered by any clause in that chain at all: moving the Preamp knob
+alone, with every other control still at default, would have done
+nothing until either another control also went non-default or the next
+track's flush picked it up — which is likely most of what the user was
+actually hitting, since preamp/bands are the most commonly touched
+controls.
+
+**Fix**: `isActive()` now unconditionally returns `isActive` (the
+"is this a supported PCM format" flag this class already tracked, and
+had always correctly gated on) — no more per-control OR-chain to keep in
+sync with every setting this class has or will ever gain. This is the
+identical fix already shipped for `TempoPitchAudioProcessor`, and the
+same reasoning: Media3's `AudioProcessingPipeline` only re-checks
+`isActive()` at `flush()` (a new track), so a processor excluded from
+the active chain at that point stays excluded — silently — no matter how
+its internal state changes afterward, until the next flush. The only way
+to make every control on this processor live-tweakable without a
+reconfigure/reseek workaround is to never let the processor drop out of
+the chain to begin with.
+
+**Why this is safe** — verified by hand, not assumed, since "always run
+every stage" only doesn't change behavior if every stage is actually a
+no-op at its default/disabled state:
+- Biquad filters: `disable()` sets `filters = emptyList()`, so
+  `filters.forEach` is already a no-op when the master toggle is off —
+  confirmed by reading `disable()`/`applyProfile()` directly.
+- Bass boost: `bassBoostFilter` is `null` until a boost >0.01dB is set;
+  the processing loop already null-checks it.
+- Balance: `balance == 0.0` makes `leftGain == rightGain == preampGain`
+  algebraically — no channel imbalance introduced.
+- Stereo width: `applyStereoWidth()` already short-circuits to an
+  identity return when `abs(stereoWidth - 1.0) < 0.001`, read directly.
+- Limiter: `LookaheadLimiter.process()` already has `if (!enabled) return
+  left to right` as its first line (from the `0009` patch).
+- Convolver: `ConvolutionAudioProcessor.process()` has the same
+  `if (!enabled) return left to right` guard (from `0010`), and the
+  field itself is nullable/null until an IR is loaded.
+- Spectrum tap: every `spectrumAnalyzer.accept()` call site is already
+  wrapped in `if (spectrumAnalyzer.enabled)`.
+- Preamp: `preampGain` defaults to and resets to exactly `1.0`
+  (`10.0.pow(0.0 / 20.0)`), an exact identity multiply at 0dB.
+
+Every branch checked directly in the current source, not inferred from
+past sessions' notes. Small constant CPU cost now paid even when nothing
+is engaged (same trade-off already accepted and shipped for
+tempo/pitch) — no behavior change at any control's default value.
+
+**Also removed**: the outdated inline comment on the old OR-chain
+explaining the item-7/§2e spectrum-specific patch — no longer applicable
+once the whole chain it was patching is gone.
+
+**Not verified on-device** — same caveat as item 12: confirmed by
+reading this class's own source directly (not Media3's, this time, since
+the framework-behavior half of the reasoning was already confirmed
+against real Media3 source in item 12) and reasoning through every
+branch by hand, but not run. If tempo/pitch/knobs/sliders *still* don't
+apply live after this patch, the next thing to check is whichever of
+item 12's own still-open questions applies — whether
+`DefaultAudioSink` caches `AudioProcessingPipeline` instances across
+`flush()` in some path neither session's reading covered.
 
 ## 4. Suggested next step
 

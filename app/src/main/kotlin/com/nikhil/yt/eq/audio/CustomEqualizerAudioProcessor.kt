@@ -249,28 +249,45 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         return inputAudioFormat
     }
 
-    override fun isActive(): Boolean =
-        isActive && (
-            (equalizerEnabled && filters.isNotEmpty()) ||
-                bassBoostFilter != null ||
-                balance != 0.0 ||
-                kotlin.math.abs(stereoWidth - 1.0) >= 0.001 ||
-                lookaheadLimiter.enabled ||
-                convolutionEngine?.enabled == true ||
-                // Missing here is the actual "spectrum isn't showing" bug: with a
-                // flat/neutral profile and none of the other master-bus controls
-                // touched, this whole OR-chain was false even with the spectrum
-                // switch on and the master EQ toggle on. Media3's
-                // AudioProcessingPipeline only re-checks isActive() at flush()
-                // (confirmed against the real androidx/media source when this same
-                // class of bug was found and fixed for TempoPitchAudioProcessor —
-                // see that class's isActive() doc comment for the full mechanism),
-                // so this processor was silently excluded from the active chain
-                // and queueInput() — where spectrumAnalyzer.accept() actually runs —
-                // never fired. The switch turning "on" did nothing observable
-                // whenever nothing else in this chain happened to also be active.
-                spectrumAnalyzer.enabled
-            )
+    // Deliberately unconditional — NOT "true only if some control currently
+    // deviates from its default," which is what this used to be (an
+    // OR-chain checking equalizerEnabled/bassBoostFilter/balance/
+    // stereoWidth/limiter/convolution/spectrumAnalyzer one at a time).
+    //
+    // That pattern is a structural bug generator, not a series of
+    // unrelated bugs: Media3's AudioProcessingPipeline only re-evaluates
+    // isActive() for every processor at flush() (a format change, i.e. a
+    // new track — confirmed against the real androidx/media source, see
+    // TempoPitchAudioProcessor.isActive()'s doc comment for the full
+    // mechanism, and the fix history below for how this exact class of
+    // bug was found and fixed there first). Any control not itself
+    // checked in that OR-chain — preamp gain, for instance, which was
+    // missing from it entirely — silently did nothing when changed
+    // mid-track: the processor was never in the active chain to begin
+    // with, so queueInput() (where every one of these stages actually
+    // runs) never fired for it. It only started working once *some other*
+    // control also went non-default and flipped the OR true, or the next
+    // track's own flush picked up the by-then-nondefault value — which is
+    // exactly why it read as "only takes effect after leaving and
+    // reopening the app": backgrounding/returning doesn't fix anything by
+    // itself, but switching tracks does, and users conflate the two.
+    //
+    // The actual fix is the same one already applied to
+    // TempoPitchAudioProcessor: stop trying to keep an exhaustive,
+    // hand-maintained list of "is anything non-default" in sync with
+    // every control this class has (or will ever gain), and instead keep
+    // the processor in the active chain unconditionally whenever the
+    // format is supported. Every stage below — biquad filters, bass
+    // boost, balance, stereo width, the limiter, the convolver, the
+    // spectrum tap, preamp gain — is already its own confirmed no-op at
+    // its default/disabled state (empty filter list, null bass filter,
+    // balance=0 producing unity gain, stereoWidth=1.0 short-circuiting to
+    // identity, the limiter/convolver/analyzer each gated by their own
+    // `enabled` flag, preampGain=1.0 at 0dB being an exact identity
+    // multiply), so always running them costs a small constant amount of
+    // CPU and changes no audio when nothing is engaged — the same
+    // trade-off already justified and shipped for tempo/pitch.
+    override fun isActive(): Boolean = isActive
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (!inputBuffer.hasRemaining()) return
