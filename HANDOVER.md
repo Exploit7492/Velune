@@ -904,6 +904,52 @@ correctly, and whether the "which preset is currently active" label on
 the top button updates promptly as bands change, is Compose+Material3
 bottom-sheet runtime behavior with no JVM-testable equivalent.
 
+## 2e. This session's other work — spectrum "isn't showing" investigation
+
+Traced the full path end to end: UI switch → `AxionEqViewModel.setSpectrumVisible`
+→ `EqualizerService.setSpectrumAnalyzerEnabled` → `spectrumAnalyzer.enabled`
+→ `queueInput()`'s `if (spectrumAnalyzer.enabled) spectrumAnalyzer.accept(...)`
+→ `spectrumSnapshot()` → the poll loop → `SpectrumBarsCanvas`'s draw code.
+Every link in that chain was already correct on inspection — the wiring,
+the poll loop, the Canvas drawing math, all of it.
+
+Found one real bug anyway, the same class as the tempo/pitch fix above:
+`CustomEqualizerAudioProcessor.isActive()` — the actual gate for whether
+Media3 even routes audio through this processor at all — listed every
+reason to stay active (filters, bass boost, balance, stereo width,
+limiter, convolution) except `spectrumAnalyzer.enabled` itself. So
+turning the spectrum switch on didn't, by itself, guarantee the
+processor stayed in the active chain; `queueInput()` (where the tap
+actually runs) could simply never fire.
+
+**Important nuance, don't oversell this one**: in the common case — any
+EQ profile already applied, even a flat all-zero-gain one —
+`applyProfile()` populates `filters` unconditionally (filter *objects*
+exist regardless of their gain being 0), so
+`equalizerEnabled && filters.isNotEmpty()` was probably already `true`
+and the spectrum probably already worked in that case. This gap mainly
+bites when `filters` is genuinely empty — before any profile has ever
+been applied, or right after the master toggle was switched off
+(`disable()` clears `filters` to `emptyList()`) and back on. Fixed
+anyway since it's real and strictly additive (can only keep the
+processor active in *more* cases, never fewer — no regression risk),
+but if a fresh on-device repro still shows the spectrum flat with the
+master toggle AND spectrum switch both clearly on and a profile with
+actual content selected, the bug is somewhere else — check the poll
+loop's timing/lifecycle next (does `LaunchedEffect(spectrumShown, enabled)`
+actually recompose/fire when expected?), not this file again.
+
+Also worth remembering for later: this same `isActive()` OR-chain
+pattern now exists in two places (`CustomEqualizerAudioProcessor` and
+`TempoPitchAudioProcessor`). Any *new* control added to either
+processor that should keep it "doing something" needs its own line
+added to the relevant OR-chain, or it'll silently inherit this exact
+bug the moment it's the only thing turned on.
+
+**Not verified on-device** — same caveat as everything above: confirmed
+by reading the real Media3 source and this class's own logic, not by
+watching bars actually move on a phone.
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
@@ -915,17 +961,12 @@ Ask the user directly, `ask_user_input_v0` style:
 2. **Flanger effect for Simple** — asked for; confirmed via grep there is
    currently zero flanger implementation anywhere in the codebase, so
    this is a genuine from-scratch DSP build, not a "make it work" fix.
-3. **Spectrum-not-showing investigation** — user reported the spectrum
-   analyzer "isn't showing"; the code path looks correct (there's already
-   a disabled-state hint text when the master EQ toggle is off), but this
-   was never confirmed against an actual repro — could be the master
-   toggle being off (a discoverability issue, not a bug) or a genuine
-   on-device rendering bug across the never-verified spectrum patches.
-   Get a repro (are BOTH the master toggle and the spectrum's own switch
-   on?) before touching code here.
-4. Something else the user names.
+3. Something else the user names.
 
-(Preset picker moved to the top of Simple is now done — see §2d.)
+(Preset picker moved to the top of Simple is now done — see §2d. The
+spectrum "isn't showing" investigation is now done too — see §2e — a
+real isActive() gap was found and fixed, but get an on-device repro
+before assuming it's the *whole* story if reports continue.)
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered

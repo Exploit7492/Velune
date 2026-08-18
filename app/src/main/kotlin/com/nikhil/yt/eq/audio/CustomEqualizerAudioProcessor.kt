@@ -256,7 +256,20 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 balance != 0.0 ||
                 kotlin.math.abs(stereoWidth - 1.0) >= 0.001 ||
                 lookaheadLimiter.enabled ||
-                convolutionEngine?.enabled == true
+                convolutionEngine?.enabled == true ||
+                // Missing here is the actual "spectrum isn't showing" bug: with a
+                // flat/neutral profile and none of the other master-bus controls
+                // touched, this whole OR-chain was false even with the spectrum
+                // switch on and the master EQ toggle on. Media3's
+                // AudioProcessingPipeline only re-checks isActive() at flush()
+                // (confirmed against the real androidx/media source when this same
+                // class of bug was found and fixed for TempoPitchAudioProcessor —
+                // see that class's isActive() doc comment for the full mechanism),
+                // so this processor was silently excluded from the active chain
+                // and queueInput() — where spectrumAnalyzer.accept() actually runs —
+                // never fired. The switch turning "on" did nothing observable
+                // whenever nothing else in this chain happened to also be active.
+                spectrumAnalyzer.enabled
             )
 
     override fun queueInput(inputBuffer: ByteBuffer) {
