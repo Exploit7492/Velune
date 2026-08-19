@@ -1260,8 +1260,78 @@ item 12's own still-open questions applies — whether
 `DefaultAudioSink` caches `AudioProcessingPipeline` instances across
 `flush()` in some path neither session's reading covered.
 
-## 4. Suggested next step
+## 2i. This session's work — App.onCreate() warm-up, added on top of §2g,
+not instead of it
 
+The user asked for a direct comparison between §2g's approach
+(EqualizerService self-restores in its own constructor) and an
+alternative someone had proposed: move the restore into
+`App.onCreate()`'s existing `initializeCriticalSync()` phase, relying on
+Android's own guarantee that `Application.onCreate()` always completes
+before any component (Service, Activity, etc.) can be created in the same
+process.
+
+Verdict given, and implemented here: **neither one is strictly better —
+they solve the same problem from different layers, and combining them is
+better than either alone.**
+
+- The `App.onCreate()` approach's real strength: it rests on a documented
+  *OS-level* guarantee, not on trusting a DI library's internal codegen
+  ordering. It also matches this codebase's own existing convention
+  (`initializeCriticalSync()` already exists, confirmed by reading
+  `App.kt` directly before writing anything).
+- §2g's approach's real strength: `EqualizerService`'s correctness has
+  zero dependency on any other class. It doesn't matter who constructs
+  it, when, or from where — it's self-consistent the instant it exists,
+  by Kotlin's own `init {}` semantics. An `App.onCreate()`-only fix would
+  create an *unenforced* cross-file contract instead: "this only works as
+  long as nobody ever edits `App.onCreate()` and removes/reorders that
+  line" — a silent regression waiting to happen, not something the
+  compiler would catch.
+- §2g's approach is also robust to a hypothetical `App.onCreate()`
+  can't cover: a `ContentProvider`, which Android runs *before*
+  `Application.onCreate()` completes, touching `EqualizerService` early.
+  Checked `AndroidManifest.xml` — there's no custom `ContentProvider` in
+  this app today, so this isn't a live bug, but it's a real category of
+  fragility only the self-contained version is immune to by
+  construction, not by luck.
+
+**What was actually added this session**: three lines in
+`initializeCriticalSync()` that call `getSharedPreferences(...)` for the
+three files `EqualizerService`'s constructor reads
+(`nanosonic_eq_profiles`, `echo_eq_prefs`, `eq_engine_state`) — nothing
+else. This is explicitly a *latency* optimization, not a correctness
+dependency, and the comment at the call site says so directly. The
+mechanism: `Context.getSharedPreferences()` triggers Android's own
+internal background-thread XML parse on first open for that file name,
+and caches the resulting `SharedPreferencesImpl` per (file, process) —
+so calling it here, before `MusicService` even starts spinning up the
+player, kicks that parse off earlier in cold start, and
+`EqualizerService`'s own later reads of the same file names hit the
+already-loaded/loading cached instance rather than starting a fresh load
+from scratch. `EqualizerService`'s constructor is untouched by this
+change and still fully self-sufficient — delete these three lines and
+correctness is unaffected, only (mildly) less front-loaded.
+
+**Verified**: read `App.kt` directly to find the actual file name/style
+convention (`initializeCriticalSync()`) rather than assuming one existed;
+grepped `EQProfileRepository.kt`/`EqualizerService.kt`/
+`AxionEqViewModel.kt` for the exact three `SharedPreferences` file names
+in the restore path rather than guessing them; confirmed `Context` was
+already imported in `App.kt` (no new import needed); brace/paren
+balance-checked the file.
+
+**Not verified, same as everything else in this file**: real measured
+cold-start timing improvement (if any) — the underlying mechanism
+(Android's `SharedPreferencesImpl` per-process caching + background
+first-load) is standard, documented platform behavior, not something
+specific to this app, but "the mechanism is real" and "this measurably
+helps on a real device" are different claims, and only the former was
+checked here.
+
+
+
+## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 

@@ -108,6 +108,24 @@ class App : Application(), SingletonImageLoader.Factory {
     private fun initializeCriticalSync() {
         CanvasArtworkPlaybackCache.init(this)
 
+        // Warm the SharedPreferences files EqualizerService's own constructor
+        // reads synchronously (see its class doc for the full "construction
+        // guarantees init, not a race" reasoning). This call is a *latency*
+        // optimization only, not a correctness dependency: Android caches a
+        // SharedPreferences file's parsed contents in memory after the first
+        // open, so touching these three files here — this early in cold
+        // start, before MusicService even begins spinning up the player —
+        // moves that one-time disk-parse cost off the path that actually
+        // needs the values. If this call were deleted entirely, or MusicService
+        // started before this line ever ran (e.g. a future ContentProvider,
+        // which Android runs *before* Application.onCreate() completes),
+        // EqualizerService would still restore correctly — it reads these
+        // same files itself, unconditionally, as part of its own
+        // construction. Nothing here is load-bearing; it's pure warm-up.
+        getSharedPreferences("nanosonic_eq_profiles", Context.MODE_PRIVATE)
+        getSharedPreferences("echo_eq_prefs", Context.MODE_PRIVATE)
+        getSharedPreferences("eq_engine_state", Context.MODE_PRIVATE)
+
         val locale = Locale.getDefault()
         val languageTag = locale.toLanguageTag().replace("-Hant", "")
         YouTube.locale = YouTubeLocale(
