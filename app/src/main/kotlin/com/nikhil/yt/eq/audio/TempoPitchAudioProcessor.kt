@@ -119,14 +119,61 @@ class TempoPitchAudioProcessor : AudioProcessor {
      * `player.playbackParameters =`, which Media3 specifically forces a
      * sink reconfigure for — bypassing that (required, since Sonic is
      * gone) lost that automatic trigger, so this compensates for it
-     * instead. The cost is a small constant CPU overhead even when
-     * untouched, already justified: patch 0015's own verification confirmed
-     * tempo=1.0 reproduces near-identity to a bypass.
+     * instead. The cost was assumed "small" based on patch 0015's
+     * near-identity *output* verification, but that only checked the
+     * waveform result, not the CPU cost of getting there — running full
+     * WSOLA + resampling on every buffer of every track, even at the
+     * identity ratio, is real per-sample work and real allocation
+     * pressure on the audio thread, not free. See the identity fast path
+     * in queueInput() below, added once this was reported as an actual
+     * on-device stutter, for the fix that keeps this correctness
+     * guarantee without paying that cost when tempo/pitch aren't touched.
      */
     override fun isActive(): Boolean = isActiveFormat
 
+    /**
+     * True when both ratios are close enough to 1.0 that WSOLA/resampling
+     * would produce output indistinguishable from a straight copy (per
+     * patch 0015's own near-identity verification) — the case every
+     * track is in unless the user has actually opened the tempo/pitch
+     * dialog and moved something. isActive() above must stay
+     * unconditionally true for correctness (see its doc comment), but
+     * that only obligates this processor to keep receiving queueInput()
+     * calls — it says nothing about what queueInput() has to *do* on
+     * each call. Skipping the real DSP path here when there's nothing to
+     * change is safe and free to toggle: the very next queueInput() call
+     * after setTempo/setPitchSemitones moves a ratio off 1.0 takes the
+     * real path immediately, same buffer, no reconfigure/flush needed.
+     */
+    private fun isIdentity(): Boolean =
+        kotlin.math.abs(tempoRatio - 1.0) < IDENTITY_EPSILON &&
+            kotlin.math.abs(pitchRatio - 1.0) < IDENTITY_EPSILON
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (!inputBuffer.hasRemaining()) return
+
+        if (isIdentity()) {
+            // Fast path: a straight byte copy, no per-sample decode to
+            // DoubleArray, no resampler, no WSOLA analysis/overlap-add, and
+            // critically no array allocation at all (the decode/resample/
+            // stretch path below allocates three fresh Array<DoubleArray>
+            // per call) — this is what actually made the "untouched" case
+            // cheap; the full pipeline below never was.
+            val bytes = inputBuffer.remaining()
+            val out = if (outputBuffer.capacity() < bytes) {
+                ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+            } else {
+                outputBuffer.clear() as ByteBuffer
+            }
+            out.put(inputBuffer)
+            out.flip()
+            outputBuffer = out
+            val bytesPerSample = bytesPerSample()
+            val frameCount = bytes / (bytesPerSample * channelCount)
+            totalInputFrames += frameCount
+            totalOutputFrames += frameCount
+            return
+        }
         val ws = wsola ?: return
         val rs = resampler ?: return
 
@@ -257,5 +304,14 @@ class TempoPitchAudioProcessor : AudioProcessor {
         private const val TAG = "TempoPitchAudioProcessor"
         private const val FLUSH_SILENCE_FRAMES = 4096
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+
+        // How close tempoRatio/pitchRatio need to be to 1.0 to take the
+        // zero-allocation bypass path in queueInput() instead of running
+        // real WSOLA/resampling. setTempo/setPitchSemitones already
+        // coerce to a 0.25..3.0 / -12..12 semitone range, both far
+        // outside this window, so this only ever catches the genuine
+        // "user hasn't touched it" default state, never a real subtle
+        // adjustment silently getting skipped.
+        private const val IDENTITY_EPSILON = 0.0005
     }
 }

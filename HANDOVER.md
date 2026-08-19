@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v11)
+# Velune EQ/DSP Handover (v12)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1329,6 +1329,69 @@ specific to this app, but "the mechanism is real" and "this measurably
 helps on a real device" are different claims, and only the former was
 checked here.
 
+## 2j. This session's work — the actual stutter cause: TempoPitchAudioProcessor
+
+had no identity fast path
+
+User report: "when the song is playing passing the pipeline it's
+stutters and hooks... almost like the pipeline is finding it hard to
+resolve the song passing through the eq." Traced to the two
+`isActive() always true` fixes from earlier this session (§2 item 12 /
+393d09c for tempo/pitch, §2h / 510522e for the main equalizer
+processor) — both correct and necessary, but neither one's own "the
+cost is small" doc-comment claim had actually been checked against the
+real per-call implementation until now.
+
+Re-verified both against that claim directly:
+- `CustomEqualizerAudioProcessor` — claim holds. Simple per-sample float
+  loop, every stage already null/empty/disabled-checked, no allocation
+  per call. Left alone.
+- `TempoPitchAudioProcessor` — claim did **not** hold. Every
+  `queueInput()` call, identity or not, decoded into three freshly-
+  allocated `Array<DoubleArray>` (real allocation on the audio thread
+  every buffer → GC pressure) and ran a full resampler pass plus full
+  WSOLA analysis/overlap-add — genuinely expensive windowed-correlation
+  DSP, not a cheap no-op — even at tempo=1.0/pitch=0 where the *output*
+  is only near-identical to a bypass (per patch 0015's own
+  verification), not actually computed via one. This ran on every
+  buffer of every track for anyone who's never touched tempo/pitch,
+  which is almost certainly the real stutter source.
+
+**Fix**: added `isIdentity()` (both ratios within 0.0005 of 1.0 — far
+inside the dead zone below the real 0.25..3.0 / ±12-semitone range, so
+it can't misfire on a genuine small adjustment) and a fast path in
+`queueInput()` that takes it: one bulk `ByteBuffer.put()` byte copy,
+zero allocation, no resampler, no WSOLA. `isActive()` itself is
+untouched — still unconditionally `true` — so the correctness fix from
+item 12 stands; the processor stays in Media3's active chain and keeps
+getting `queueInput()` calls throughout. The very next call after
+`setTempo`/`setPitchSemitones` moves either ratio off 1.0 takes the
+real DSP path immediately — no reconfigure/flush needed to switch
+between the two paths.
+
+**One honest, deliberately-accepted edge case, don't "fix" this later
+without re-reading**: WSOLA holds internal overlap-window state across
+calls. Switching from the real path back to identity (user resets
+tempo/pitch to default mid-track) stops feeding it further samples
+immediately rather than draining whatever partial window it was
+already holding — worst case, a data loss of about one window's worth
+of audio (tens of ms) at that exact transition moment. Deliberately not
+fixed: a one-time, likely-inaudible cost at a rare manual-reset
+transition, not a continuous per-sample cost like the bug this patch
+fixes. A full drain-on-transition mechanism would be real scope creep
+for what was asked as a performance fine-tune, not a WSOLA rewrite.
+
+**Not verified on-device** — the reasoning (WSOLA is expensive, a bulk
+byte copy isn't, GC pressure on an audio thread causes exactly this
+symptom) is solid, well-established DSP/Android engineering, but
+whether this specific patch actually resolves the *reported* stutter on
+a real phone hasn't been watched happen. If the report continues after
+this lands, the next thing to check is whether `CustomEqualizerAudioProcessor`'s
+per-sample loop is more expensive than it looks under real device load
+(convolution specifically — partitioned FFT convolution is the one
+stage in that class that's genuinely not cheap, and it wasn't re-
+profiled here, only reasoned about structurally), not this file again.
+
 
 
 ## 4. Suggested next step
@@ -1336,9 +1399,10 @@ checked here.
 Ask the user directly, `ask_user_input_v0` style:
 
 1. **On-device verification pass** — nothing convolution-, spectrum-,
-   canonical-engine-, or preset-picker-related has ever run on an actual
-   phone; this is arguably overdue given how much has been built on top
-   of it.
+   canonical-engine-, preset-picker-, or (now) tempo/pitch-fast-path-
+   related has ever run on an actual phone; this is arguably overdue
+   given how much has been built on top of it, and is now the single
+   biggest open question given §2j landed on reasoning alone.
 2. **Flanger effect for Simple** — asked for; confirmed via grep there is
    currently zero flanger implementation anywhere in the codebase, so
    this is a genuine from-scratch DSP build, not a "make it work" fix.
@@ -1347,7 +1411,9 @@ Ask the user directly, `ask_user_input_v0` style:
 (Preset picker moved to the top of Simple is now done — see §2d. The
 spectrum "isn't showing" investigation is now done too — see §2e — a
 real isActive() gap was found and fixed, but get an on-device repro
-before assuming it's the *whole* story if reports continue.)
+before assuming it's the *whole* story if reports continue. The
+"stutters/hooks passing through the eq" performance report is now done
+too — see §2j.)
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered
