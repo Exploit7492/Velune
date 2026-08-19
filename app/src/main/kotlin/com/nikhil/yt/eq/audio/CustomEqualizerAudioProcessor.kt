@@ -80,6 +80,12 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     // wrapper and SpectrumAnalyzer for the FFT/binning itself.
     val spectrumAnalyzer = SpectrumAnalyzer()
 
+    // Output peak/level meter — the "studio" meter next to the Preamp
+    // knob. Same tap point and same enabled-flag-gated cost model as
+    // spectrumAnalyzer above, but stereo (not mono-downmixed) and driven
+    // by simple running-max instead of an FFT — see PeakMeter's own doc.
+    val peakMeter = PeakMeter()
+
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
@@ -175,6 +181,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         spectrumAnalyzer.enabled = enabled
     }
 
+    fun setPeakMeterEnabled(enabled: Boolean) {
+        peakMeter.enabled = enabled
+    }
+
     private fun applyStereoWidth(left: Double, right: Double): Pair<Double, Double> {
         if (kotlin.math.abs(stereoWidth - 1.0) < 0.001) return left to right
         val mid = (left + right) * 0.5
@@ -234,6 +244,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         rebuildBassBoostFilter()
         lookaheadLimiter.configure(sampleRate)
         spectrumAnalyzer.configure(sampleRate)
+        peakMeter.configure(sampleRate)
 
         pendingImpulseResponseFile?.let { file ->
             try {
@@ -355,6 +366,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 if (spectrumAnalyzer.enabled) {
                     spectrumAnalyzer.accept((left + right) * 0.5)
                 }
+                if (peakMeter.enabled) {
+                    peakMeter.accept(left, right)
+                }
 
                 output.putShort((left * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
                 output.putShort((right * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
@@ -367,6 +381,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 sample = lookaheadLimiter.processMono(sample)
                 if (spectrumAnalyzer.enabled) {
                     spectrumAnalyzer.accept(sample)
+                }
+                if (peakMeter.enabled) {
+                    peakMeter.accept(sample, sample)
                 }
                 output.putShort((sample * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
             }
@@ -414,6 +431,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 if (spectrumAnalyzer.enabled) {
                     spectrumAnalyzer.accept((left + right) * 0.5)
                 }
+                if (peakMeter.enabled) {
+                    peakMeter.accept(left, right)
+                }
 
                 output.putFloat(left.coerceIn(-1.0, 1.0).toFloat())
                 output.putFloat(right.coerceIn(-1.0, 1.0).toFloat())
@@ -426,6 +446,9 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 sample = lookaheadLimiter.processMono(sample)
                 if (spectrumAnalyzer.enabled) {
                     spectrumAnalyzer.accept(sample)
+                }
+                if (peakMeter.enabled) {
+                    peakMeter.accept(sample, sample)
                 }
                 output.putFloat(sample.coerceIn(-1.0, 1.0).toFloat())
             }
@@ -448,6 +471,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         lookaheadLimiter.reset()
         convolutionEngine?.reset()
         spectrumAnalyzer.reset()
+        peakMeter.reset()
     }
 
     override fun reset() {

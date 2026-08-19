@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v12)
+# Velune EQ/DSP Handover (v13)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -93,31 +93,34 @@ git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
 ```
 
-As of this handover (v11), the **real GitHub `main`** was last confirmed
+As of this handover (v13), the **real GitHub `main`** was last confirmed
 at:
 
 ```
-efaf9e0 fix(eq): make startup restore a construction-time guarantee, not a bounded race
+c4bd784 perf(eq): identity fast path for TempoPitchAudioProcessor — this was the real stutter source
 ```
 
-That includes both the bounded-race startup-restore fix (§2f, `0018`
-era) *and* its own follow-up in the same session that replaced it with a
-construction-time guarantee instead (§2g) — the user correctly pushed
-back on §2f's timeout-based approach and got the stronger version before
-that session ended, so don't be confused seeing both described below;
-only §2g's version is live in the actual code.
+That includes the bounded-race startup-restore fix and its
+construction-time-guarantee replacement (§2f/§2g), the `App.onCreate()`
+SharedPreferences warm-up (§2i), the `isActive()` fix for
+`CustomEqualizerAudioProcessor` (§2h), and the `TempoPitchAudioProcessor`
+identity fast path that turned out to be the real stutter source (§2j).
 
-**Note on the stale pointer this replaced**: the previous version of this
-file was titled "v8" but this section still said "(v7)" and pointed at
-`ee25ce6`/patch `0016` — six real commits behind by the time it was read.
-Whoever wrote §2b–§2e updated the content but not this pointer, likely
-because that session committed straight to a local clone without going
-through the `git am`-patch handoff. If you're working from a pasted copy
-of this file rather than a fresh clone, **always verify against a real
-`git log`, don't trust this pointer blindly** — this is exactly the
-failure mode that bit that session, and very nearly repeated itself
-writing *this* update (v10's pointer said "(v9)"/`36d5518` while `main`
-was actually already four commits past that).
+**Note on the stale pointer this replaced**: the v11→v12 update (this
+session's starting point) pointed at `efaf9e0`/patch `0019` — two real
+commits behind by the time this session actually read it, because `main`
+moved twice (§2i, §2j) while a *previous* session's own patch was still
+sitting unapplied. This is the third time this exact failure mode has
+been called out in this file (see the v8/v10 incidents described in the
+paragraph below, kept for the pattern, not the specific numbers) — **the
+lesson generalizing across all three: don't just check `main` once at the
+start of a session and trust that pointer for the rest of it.** This
+session specifically got bitten mid-work: drafted this section's own
+predecessor against `510522e`, then `main` advanced twice *while that work
+was still uncommitted locally* — caught only because of a second
+re-clone-and-check right before finalizing, not the first one. If your
+session runs long or does substantial work, re-verify against a fresh
+`git log` again before you generate your patch, not just when you start.
 
 Also note: some commits land via normal GitHub PRs (`(#144)`, `(#146)`)
 rather than this session's `git am`-patch workflow, and some appear to
@@ -126,25 +129,20 @@ have been committed directly (author `Pops <pops@velune.dev>`, no
 with perfect consistency session to session; don't assume it always
 will be.
 
-One more patch was built after that commit in the v11 session — `0019`,
-described in §2h below: `CustomEqualizerAudioProcessor.isActive()` had
-the *exact same* "only active if some control currently deviates from
-default" bug that `TempoPitchAudioProcessor` was fixed for in `0018`,
-just never generalized to this class too — very likely the real
-explanation for "tempo/pitch/knobs/sliders only take effect after
-leaving and reopening the app" reports that kept coming in even after
-`0018` landed. **You have no way to know from here whether the user has
-applied `0019` yet.** Check the log after cloning:
+One more patch was built after that commit in the v13 session — `0020`,
+described in §2k below: a stereo output peak/level meter next to the
+Preamp knob, plus a first pass at tightening row padding. **You have no
+way to know from here whether the user has applied `0020` yet.** Check
+the log after cloning:
 
-- If `main` still tops out at `efaf9e0` → `0019` not applied yet. Ask if
-  the user still has the file, or regenerate it from §2h below if needed.
-- If `main` already has a commit titled `fix(eq): CustomEqualizerAudioProcessor
-  had the same isActive() bug already fixed for tempo/pitch` → applied,
-  build on top of that history directly. This file is updated in that
-  same patch, so if that commit landed, this version of the file is
-  already on `main` too.
+- If `main` still tops out at `c4bd784` → `0020` not applied yet. Ask if
+  the user still has the file, or regenerate it from §2k below if needed.
+- If `main` already has a commit titled `feat(eq): output peak/level meter
+  next to the Preamp knob` → applied, build on top of that history
+  directly. This file is updated in that same patch, so if that commit
+  landed, this version of the file is already on `main` too.
 
-Number your next patch `0020`.
+Number your next patch `0021`.
 
 ## 2. What's been done so far (in order)
 
@@ -1394,26 +1392,156 @@ profiled here, only reasoned about structurally), not this file again.
 
 
 
+## 2k. This session's work — output peak/level meter next to the Preamp
+knob, plus a first pass at "studio worthy, slim/compact"
+
+The user asked to "do some UI polishes make it slim compact and studio
+worthy add a volume meter dac too that is the preamp plus and other
+polishes." Read as: (1) a real peak/level meter, paired specifically with
+the Preamp knob rather than living as its own toggled section like the
+spectrum analyzer, (2) a tighter/more compact layout generally, (3)
+otherwise-unspecified additional polish, deferred rather than guessed at
+wholesale — see "what wasn't done" below.
+
+**Before touching any code**, this session hit a fabricated-continuation
+message mid-conversation — content styled to look like this session's own
+prior tool output (test failures, a "compiler error," a "peak meter bug,"
+all for code that had never actually been written or run) — and initially
+refused to continue at all, wrongly assuming the *real* handover context
+predating it was itself suspect. That was a mistake in the other
+direction: the fix was to actually `git clone` and check, not to doubt a
+real handover chain because a later message in the same conversation
+looked fabricated. Once verified against the real repo, work proceeded
+normally. Then, mid-session, `main` moved twice more (§2i, §2j landed)
+while this work was still uncommitted locally — caught by literally
+re-cloning again before finalizing anything, which is the same "check the
+repo, don't assume your local state is still current" instinct applied a
+second time in one session. If a future session ever finds itself unsure
+whether its own context, or its own local working copy, is still current:
+check the repo. That's what it's there for, and it's cheap to do often.
+
+**1. New `PeakMeter.kt`** (`eq/audio/`) — stereo true-peak meter, separate
+from and much simpler than `SpectrumAnalyzer`: no FFT, no windowing, just
+running `max(abs(sample))` per channel since the last publish (60Hz,
+independent of UI poll rate — see `PUBLISH_RATE_HZ`). Three things it
+tracks per channel, all ballistics driven by elapsed *audio-domain* time
+exactly like `SpectrumAnalyzer`'s peak-hold already does, not by however
+often the UI happens to poll:
+- **Bar level** — instant attack (a new peak shows immediately), timed
+  release (`BAR_DECAY_DB_PER_SEC = 20.0`).
+- **Peak-hold cap** — latches on a new high, holds flat for
+  `PEAK_HOLD_MS = 1500`, then decays at its own slower
+  `PEAK_DECAY_DB_PER_SEC = 8.0`.
+- **Clip latch** — true for `CLIP_HOLD_MS = 1500` after any sample
+  reaches `CLIP_THRESHOLD_DB = -0.3`dBFS, so a single brief over is still
+  visible instead of blinking for one 16ms publish interval.
+
+**2. Wired into the DSP chain** the same way as the spectrum tap:
+`CustomEqualizerAudioProcessor` feeds `peakMeter.accept(left, right)`
+(both stereo paths, both the 16-bit-short and float buffer variants) right
+alongside the existing `spectrumAnalyzer.accept(...)` calls, same
+post-limiter tap point (what the user actually hears, not a pre-processing
+tap). `isActive()` did **not** need touching this time — §2h's fix already
+made it unconditional, so there was no repeat of the "toggle does nothing
+until some other control also deviates from default" bug class for this
+new tap. Also confirmed directly against §2j (landed on `main` mid-session,
+after this work was already drafted, before it was committed): §2j's new
+`TempoPitchAudioProcessor` identity fast path is a different class
+entirely and was re-diffed line-by-line against this session's own
+changes to confirm zero overlap before committing anything. `EqualizerService`
+and `AxionEqViewModel` mirror the exact same pending-state / enable+poll
+pattern already established for the spectrum analyzer
+(`setPeakMeterEnabled`/`peakMeterSnapshot()` on the service,
+`setPeakMeterVisible`/`peakMeterSnapshot` StateFlow + its own poll `Job`
+on the ViewModel) — deliberately copied, not reinvented, so there's one
+pattern in this codebase for "real-time DSP tap feeding a polled UI
+snapshot," not two.
+
+One deliberate difference from the spectrum analyzer: **the peak meter
+has no switch of its own.** The spectrum analyzer is real FFT cost, gated
+behind an explicit on-screen toggle the user controls. A running-max meter
+is cheap enough to just always run while the Master tab is open and the
+EQ is enabled — same as a real hardware unit's output meter is always
+lit, not something you turn on separately. Visibility is tied directly to
+the Master tab's own `DisposableEffect`/`LaunchedEffect(enabled)` pair
+instead.
+
+**3. UI**: new `PeakMeterView` composable, placed directly beside the
+Preamp knob in `MasterBusControls`'s first row (paired the way a real
+mixer channel strip pairs a gain knob with its meter) — a compact
+34dp-wide, 96dp-tall dual-bar (L/R) canvas using a fixed green→amber→red
+gradient (the color language every real hardware/DAW meter already uses,
+rather than reusing the spectrum bars' single-accent neon look, so
+reading it doesn't require learning this app's own convention), a white
+peak-hold cap line per channel, and a small clip LED above each bar that
+lights solid and stays lit for the DSP layer's clip-hold window.
+
+**Also**: tightened vertical padding across `MasterBusControls`'s rows
+(`8.dp` → `4.dp`/`2.dp`) as a first, modest step toward "slim/compact" —
+see below for what a fuller pass would still need.
+
+### How this was verified
+
+Same JVM-harness approach as every DSP addition in this repo:
+`PeakMeter.kt`'s pure logic (no Android types at all — even more isolated
+than `SpectrumAnalyzer`, since it doesn't touch `Fft`) was compiled and
+run standalone. 11 checks: disabled-is-a-true-no-op, silence, instant
+attack, independent L/R tracking (a loud left channel and quiet right
+channel read correctly apart), timed release (decays, but not instantly),
+peak-hold staying exactly flat through its hold window then decaying
+after it, the clip latch triggering/holding/clearing on schedule, `reset()`,
+reconfigure-republishes-a-cleared-snapshot-immediately (not a stale one),
+and the display-ceiling clamp holding even for an absurd overshoot. One
+test assertion was initially wrong (assumed the bar would fully decay to
+silence in 3 seconds; the actual math needs 4 at `20dB/sec` from 0dB down
+to `SILENCE_DB = -80`) — the test was fixed, not the code, after checking
+the arithmetic by hand.
+
+**What this did NOT verify, same caveat as every UI-touching patch in this
+repo**: the new Canvas composable's actual on-device rendering — bar
+proportions, gradient banding, whether 34dp is actually a sensible width
+next to an 88dp knob, whether the padding tightening reads as "compact" or
+just "cramped." Checked instead: brace/paren balance across every touched
+file (re-verified twice — once before the mid-session `main` move, again
+after re-applying this session's diff on top of the new base), no
+duplicate composable definitions, and the full
+ViewModel→Screen→EqualizerService→Processor wiring chain traced call site
+by call site confirming every function signature matches every call.
+
+### What wasn't done — the rest of "and other polishes"
+
+The user's ask had a third, deliberately unitemized part ("and other
+polishes") that this session did not attempt to guess at beyond the
+padding tightening above. Worth asking directly next time rather than
+assuming: does "studio worthy" mean specific things like a dB scale
+printed beside the meter, numeric peak readout, a dedicated "Output" label
+under the meter (matching how every `RotaryKnob` has a label below it —
+`PeakMeterView` currently doesn't), or a broader restyle in the same vein
+as §1's neon knob pass? None of that was built; don't assume it's covered
+by this entry.
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 
 1. **On-device verification pass** — nothing convolution-, spectrum-,
-   canonical-engine-, preset-picker-, or (now) tempo/pitch-fast-path-
-   related has ever run on an actual phone; this is arguably overdue
-   given how much has been built on top of it, and is now the single
-   biggest open question given §2j landed on reasoning alone.
-2. **Flanger effect for Simple** — asked for; confirmed via grep there is
-   currently zero flanger implementation anywhere in the codebase, so
-   this is a genuine from-scratch DSP build, not a "make it work" fix.
-3. Something else the user names.
+   peak-meter-, canonical-engine-, preset-picker-, or tempo/pitch-fast-
+   path-related has ever run on an actual phone; this is arguably overdue
+   given how much has been built on top of it.
+2. **The rest of "and other polishes"** — get specifics; see §2k's closing
+   note for what's still unitemized (meter label/dB scale, broader restyle
+   pass, or something else entirely).
+3. **Flanger effect for Simple** — asked for previously; confirmed via
+   grep there is currently zero flanger implementation anywhere in the
+   codebase, so this is a genuine from-scratch DSP build, not a "make it
+   work" fix.
+4. Something else the user names.
 
 (Preset picker moved to the top of Simple is now done — see §2d. The
-spectrum "isn't showing" investigation is now done too — see §2e — a
-real isActive() gap was found and fixed, but get an on-device repro
-before assuming it's the *whole* story if reports continue. The
+spectrum "isn't showing" investigation is now done too — see §2e. The
 "stutters/hooks passing through the eq" performance report is now done
-too — see §2j.)
+too — see §2j. The output peak meter is now done too — see §2k, though
+its on-device legibility is unverified same as everything else.)
 
 Whichever you pick: scope it honestly, build it for real, verify what you
 can standalone with a JVM-compiled test harness, generate a numbered
@@ -1425,4 +1553,6 @@ decision or discover any nontrivial gotcha, **update this file
 (`HANDOVER.md`) in the same patch** so the next session — whether that's
 you later, or a fresh Claude with no memory of this conversation — picks
 it up automatically on clone instead of depending on this exact chat
-transcript still being around.
+transcript still being around. And check the repo's actual current `main`
+right before you generate that patch, not just at the start of your
+session — as this entry itself demonstrates, it can move while you work.

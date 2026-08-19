@@ -197,6 +197,21 @@ class AxionEqViewModel @Inject constructor(
 
     private var spectrumPollJob: kotlinx.coroutines.Job? = null
 
+    // Output peak/level meter — same "not persisted, view-visibility only"
+    // reasoning as the spectrum analyzer above; see setPeakMeterVisible.
+    private val _peakMeterSnapshot = MutableStateFlow(
+        com.nikhil.yt.eq.audio.PeakMeterSnapshot(
+            leftDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+            rightDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+            leftPeakDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+            rightPeakDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+            leftClipping = false,
+            rightClipping = false
+        )
+    )
+    val peakMeterSnapshot = _peakMeterSnapshot.asStateFlow()
+    private var peakMeterPollJob: kotlinx.coroutines.Job? = null
+
     val customProfiles = eqProfileRepository.profiles.map { profiles ->
         profiles.filter { it.isCustom && it.id != "echo_tuning" }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -635,6 +650,32 @@ class AxionEqViewModel @Inject constructor(
         } else {
             hz.toInt().toString()
         }
+
+    /**
+     * Starts/stops the output peak/level meter — same shape as
+     * [setSpectrumVisible]: real per-sample DSP cost on the audio thread,
+     * only worth paying while the meter is actually on screen, so the tap
+     * and the poll loop start/stop together. Polls at 60fps rather than
+     * the spectrum's 20fps — a peak meter's whole job is showing transient
+     * peaks and an instant-attack clip flag, so it benefits more from a
+     * fast poll than a bar graph does; PeakMeter itself publishes at 60Hz
+     * (see its PUBLISH_RATE_HZ) so this doesn't poll faster than fresh
+     * data actually arrives.
+     */
+    fun setPeakMeterVisible(visible: Boolean) {
+        peakMeterPollJob?.cancel()
+        equalizerService.setPeakMeterEnabled(visible)
+        if (!visible) {
+            peakMeterPollJob = null
+            return
+        }
+        peakMeterPollJob = viewModelScope.launch {
+            while (true) {
+                _peakMeterSnapshot.value = equalizerService.peakMeterSnapshot()
+                kotlinx.coroutines.delay(16)
+            }
+        }
+    }
 
     fun clearImpulseResponse() {
         currentIrFile?.takeIf { it.exists() }?.delete()

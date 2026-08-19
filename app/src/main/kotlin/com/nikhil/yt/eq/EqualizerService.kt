@@ -140,6 +140,9 @@ class EqualizerService @Inject constructor(
     // processor exists.
     private var pendingSpectrumEnabled: Boolean = false
 
+    // Output peak/level meter — same "pending" pattern again.
+    private var pendingPeakMeterEnabled: Boolean = false
+
     // Tempo/pitch — a separate registry from [audioProcessors] above since
     // it's a standalone AudioProcessor (see TempoPitchAudioProcessor's class
     // doc for why), not another feature of CustomEqualizerAudioProcessor.
@@ -248,6 +251,7 @@ class EqualizerService @Inject constructor(
         pendingImpulseResponseFile?.let { processor.loadImpulseResponse(it) }
         processor.setConvolutionEnabled(pendingConvolutionEnabled)
         processor.setSpectrumAnalyzerEnabled(pendingSpectrumEnabled)
+        processor.setPeakMeterEnabled(pendingPeakMeterEnabled)
     }
 
     
@@ -402,6 +406,36 @@ class EqualizerService @Inject constructor(
     @OptIn(UnstableApi::class)
     fun spectrumBarIndexForLabel(frequencyHz: Double): Int =
         audioProcessors.firstOrNull()?.spectrumAnalyzer?.barIndexForLabel(frequencyHz) ?: -1
+
+    /**
+     * Turns the output peak/level meter tap on/off across all active
+     * processors — same reasoning as [setSpectrumAnalyzerEnabled]: left off
+     * unless the meter UI is actually on screen, no per-sample cost
+     * otherwise.
+     */
+    @OptIn(UnstableApi::class)
+    fun setPeakMeterEnabled(enabled: Boolean) {
+        pendingPeakMeterEnabled = enabled
+        audioProcessors.forEach { it.setPeakMeterEnabled(enabled) }
+    }
+
+    /**
+     * Latest peak-meter reading — see [PeakMeter] for what each field
+     * means (bar level, peak-hold cap, clip latch, per channel). Reads
+     * from whichever processor is currently active, same as
+     * [spectrumSnapshot].
+     */
+    @OptIn(UnstableApi::class)
+    fun peakMeterSnapshot(): com.nikhil.yt.eq.audio.PeakMeterSnapshot =
+        audioProcessors.firstOrNull()?.peakMeter?.snapshot()
+            ?: com.nikhil.yt.eq.audio.PeakMeterSnapshot(
+                leftDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+                rightDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+                leftPeakDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+                rightPeakDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB,
+                leftClipping = false,
+                rightClipping = false
+            )
 
     @OptIn(UnstableApi::class)
     fun applyProfile(profile: SavedEQProfile): Result<Unit> {

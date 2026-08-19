@@ -112,6 +112,7 @@ fun AxionEqScreen(
     val spectrumSnapshot by viewModel.spectrumSnapshot.collectAsState()
     val spectrumLabels by viewModel.spectrumLabels.collectAsState()
     var spectrumShown by remember { mutableStateOf(false) }
+    val peakMeterSnapshot by viewModel.peakMeterSnapshot.collectAsState()
 
     val context = LocalContext.current
     val irPickerLauncher = rememberLauncherForActivityResult(
@@ -259,6 +260,22 @@ fun AxionEqScreen(
                             LaunchedEffect(spectrumShown, enabled) {
                                 viewModel.setSpectrumVisible(spectrumShown && enabled)
                             }
+                            // Peak meter has no switch of its own — unlike
+                            // the spectrum analyzer (real FFT cost, worth
+                            // gating behind an explicit toggle), a running-
+                            // max meter is cheap enough to just always run
+                            // while the Master tab itself is open and the
+                            // EQ is enabled, the same way a real hardware
+                            // unit's output meter is always lit. Same
+                            // DisposableEffect-on-leave-composition
+                            // discipline as the spectrum tap above, so nothing
+                            // keeps polling once the tab/screen closes.
+                            DisposableEffect(Unit) {
+                                onDispose { viewModel.setPeakMeterVisible(false) }
+                            }
+                            LaunchedEffect(enabled) {
+                                viewModel.setPeakMeterVisible(enabled)
+                            }
                             SpectrumSection(
                                 enabled = enabled,
                                 shown = spectrumShown,
@@ -277,6 +294,7 @@ fun AxionEqScreen(
                                 pitchSemitones = pitchSemitones,
                                 enabled = enabled,
                                 accentColor = MaterialTheme.colorScheme.primary,
+                                peakMeterSnapshot = peakMeterSnapshot,
                                 onPreampChange = { viewModel.setPreampDb(it) },
                                 onBalanceChange = { viewModel.setBalance(it) },
                                 onBassBoostChange = { viewModel.setBassBoostDb(it) },
@@ -375,6 +393,7 @@ private fun MasterBusControls(
     pitchSemitones: Float,
     enabled: Boolean,
     accentColor: Color,
+    peakMeterSnapshot: com.nikhil.yt.eq.audio.PeakMeterSnapshot,
     onPreampChange: (Float) -> Unit,
     onBalanceChange: (Float) -> Unit,
     onBassBoostChange: (Float) -> Unit,
@@ -389,9 +408,17 @@ private fun MasterBusControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.Top,
         ) {
+            // Preamp paired with the output meter — "what you're feeding
+            // in" right next to "what's actually coming out," the same
+            // pairing a real mixer channel strip puts a gain knob and its
+            // meter in. The meter has no toggle of its own (see its
+            // DisposableEffect at the call site) — it just runs whenever
+            // this tab is open and the EQ is enabled, same as a hardware
+            // unit's meter is always lit.
             RotaryKnob(
                 value = ((preampDb + 12f) / 24f).coerceIn(0f, 1f),
                 onValueChange = { onPreampChange((it * 24f - 12f).coerceIn(-12f, 12f)) },
@@ -400,6 +427,11 @@ private fun MasterBusControls(
                 enabled = enabled,
                 accentColor = accentColor,
                 size = 88.dp,
+            )
+            PeakMeterView(
+                snapshot = peakMeterSnapshot,
+                enabled = enabled,
+                modifier = Modifier.padding(top = 4.dp),
             )
             RotaryKnob(
                 value = ((balance + 1f) / 2f).coerceIn(0f, 1f),
@@ -433,7 +465,7 @@ private fun MasterBusControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             RotaryKnob(
@@ -458,7 +490,7 @@ private fun MasterBusControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -485,7 +517,7 @@ private fun MasterBusControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             RotaryKnob(
@@ -507,6 +539,107 @@ private fun MasterBusControls(
                 size = 80.dp,
             )
         }
+    }
+}
+
+/**
+ * Compact stereo output peak meter — sits next to the Preamp knob (see
+ * [MasterBusControls]), styled as a small studio-strip meter rather than
+ * matching the spectrum bars' single-accent-color neon look: a fixed
+ * green/amber/red gradient track (green = safe headroom, amber =
+ * approaching 0dBFS, red = at/above it), the same color language every
+ * real hardware and DAW peak meter uses, so reading it doesn't require
+ * learning this app's own color convention. Two channels side by side (L
+ * then R), each with a white peak-hold cap and a small clip LED above the
+ * bar that lights solid red and stays lit for [com.nikhil.yt.eq.audio.PeakMeter]'s
+ * clip-hold window rather than just flickering for one publish interval.
+ *
+ * Draws whatever [snapshot] hands it — all ballistics (bar decay,
+ * peak-hold latch+decay, clip latch) already happened in [PeakMeter]
+ * against real audio-domain time, same "DSP owns the timing, UI just
+ * draws it" split [SpectrumBarsCanvas] uses. Unverified beyond compiling,
+ * same caveat as every other Canvas composable in this file — see
+ * HANDOVER.md.
+ */
+@Composable
+private fun PeakMeterView(
+    snapshot: com.nikhil.yt.eq.audio.PeakMeterSnapshot,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val trackAlpha = if (enabled) 1f else 0.35f
+    Canvas(
+        modifier = modifier
+            .width(34.dp)
+            .height(96.dp)
+            .padding(horizontal = 2.dp)
+            .graphicsLayer(alpha = trackAlpha),
+    ) {
+        val minDb = com.nikhil.yt.eq.audio.PeakMeter.SILENCE_DB
+        val maxDb = com.nikhil.yt.eq.audio.PeakMeter.DISPLAY_CEIL_DB.toFloat()
+        fun normalize(db: Float) = ((db - minDb) / (maxDb - minDb)).coerceIn(0f, 1f)
+
+        val ledRadius = 3.dp.toPx()
+        val ledTopMargin = ledRadius * 2f + 3.dp.toPx()
+        val gap = 4.dp.toPx()
+        val barWidth = (size.width - gap) / 2f
+        val meterTop = ledTopMargin
+        val meterHeight = size.height - meterTop
+        val peakCapHeight = 2.dp.toPx()
+
+        fun meterGradient() = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color(0xFFFF3B30), // hottest = red, at the very top of the track
+                0.18f to Color(0xFFFF3B30),
+                0.28f to Color(0xFFFFC107), // amber band approaching 0dBFS
+                0.55f to Color(0xFFFFC107),
+                0.62f to Color(0xFF34D399), // green for the safe range beneath it
+                1.00f to Color(0xFF34D399),
+            ),
+            startY = meterTop,
+            endY = size.height,
+        )
+
+        fun drawChannel(x: Float, levelDb: Float, peakDb: Float, clipping: Boolean) {
+            // Faint full-height track so the scale is legible even at
+            // silence, not just an empty gap where a bar might appear.
+            drawRect(
+                brush = meterGradient(),
+                topLeft = Offset(x, meterTop),
+                size = Size(barWidth, meterHeight),
+                alpha = 0.16f,
+            )
+
+            val level = normalize(levelDb)
+            val barHeight = meterHeight * level
+            val top = size.height - barHeight
+            drawRect(
+                brush = meterGradient(),
+                topLeft = Offset(x, top),
+                size = Size(barWidth, barHeight),
+            )
+
+            val peakLevel = normalize(peakDb)
+            if (peakLevel > level + 0.01f) {
+                val peakY = size.height - meterHeight * peakLevel
+                drawRect(
+                    color = Color.White.copy(alpha = 0.9f),
+                    topLeft = Offset(x, peakY - peakCapHeight / 2f),
+                    size = Size(barWidth, peakCapHeight),
+                )
+            }
+
+            val ledCenter = Offset(x + barWidth / 2f, ledRadius + 1.dp.toPx())
+            if (clipping) {
+                drawCircle(color = Color(0xFFFF3B30).copy(alpha = 0.35f), radius = ledRadius * 2.4f, center = ledCenter)
+                drawCircle(color = Color(0xFFFF3B30), radius = ledRadius, center = ledCenter)
+            } else {
+                drawCircle(color = Color(0xFFFF3B30).copy(alpha = 0.18f), radius = ledRadius, center = ledCenter)
+            }
+        }
+
+        drawChannel(0f, snapshot.leftDb, snapshot.leftPeakDb, snapshot.leftClipping)
+        drawChannel(barWidth + gap, snapshot.rightDb, snapshot.rightPeakDb, snapshot.rightClipping)
     }
 }
 
