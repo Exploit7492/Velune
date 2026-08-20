@@ -152,67 +152,64 @@ fun ParametricEqEditor(viewModel: EQViewModel) {
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
 
-                    // Bands
+                    // Bands — gain now lives on Simple's slim vertical fader
+                    // strip (NeonVerticalFader/SimpleBandStrip in
+                    // AxionEqScreen.kt), reading/writing this exact same
+                    // profile.bands data, so editing gain here would just be
+                    // a second, redundant control for the same value. This
+                    // list is now Q-only: the one per-band parameter that
+                    // doesn't have a home anywhere else, kept compact (one
+                    // row per band) instead of the three-slider/full-header
+                    // block this used to be.
+                    //
+                    // Known trade-off, not silently dropped: frequency
+                    // editing for individual bands is gone from this
+                    // screen entirely. For the fixed 10 standard bands that
+                    // Simple's strip drives, that's correct — a graphic EQ
+                    // legitimately doesn't expose per-band frequency, only
+                    // gain (Neutron's own fixed-band view doesn't either).
+                    // It does mean a band added via "Add band" below, or an
+                    // AutoEQ/JSON import that produced bands beyond the
+                    // fixed 10, has no UI left to move off its initial
+                    // frequency. That's a real, known gap for that
+                    // less-common path, not an oversight.
                     Spacer(Modifier.height(8.dp))
                     PreferenceGroupTitle(title = stringResource(R.string.eq_bands))
 
                     profile.bands.forEachIndexed { index, band ->
-                        Column(
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = "Band ${index + 1}: ${band.filterType.name}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                IconButton(
-                                    onClick = { viewModel.removeBand(index) },
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.close),
-                                        contentDescription = stringResource(R.string.remove),
-                                    )
-                                }
-                            }
-
                             Text(
                                 text = stringResource(R.string.frequency_hz, band.frequency.toInt()),
                                 style = MaterialTheme.typography.bodySmall,
-                            )
-                            Slider(
-                                value = band.frequency.toFloat(),
-                                onValueChange = { viewModel.updateBandFrequency(index, it) },
-                                valueRange = 20f..20000f,
-                                steps = 199,
-                            )
-
-                            Text(
-                                text = stringResource(R.string.gain_db, String.format("%.1f", band.gain)),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Slider(
-                                value = band.gain.toFloat(),
-                                onValueChange = { viewModel.updateBandGain(index, it) },
-                                valueRange = -12f..12f,
-                                steps = 48,
-                            )
-
-                            Text(
-                                text = "Q: ${String.format("%.2f", band.q)}",
-                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.width(72.dp),
                             )
                             Slider(
                                 value = band.q.toFloat(),
                                 onValueChange = { viewModel.updateBandQ(index, it) },
                                 valueRange = 0.1f..10f,
                                 steps = 99,
+                                modifier = Modifier.weight(1f),
                             )
+                            Text(
+                                text = "Q %.2f".format(band.q),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.width(52.dp),
+                            )
+                            IconButton(
+                                onClick = { viewModel.removeBand(index) },
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.close),
+                                    contentDescription = stringResource(R.string.remove),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
 

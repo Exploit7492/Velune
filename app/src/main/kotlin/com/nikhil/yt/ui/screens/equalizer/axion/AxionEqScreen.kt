@@ -1262,6 +1262,26 @@ private fun SimpleEqMode(
                 .aspectRatio(1f),
         )
 
+        // 10-band graphic EQ — moved here from the Master tab's parametric
+        // editor (which used full-width horizontal Frequency/Gain/Q sliders
+        // per band, a much bulkier control surface than a channel-strip
+        // view needs) and redrawn as slim vertical faders in the style real
+        // hardware EQs and Neutron's fixed-band view use. See
+        // NeonVerticalFader's doc for the full "why this instead of a
+        // rotated Material Slider" reasoning.
+        //
+        // Reads/writes the exact same bandGains this tab's own triangle
+        // dial reads/writes (via setBandGain), not a separate model — the
+        // triangle is a coarse 3-handle macro view over these same 10
+        // values (see applyTriangle above), this is the precise per-band
+        // view over them. Moving either one moves the same underlying
+        // profile, visible in both immediately.
+        SimpleBandStrip(
+            bandGains = bandGains,
+            enabled = enabled,
+            onBandChange = { band, value -> viewModel.setBandGain(band, value) },
+        )
+
         AnimatedVisibility(
             visible = isDirty && enabled,
             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -1283,6 +1303,42 @@ private fun SimpleEqMode(
                 Text(
                     text = stringResource(R.string.eq_save),
                     style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimpleBandStrip(
+    bandGains: FloatArray,
+    enabled: Boolean,
+    onBandChange: (Int, Float) -> Unit,
+) {
+    val bandLabels = remember { arrayOf("31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k") }
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (band in bandLabels.indices) {
+                NeonVerticalFader(
+                    valueDb = bandGains.getOrElse(band) { 0f } / 50f,
+                    onValueChange = { onBandChange(band, (it * 50f).coerceIn(-600f, 600f)) },
+                    label = bandLabels[band],
+                    enabled = enabled,
+                    accentColor = accentColor,
                 )
             }
         }

@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v13)
+# Velune EQ/DSP Handover (v14)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1519,6 +1519,117 @@ under the meter (matching how every `RotaryKnob` has a label below it —
 `PeakMeterView` currently doesn't), or a broader restyle in the same vein
 as §1's neon knob pass? None of that was built; don't assume it's covered
 by this entry.
+
+## 2l. This session's work — moved the 10-band gain sliders from Master to
+Simple, redrawn as slim Neutron-style vertical faders
+
+The user asked, across two messages: move "the parametric EQ sliders" off
+the Master tab and onto Simple, and redraw them as vertical, slim, "more
+professional... like the way neutron EQ sliders are" — rather than the
+big horizontal sliders they were.
+
+**What "the parametric EQ sliders" actually were**: `ParametricEqEditor`
+in `EqScreen.kt` (embedded at the bottom of the Master tab, driven by
+`EQViewModel`) — for every band in the active profile, three full-width
+horizontal `Slider`s stacked vertically (Frequency, Gain, Q), each with
+its own header row and remove button. Confirmed by reading the file
+directly rather than assuming: despite the name, there was no curve/graph
+canvas anywhere in it — "parametric" here just meant "list of sliders",
+not a draggable-node visualization.
+
+**Confirmed the data was already unified before touching anything**: both
+`AxionEqViewModel` (drives Simple/Master's `bandGains`) and `EQViewModel`
+(drove the old per-band slider list) read from the same
+`EQProfileRepository`/`SavedEQProfile` — this was already true from an
+earlier session's "one canonical engine" work (§2b), not something this
+patch needed to establish. That's what made "move to Simple" a pure UI
+relocation rather than a data-migration: no new state, no new persistence,
+just reading/writing the exact same `bandGains`/`setBandGain` Simple's
+existing bass/mid/treble triangle dial already uses.
+
+**New: `NeonVerticalFader.kt`** — a slim, bipolar, fully custom-`Canvas`-drawn
+vertical fader per band, replacing the old rotated-Material-`Slider`
+approach entirely (not just visually — no `Slider` composable involved at
+all this time). Why custom-drawn instead of another rotated `Slider`: a
+Material `Slider`'s minimum touch target and default thumb/track sizing
+are built for being the only interactive control on a row, and fighting
+that to get genuinely slim (this uses 22dp wide, previously a rotated
+`Slider` needed ~56dp to keep its hit target usable) was the actual
+"still looks big" problem, not just visual styling. Key details:
+- **Bipolar fill**: grows from the 0dB centerline outward toward boost or
+  cut, instead of filling from one end — the same at-a-glance "how far is
+  this band pushed" reading a real console channel strip's LED meter or a
+  graphic EQ's fill gives you, which a same-direction fill doesn't.
+- **Visual language matches `RotaryKnob`**, not a second style invented for
+  this: the same layered wide-dim + narrow-bright stroke trick
+  (`drawNeonArc` → adapted here as `drawNeonFillCapsule`), the same
+  halo-of-fading-circles thumb trick (`drawNeonDot` → `drawNeonFaderCap`),
+  and an under-glow whose opacity tracks distance from center, mirroring
+  `RotaryKnob`'s "light that goes with what it's controlling" effect for a
+  fader instead of a knob.
+- **Direct-position dragging**, not delta-based: tapping anywhere on the
+  track jumps the fader there, dragging tracks the finger 1:1 — correct
+  for a fader specifically (unlike a knob, a vertical fader's value has a
+  natural 1:1 spatial mapping to touch position, matching every real
+  fader/DAW's UX), verified by checking `AwaitPointerEventScope` actually
+  exposes `size` (needed for the position→value math) via a targeted web
+  search rather than assuming the API shape.
+- Caught and fixed two API mistakes before they became compile errors:
+  `RoundRect` is in `androidx.compose.ui.geometry`, not `.graphics` (wrong
+  import, would have been "unresolved reference"); switched to
+  `DrawScope.drawRoundRect(...)` directly instead of manually building
+  `Path`/`RoundRect` objects, which sidestepped needing to verify
+  `Path.addRoundRect`'s exact signature at all. Both caught by web search
+  against the real Compose API before writing the final version, not
+  discovered later from a CI log this time.
+
+**`SimpleBandStrip`** (new, in `AxionEqScreen.kt`) — a horizontally
+scrollable row of 10 `NeonVerticalFader`s in a dark panel, added to
+`SimpleEqMode` right below the existing bass/mid/treble triangle dial.
+Both controls now read/write the identical `bandGains` — the triangle is
+a coarse 3-handle macro view, the strip is the precise per-band view,
+moving either one is visible in both immediately, same profile.
+
+**Master's `ParametricEqEditor` per-band block**: reduced from three
+sliders (Frequency/Gain/Q) per band down to one (Q only), one compact row
+per band instead of a header + three full slider stacks. Gain was
+removed because it's now redundant with Simple's strip (same value, would
+just be a second control fighting for the same number). Frequency was
+removed and is a genuine, stated trade-off, not swept under the rug: for
+the fixed 10 standard bands Simple's strip drives, that's the *correct*
+design — a graphic EQ legitimately doesn't expose per-band frequency,
+only gain, and Neutron's own fixed-band view doesn't either. It does mean
+a band added via "Add band," or extra bands from an AutoEQ/JSON import
+beyond the fixed 10, now has no UI anywhere to move off its initial
+frequency. That's a real gap for that less-common path. If it matters in
+practice, the fix would be a small "band count/frequency" editor
+specifically for non-standard bands, not undoing this change.
+
+**Mid-session, `main` moved twice** while this was uncommitted locally
+(§2i's App.onCreate() warm-up landed, then §2j/§2k's identity-fast-path
+fix and peak meter) — caught the same way §2k's own note describes:
+stashed local work, re-cloned/reset to the real `origin/main`, rebased
+the stashed diff on top, confirmed zero file overlap on the DSP-side
+commits and a clean auto-merge on the one shared file
+(`AxionEqScreen.kt`, since §2k also touched the Master tab) before
+committing anything.
+
+**Verified**: brace/paren balance-checked all three touched files after
+the rebase. Grepped for single-definition/single-call-site on
+`SimpleBandStrip` and `NeonVerticalFader` post-merge to confirm the
+rebase didn't duplicate anything. Re-read the merged `SimpleEqMode` call
+site and confirmed `MasterBusControls`/`PeakMeterView` from §2k were
+untouched by this session's changes (different section of the same file,
+no actual code overlap despite the same file needing a merge).
+
+**Not verified, same as everything else in this file**: on-device
+rendering — bar/thumb proportions at the chosen 22dp width, glow
+legibility, whether the horizontal-scroll band strip reads as
+"professional/Neutron-like" rather than cramped, and whether the direct-
+position drag feels right compared to `RotaryKnob`'s delta-based
+dragging on an actual touchscreen.
+
+
 
 ## 4. Suggested next step
 
