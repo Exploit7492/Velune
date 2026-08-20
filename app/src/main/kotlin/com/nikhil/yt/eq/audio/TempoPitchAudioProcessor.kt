@@ -50,6 +50,14 @@ class TempoPitchAudioProcessor : AudioProcessor {
     private var outputBuffer: ByteBuffer = EMPTY_BUFFER
     private var inputEnded = false
 
+    // True whenever the most recent queueInput() call took the real
+    // WSOLA/resampler path (isIdentity() was false). Tracked so the next
+    // call that finds isIdentity() true again — tempo/pitch reset back to
+    // default mid-track — knows there's real buffered state sitting in
+    // wsola/resampler that needs draining before switching to the cheap
+    // bypass, instead of just abandoning it. See drainActivePipeline().
+    private var wasProcessingActively = false
+
     // Cumulative frame counts since the last flush. [mediaDurationForPlayoutDuration]
     // reports the *observed* ratio between these to the audio sink's position
     // tracking rather than trusting the nominal tempoRatio -- windowing/rounding
@@ -144,6 +152,9 @@ class TempoPitchAudioProcessor : AudioProcessor {
      * change is safe and free to toggle: the very next queueInput() call
      * after setTempo/setPitchSemitones moves a ratio off 1.0 takes the
      * real path immediately, same buffer, no reconfigure/flush needed.
+     * Going the other way (real processing back to identity) is handled
+     * by drainActivePipeline(), called from queueInput() below, so no
+     * buffered audio is lost at that transition either.
      */
     private fun isIdentity(): Boolean =
         kotlin.math.abs(tempoRatio - 1.0) < IDENTITY_EPSILON &&
@@ -153,27 +164,48 @@ class TempoPitchAudioProcessor : AudioProcessor {
         if (!inputBuffer.hasRemaining()) return
 
         if (isIdentity()) {
-            // Fast path: a straight byte copy, no per-sample decode to
-            // DoubleArray, no resampler, no WSOLA analysis/overlap-add, and
-            // critically no array allocation at all (the decode/resample/
-            // stretch path below allocates three fresh Array<DoubleArray>
-            // per call) — this is what actually made the "untouched" case
-            // cheap; the full pipeline below never was.
-            val bytes = inputBuffer.remaining()
-            val out = if (outputBuffer.capacity() < bytes) {
-                ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+            // If the previous call was actively stretching, there's real
+            // buffered state inside wsola/resampler (up to ~1 window,
+            // ~40ms) that hasn't been emitted yet — drain it now rather
+            // than discard it, and prepend it to this call's bypass
+            // output so it's still heard, just very slightly delayed.
+            val drained = if (wasProcessingActively) {
+                wasProcessingActively = false
+                drainActivePipeline()
+            } else {
+                null
+            }
+            val drainedFrameCount = drained?.get(0)?.size ?: 0
+
+            // Fast path otherwise: a straight byte copy, no per-sample decode
+            // to DoubleArray, no resampler, no WSOLA analysis/overlap-add,
+            // and critically no array allocation at all (the decode/
+            // resample/stretch path below allocates three fresh
+            // Array<DoubleArray> per call) — this is what actually made the
+            // "untouched" case cheap; the full pipeline below never was.
+            val bytesPerSample = bytesPerSample()
+            val bypassBytes = inputBuffer.remaining()
+            val drainedBytes = drainedFrameCount * bytesPerSample * channelCount
+            val totalBytes = bypassBytes + drainedBytes
+
+            val out = if (outputBuffer.capacity() < totalBytes) {
+                ByteBuffer.allocateDirect(totalBytes).order(ByteOrder.nativeOrder())
             } else {
                 outputBuffer.clear() as ByteBuffer
+            }
+            if (drained != null && drainedFrameCount > 0) {
+                encodeFrames(out, drained, drainedFrameCount, bytesPerSample)
             }
             out.put(inputBuffer)
             out.flip()
             outputBuffer = out
-            val bytesPerSample = bytesPerSample()
-            val frameCount = bytes / (bytesPerSample * channelCount)
+
+            val frameCount = bypassBytes / (bytesPerSample * channelCount)
             totalInputFrames += frameCount
-            totalOutputFrames += frameCount
+            totalOutputFrames += frameCount + drainedFrameCount
             return
         }
+        wasProcessingActively = true
         val ws = wsola ?: return
         val rs = resampler ?: return
 
@@ -209,6 +241,41 @@ class TempoPitchAudioProcessor : AudioProcessor {
         writeOutput(stretched, outFrames, bytesPerSample)
     }
 
+    /**
+     * Flushes whatever's still buffered inside the resampler and WSOLA
+     * stretcher when switching from active processing to the identity
+     * bypass mid-track, so that audio isn't silently lost at the switch.
+     *
+     * Two stages, in the same order audio normally flows through them:
+     * 1. The resampler holds a tiny (~1 sample) interpolation lookahead
+     *    tail — flushed with a small pad of silence, same technique
+     *    queueEndOfStream() already uses at true end-of-track, just
+     *    mid-stream here instead. Whatever it produces from that flush
+     *    is fed into WSOLA exactly like a normal process() call would.
+     * 2. WsolaTimeStretcher.drain() (see that function's own doc comment)
+     *    then flushes everything WSOLA itself is holding, including the
+     *    input queue and the half-finished overlap-add window.
+     *
+     * Verified against a Python model of this exact sequence before
+     * writing it here (this session's scratch verification, not
+     * shipped): recovers audio whose total duration matches the
+     * expected steady-state input/output ratio to within one hop's
+     * rounding, with no NaN/garbage values and both stages returning to
+     * a clean, reusable state afterward.
+     */
+    private fun drainActivePipeline(): Array<DoubleArray>? {
+        val ws = wsola ?: return null
+        val rs = resampler ?: return null
+
+        val flushPad = Array(channelCount) { DoubleArray(RESAMPLER_FLUSH_PAD_FRAMES) }
+        val resampledTail = rs.process(flushPad, RESAMPLER_FLUSH_PAD_FRAMES)
+        if (resampledTail[0].isNotEmpty()) {
+            ws.process(resampledTail, resampledTail[0].size)
+        }
+        val drained = ws.drain()
+        return if (drained[0].isEmpty()) null else drained
+    }
+
     private fun writeOutput(frames: Array<DoubleArray>, outFrames: Int, bytesPerSample: Int) {
         val outBytes = outFrames * bytesPerSample * channelCount
         // FIX: `outputBuffer.clear()` resolves to `java.nio.Buffer.clear()` (not the
@@ -222,14 +289,18 @@ class TempoPitchAudioProcessor : AudioProcessor {
         } else {
             outputBuffer.clear() as ByteBuffer
         }
-        when (encoding) {
-            C.ENCODING_PCM_FLOAT ->
-                for (i in 0 until outFrames) for (c in 0 until channelCount) out.putFloat(frames[c][i].coerceIn(-1.0, 1.0).toFloat())
-            C.ENCODING_PCM_16BIT ->
-                for (i in 0 until outFrames) for (c in 0 until channelCount) out.putShort((frames[c][i] * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
-        }
+        encodeFrames(out, frames, outFrames, bytesPerSample)
         out.flip()
         outputBuffer = out
+    }
+
+    private fun encodeFrames(dest: ByteBuffer, frames: Array<DoubleArray>, frameCount: Int, bytesPerSample: Int) {
+        when (encoding) {
+            C.ENCODING_PCM_FLOAT ->
+                for (i in 0 until frameCount) for (c in 0 until channelCount) dest.putFloat(frames[c][i].coerceIn(-1.0, 1.0).toFloat())
+            C.ENCODING_PCM_16BIT ->
+                for (i in 0 until frameCount) for (c in 0 until channelCount) dest.putShort((frames[c][i] * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort())
+        }
     }
 
     private fun bytesPerSample(): Int = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
@@ -248,6 +319,7 @@ class TempoPitchAudioProcessor : AudioProcessor {
         inputEnded = false
         wsola?.reset()
         resampler?.reset()
+        wasProcessingActively = false
         totalInputFrames = 0L
         totalOutputFrames = 0L
     }
@@ -313,5 +385,15 @@ class TempoPitchAudioProcessor : AudioProcessor {
         // "user hasn't touched it" default state, never a real subtle
         // adjustment silently getting skipped.
         private const val IDENTITY_EPSILON = 0.0005
+
+        // Small pad fed through the resampler in drainActivePipeline() to
+        // flush its ~1-sample interpolation lookahead when switching from
+        // active processing back to the identity bypass mid-track. Tiny
+        // and fixed, same idea as FLUSH_SILENCE_FRAMES above but far
+        // smaller since the resampler's own buffered tail is inherently
+        // minuscule (a couple of samples, not a whole window) — this
+        // isn't a duration to render, just enough lookahead for its
+        // linear interpolation to resolve its last real sample.
+        private const val RESAMPLER_FLUSH_PAD_FRAMES = 8
     }
 }

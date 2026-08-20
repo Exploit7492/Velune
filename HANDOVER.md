@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v14)
+# Velune EQ/DSP Handover (v15)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1628,6 +1628,76 @@ legibility, whether the horizontal-scroll band strip reads as
 "professional/Neutron-like" rather than cramped, and whether the direct-
 position drag feels right compared to `RotaryKnob`'s delta-based
 dragging on an actual touchscreen.
+
+## 2m. This session's work — properly draining WSOLA/resampler on the
+
+identity transition, instead of accepting the loss §2j flagged
+
+§2j's own commit message flagged an accepted edge case rather than
+fixing it: switching from active tempo/pitch processing back to
+identity mid-track abandoned whatever was still buffered inside WSOLA
+(up to ~1 window, ~40ms) instead of draining it. Asked to fix that
+properly instead of leaving it as a documented trade-off.
+
+**What was added**:
+- `WsolaTimeStretcher.drain()` — feeds a small, fixed amount of silence
+  (`windowSize + tolerance` frames, the max lookahead any single hop
+  could ever need — not proportional to how much real audio happens to
+  be buffered) so every hop the already-queued *real* samples support
+  gets produced normally, then emits the one unavoidable irregular
+  remainder — whatever's sitting in the overlap-add accumulator that
+  never got a second overlapping window to complete its Hann/COLA sum —
+  as a final chunk instead of discarding it. Resets to a clean state
+  afterward.
+- `TempoPitchAudioProcessor` now tracks `wasProcessingActively`. The
+  next `queueInput()` call that finds `isIdentity()` true after a real
+  (non-identity) call drains the resampler's own tiny (~1 sample)
+  interpolation lookahead first (same small-silence-flush technique
+  `queueEndOfStream()` already used at true end-of-track, applied
+  mid-stream here), feeds that into WSOLA, calls `wsola.drain()`, and
+  prepends whatever comes out to that same call's normal bypass copy —
+  so it's still heard, just delayed by under a buffer's worth, not
+  lost. Every *subsequent* identity call goes back to pure 1:1 bypass;
+  the drain only fires once, right at the transition.
+- Refactored the shared DoubleArray→ByteBuffer encode loop out of
+  `writeOutput` into `encodeFrames()`, reused by both the normal write
+  path and the new drain-prepend path — one encoding implementation,
+  not two hand-written copies of the same logic that could drift apart.
+- `wasProcessingActively` also resets in `flush()` alongside the
+  `wsola`/`resampler` resets already there, so a genuine flush (track
+  change, seek) doesn't leave it stale into the next track.
+
+**How this was verified, given no Android/Kotlin toolchain in this
+sandbox** (confirmed again this session: no `kotlinc`, no `javac`,
+`apt install default-jdk-headless` blocked — `security.ubuntu.com`'s
+package mirror isn't in the network allowlist either): ported
+`WsolaTimeStretcher` + `LinearResampler` + `SampleQueue` to plain
+Python and actually ran the logic, rather than reasoning about it on
+paper only. This is the same "verify the shape in a plain runtime
+that's actually available, then hand-transcribe" approach earlier
+sessions used for kotlinx.coroutines-shaped logic they also couldn't
+compile (see §2 item 9's own notes) — worth remembering as the pattern
+whenever a DSP change needs verification in this environment.
+Confirmed, by actually running it:
+- A single-stage WSOLA drain mid-stream recovers a small, bounded frame
+  count (not unbounded), produces no NaN/Inf/exploding values, and
+  resets to a state indistinguishable from freshly-configured.
+- The full combined resampler+WSOLA drain sequence (the actual
+  sequence implemented) recovers total audio whose duration converges
+  to the theoretically-expected input/output ratio to within one hop's
+  rounding — i.e. it recovers essentially everything that would
+  otherwise have been lost, not just some fraction of it.
+- A full call-sequence integration check mirroring `queueInput()`
+  itself confirms the drain fires exactly once at the transition and
+  never repeats on subsequent identity calls.
+
+**Not verified on-device** — same caveat as every DSP patch in this
+project's history: the algorithm and bookkeeping are now verified
+correct in a real, *executed* runtime (Python), which is a meaningfully
+stronger check than the paper-reasoning-only verification most other
+entries in this file rely on, but whether this is actually inaudible on
+a real phone at the exact moment tempo/pitch gets reset mid-song hasn't
+been listened to.
 
 
 

@@ -205,6 +205,72 @@ class WsolaTimeStretcher(private val channelCount: Int) {
         return output
     }
 
+    /**
+     * Drains everything currently buffered inside this stretcher (the raw
+     * input queue plus the half-finished overlap-add accumulator) as final
+     * output frames, then resets to a clean idle state ready for reuse.
+     *
+     * Call this before abandoning the stretcher mid-stream (e.g.
+     * [TempoPitchAudioProcessor] switching from active WSOLA processing to
+     * its identity bypass path) instead of just stopping — without it,
+     * whatever's already been ingested but not yet emitted (up to
+     * roughly one window's worth, ~40ms) would simply be discarded, an
+     * audible gap right at the moment tempo/pitch gets reset to default.
+     *
+     * How: feeds exactly enough silence ([windowSize] + [tolerance]
+     * frames — the maximum lookahead any single hop could ever need, a
+     * small fixed amount, not proportional to how much real audio is
+     * buffered) so every hop the already-queued *real* samples support
+     * gets produced normally through [tryProduceOneHop]. That still
+     * leaves one irregular remainder: whatever's sitting in [pending]
+     * never got a second overlapping window to complete its Hann/COLA
+     * sum, so the oldest [hop] samples of it are emitted as-is rather
+     * than discarded — verified (see `test_drain.py` in this session's
+     * scratch verification, not shipped) to be small, bounded, and free
+     * of the numerical blow-up a half-summed window might suggest, since
+     * Hann tapers to ~0 at the window edges either way.
+     */
+    fun drain(): Array<DoubleArray> {
+        if (windowSize == 0) return Array(channelCount) { DoubleArray(0) }
+
+        val padFrames = windowSize + tolerance
+        val silence = Array(channelCount) { DoubleArray(padFrames) }
+        for (c in 0 until channelCount) inputQ[c].append(silence[c], 0, padFrames)
+
+        val chunks = ArrayList<DoubleArray>()
+        var totalFrames = 0
+        while (true) {
+            val produced = tryProduceOneHop() ?: break
+            chunks.add(produced)
+            totalFrames += produced.size / channelCount
+        }
+
+        if (pendingHasWindow) {
+            val tail = DoubleArray(hop * channelCount)
+            for (f in 0 until hop) {
+                for (c in 0 until channelCount) tail[f * channelCount + c] = pending[c][f]
+            }
+            chunks.add(tail)
+            totalFrames += hop
+        }
+
+        reset()
+        if (chunks.isEmpty()) return Array(channelCount) { DoubleArray(0) }
+
+        val result = Array(channelCount) { DoubleArray(totalFrames) }
+        var writeIdx = 0
+        for (chunk in chunks) {
+            val frames = chunk.size / channelCount
+            for (f in 0 until frames) {
+                for (c in 0 until channelCount) {
+                    result[c][writeIdx + f] = chunk[f * channelCount + c]
+                }
+            }
+            writeIdx += frames
+        }
+        return result
+    }
+
     companion object {
         private const val WINDOW_MS = 40.0
         private const val TOLERANCE_MS = 10.0
