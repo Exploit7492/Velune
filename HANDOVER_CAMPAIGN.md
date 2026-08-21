@@ -193,10 +193,10 @@ model for a backend the app owner controls centrally.
 
 ## 6. Not done / open
 
-- **Not committed, patched, or verified yet as of the config-source
-  correction (§5) being made** — check `git log` after cloning; if this
-  file and the campaign work aren't on `main`, this session ended before
-  finishing that step. If they are, ignore this bullet, it's stale.
+- **Committed and pushed** — confirmed on real `main` as of this note
+  (`d3151cd`/`4ea693a`). If you're reading this from a fresh clone, the
+  campaign feature and this file are already there; ignore any earlier
+  version of this bullet that said otherwise.
 - **No real Supabase project wired in.** The user hadn't provided a URL/
   anon key as of this session — `local.properties`/CI secrets are unset,
   so `BuildConfig.SUPABASE_URL`/`SUPABASE_ANON_KEY` build empty and
