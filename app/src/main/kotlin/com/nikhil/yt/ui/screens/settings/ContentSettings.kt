@@ -1248,6 +1248,19 @@ highlightKey: String? = null) {
             )
         )
         Spacer(modifier = Modifier.height(16.dp))
+
+        Material3SettingsGroup(
+            title = stringResource(R.string.promoted_content_heading),
+            items = listOf(
+                Material3SettingsItem(
+                    icon = painterResource(R.drawable.link),
+                    title = { Text(stringResource(R.string.manage_campaigns)) },
+                    description = { Text(stringResource(R.string.manage_campaigns_desc)) },
+                    onClick = { navController.navigate("campaign/admin") },
+                ),
+            ),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
     
         Spacer(Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom)))
     }

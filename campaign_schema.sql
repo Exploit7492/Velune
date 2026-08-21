@@ -100,6 +100,53 @@ $$;
 
 grant execute on function public.increment_campaign_play(uuid) to anon;
 
+-- Admin policies for CampaignAdminScreen/CampaignAdminRepository — a
+-- signed-in Supabase Auth session (`authenticated` role) can see and
+-- manage every row, not just currently-live ones, unlike the anon policy
+-- above. This is what makes it safe to hold real write access from
+-- inside the app at all: see CampaignAdminRepository.kt's doc for why
+-- this is a signed-in session rather than the service-role key.
+--
+-- CAVEAT, stated plainly: `auth.role() = 'authenticated'` grants full
+-- campaign management to *any* signed-in user, not one specific admin
+-- account. That's the right tradeoff for a single-admin personal project
+-- — anyone who can sign in is, by construction, the one person with
+-- credentials to a project only you control. It stops being the right
+-- policy the moment a second real account exists that shouldn't have
+-- this access; at that point, replace `auth.role() = 'authenticated'`
+-- below with a check against a specific admin user id (`auth.uid() =
+-- '<your-user-id>'::uuid`) or a custom role claim instead of widening
+-- trust to "anyone who can sign in."
+create policy "Authenticated admin can view all campaigns"
+    on public.campaigns
+    for select
+    to authenticated
+    using (true);
+
+create policy "Authenticated admin can create campaigns"
+    on public.campaigns
+    for insert
+    to authenticated
+    with check (true);
+
+create policy "Authenticated admin can update campaigns"
+    on public.campaigns
+    for update
+    to authenticated
+    using (true)
+    with check (true);
+
+create policy "Authenticated admin can delete campaigns"
+    on public.campaigns
+    for delete
+    to authenticated
+    using (true);
+
+-- Create your admin account once, from the Supabase dashboard
+-- (Authentication → Users → Add user) or via the CLI — not from this
+-- file. There's deliberately no SQL here that creates a login; that's a
+-- credential, not schema.
+
 -- Example row for testing — delete or edit once you have a real campaign.
 -- insert into public.campaigns (source_url, start_date, end_date, certified, is_live)
 -- values (

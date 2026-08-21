@@ -404,5 +404,8 @@ fun NavGraphBuilder.navigationBuilder(
         LoginScreen(navController)
     }
         composable("eq/axion") { AxionEqScreen(onBackClick = { navController.navigateUp() }) }
+        composable("campaign/admin") {
+            com.nikhil.yt.campaign.CampaignAdminScreen(onBackClick = { navController.navigateUp() })
+        }
         composable("ambient") { AmbientModeScreen(navController) }
 }

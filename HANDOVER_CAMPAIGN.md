@@ -191,7 +191,62 @@ a runtime settings field for this again, re-read this paragraph first —
 it's not that a settings field is impossible, it's that it's the wrong
 model for a backend the app owner controls centrally.
 
-## 6. Not done / open
+## 7. Admin flow (this session): create/edit/pause/delete from the app
+
+Previously the only way to manage campaigns was the Supabase dashboard
+directly. Added:
+
+- **`CampaignAdminRepository.kt`** — deliberately a **separate class**
+  from `CampaignRepository.kt`, not an extension of it, so that class's
+  doc can keep truthfully saying "anon gets zero direct write grants."
+  Signs in via real Supabase Auth (`/auth/v1/token?grant_type=password`),
+  stores the access/refresh token pair via DataStore (same "not committed
+  to source, not OS-keystore-grade encrypted" caveat as every other
+  credential this app stores client-side), and transparently refreshes
+  the access token a minute before it expires. Full create/update/delete/
+  pause on the `campaigns` table, all using the signed-in session's JWT.
+
+  **Why not just embed the service-role key and skip all this?** The
+  service-role key bypasses Row Level Security entirely — baking it into
+  the app would mean anyone who decompiles the APK gets unrestricted
+  read/write access to the *whole* database, not just campaigns. That's
+  a real vulnerability, not a theoretical one, so it was never on the
+  table. Supabase Auth + RLS scoped to the `authenticated` role is the
+  actual right way to do this.
+
+- **`campaign_schema.sql`** — four new RLS policies (`for select/insert/
+  update/delete ... to authenticated`), stated plainly in the file's own
+  comment: `auth.role() = 'authenticated'` grants full management to
+  *any* signed-in user, which is the right tradeoff for a single-admin
+  project but stops being right the moment a second real account exists
+  that shouldn't have this access — at that point, tighten to a specific
+  `auth.uid()` check instead. No SQL creates a login; that's done once
+  from the Supabase dashboard (Authentication → Users), not from this
+  file — a credential doesn't belong in a schema migration.
+
+- **`CampaignAdminScreen.kt`** — sign-in form → campaign list (every row,
+  every status: LIVE/SCHEDULED/ENDED/PAUSED, computed fresh from
+  `active`+the date window, never stored) → a bottom-sheet create/edit
+  form with real `DatePickerDialog`s for start/end. Pause/resume and
+  delete are one-tap from the list; full edit opens the same sheet the
+  create flow uses, prefilled.
+
+- **Settings entry point** (`ContentSettings.kt`) — a "Manage Campaigns"
+  item under a restored "Promoted Content" group (the group patch `0021`
+  removed when the per-user Supabase key fields moved to build-time
+  config — this is a different kind of entry, an app-nav link, not a
+  credential field, so bringing the group back for it is correct, not a
+  reversion of that patch's actual point). Discoverable the same way any
+  other settings item is; the real access control is the sign-in wall,
+  not obscurity.
+
+**Known simplification**: the create/edit form doesn't expose
+`cta_label` — it's always submitted as `"Play"` from the app. The column
+still exists and defaults sensibly; edit it directly in Supabase if a
+campaign needs different CTA text. Not fixed here for scope reasons, not
+because it's hard.
+
+## 8. Not done / open
 
 - **Committed and pushed** — confirmed on real `main` as of this note
   (`d3151cd`/`4ea693a`). If you're reading this from a fresh clone, the
