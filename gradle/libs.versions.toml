@@ -137,7 +137,38 @@ timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
 #newpipe-extractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version = "v0.25.0" }
 #newpie-extractor = { module = "com.github.libre-tube:NewPipeExtractor", version = "70be3a4" }
-newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version = "master-SNAPSHOT" }
+# FIX (build was failing): this was "master-SNAPSHOT", which jitpack could
+# no longer resolve at all -- CI failed at :innertube:compileKotlin's
+# classpath resolution with "Could not resolve
+# com.github.TeamNewPipe:NewPipeExtractor:master-SNAPSHOT ... 401
+# Unauthorized", before any Kotlin code (including unrelated PRs) ever got
+# compiled. Root cause, confirmed by checking the real repo directly
+# rather than guessing: TeamNewPipe/NewPipeExtractor's actual default/
+# active branch is `dev`, not `master` -- a `master`-branch snapshot is
+# not something jitpack can reliably build anymore, if the branch is even
+# still meaningfully maintained at all. The project's own current README
+# no longer recommends jitpack SNAPSHOT branch builds either way: it
+# points to a tagged release for normal use, or Maven Central's snapshot
+# repo (a different mechanism entirely, keyed by commit hash, not branch
+# name) for bleeding-edge needs. Switched to the latest tagged release
+# (v0.26.3 as of this fix) rather than reaching for Maven Central's
+# snapshot repo, since nothing in this repo's history documents an actual
+# hard dependency on unreleased master-only NewPipeExtractor behavior --
+# no comment ever explained why master-SNAPSHOT was chosen over the
+# v0.25.0 tagged-release candidate already sitting here commented out --
+# and a real tagged release is both the officially-supported path and far
+# more reliable for jitpack to resolve (built once, cached permanently,
+# rather than rebuilt/re-verified on every request the way a branch
+# snapshot is). NOT verified against Velune's actual innertube module
+# code beyond confirming it only references this dependency through the
+# libs.newpipe.extractor version-catalog alias (single usage,
+# innertube/build.gradle.kts) -- if the code turns out to depend on any
+# NewPipeExtractor API/behavior that only ever existed on master and
+# never made it into a tagged release, this would surface as a real
+# compile error against innertube's own Kotlin source (a different,
+# more specific failure than this dependency-resolution one), not
+# silently.
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version = "v0.26.3" }
 #newpipe-extractor = { module = "com.github.mostafaalagamy:MetrolistExtractor", version.ref = "extractor" }
 
 kuromoji-ipadic = { module = "com.atilika.kuromoji:kuromoji-ipadic", version.ref = "kuromojiIpadic" }
