@@ -1701,6 +1701,204 @@ been listened to.
 
 
 
+## 3. Unrelated feature work — song/video toggle smoothness + views-count
+pill (patch `0021`)
+
+**Not part of the EQ/DSP thread above.** This section covers a
+completely separate feature area — `ui/player/Player.kt`'s Song/Video
+toggle and a new views-count pill — done in response to a direct user
+request unconnected to the EQ/DSP chronology in §2. Flagged clearly as
+its own section (rather than continuing the `2x` numbering) so a future
+session picking up the EQ/DSP thread doesn't mistake this for part of
+that work, and so a session picking up *this* thread doesn't have to
+wade through unrelated EQ history to find it. Files touched:
+`ui/player/Player.kt`, `ui/player/VideoMorphingComponents.kt`, new
+`ui/player/ViewCountPill.kt`. Zero overlap with any file the EQ/DSP
+sections above touch.
+
+### Why: the toggle was laggy, ported the fix from a sibling repo
+
+The user pointed at a different, unrelated codebase — a React Native/
+Expo app referred to as "mavins" (`phoenix-boss/mavins` on GitHub) — as
+having a genuinely smooth song/video toggle, and asked for that pattern
+to be ported here, plus its views-count pill design copied over too.
+Read mavins' `components/player/playerContent.tsx` directly (not
+guessed from general React Native knowledge) to find the actual
+mechanism, then adapted it to Velune's very different architecture
+(Kotlin/Compose/Media3, a dual-ExoPlayer design with a muted slave
+video player soft-synced to the master audio player via playback-speed
+nudging — see the existing `SOFT_SYNC_*` constants near the top of
+`Player.kt` — rather than mavins' single-audio-ownership-handoff
+approach, which Velune doesn't need since its video player never owns
+audio in the first place).
+
+**Root cause found, not assumed**: Velune's video stream URL was only
+resolved at the moment the toggle was tapped — a real network round-trip
+to YouTube's IOS client (see `YTPlayerUtils.resolveVideoStreamUrl`) — and
+`isLoadingVideo` was tracked in state but never actually rendered
+anywhere in the UI. So a tap could sit doing visibly nothing for however
+long that resolve took, with zero feedback that anything was happening.
+Confirmed this by reading the actual `toggleVideo` function and grepping
+every `isLoadingVideo` usage before touching anything — it really was
+dead state.
+
+**The fix, mirroring mavins' actual mechanism (not just "make it
+async")**: `loadVideoForCurrentTrack()` now runs unconditionally as soon
+as a track becomes active — not gated behind `isVideoMode` — so the
+slave video player is (usually) already resolved, prepared, and sitting
+there paused/muted by the time the user taps "Video." A new `hasVideo:
+Boolean?` tri-state (`null` = still resolving, `true` = ready, `false` =
+confirmed unavailable) lets `toggleVideo()` take an instant seek+play
+fast path in the common case, with the old live-resolve behavior kept
+only as a fallback for the rare case of tapping within the first moment
+or two of a track starting (now actually wired to a visible spinner via
+the previously-dead `isLoadingVideo`, rather than looking like nothing
+happened).
+
+**Stated trade-off, not hidden**: pre-buffering means every streamed
+track now pays the video stream's resolve+buffer network cost, even for
+users who never touch the Video tab. That's the same trade mavins makes
+— "no lag on toggle" isn't free, it's paid earlier and unconditionally
+instead of on-demand. Worth knowing if bandwidth/battery complaints show
+up later; the fix for *that* would be a different trade (e.g. only
+pre-buffer once a track's been playing a few seconds, or only for
+tracks the user has toggled to video before), not implemented here since
+it wasn't what was asked for.
+
+**Crossfade added** (`VideoMorphingComponents.kt`): the thumbnail-to-
+video transition used to be a hard cut (`if (isVideoMode && videoPlayer
+!= null)` — the video surface only existed in the composition at all
+while `isVideoMode` was true). Now a single `animateFloatAsState` progress
+value (300ms, matching mavins' `withTiming` duration) drives both
+layers' opacity via `graphicsLayer { alpha = ... }`, fading one out as
+the other fades in. Required changing all four `VideoMorphingThumbnail`/
+`MetroPlayerContent` call sites in `Player.kt` from `videoPlayer = if
+(isVideoMode) player else null` to always passing `videoPlayer = player`
+— the old conditional nulled the player reference out at the exact
+moment `isVideoMode` flipped false, which would have cut the fade-out
+short before this change could do anything.
+
+**Local media gating** (explicit user requirement, not in mavins):
+`isCurrentSongLocal` (`currentSong?.song?.isLocal == true`) now gates
+both the eager pre-buffer (skips a network call that's guaranteed to
+fail for a local file's non-YouTube id) and the Song/Video pill's
+visibility entirely — the pill doesn't render at all for local tracks,
+not just disabled/dimmed. Required moving `currentSong`'s declaration
+earlier in `BottomSheetPlayer` (it was declared much later in the
+function, after the point video state now needs it) and removing the
+now-duplicate later declaration.
+
+**Bug caught in this session's own draft before committing**: an earlier
+pass placed the new view-count-fetch `LaunchedEffect(mediaMetadata?.id)`
+*before* `mediaMetadata` itself was declared further down in the same
+function — a forward reference that would not have compiled. Caught by
+diffing the uncommitted work-in-progress against clean `origin/main`
+before finalizing, not by running a compiler (this sandbox still has no
+Android SDK — see §0). Worth internalizing as a general lesson for large
+single-file Compose functions like this one: always verify a new
+`LaunchedEffect`'s captured variables are actually in scope at that
+textual position, not just conceptually available somewhere in the
+function.
+
+**EQ icon color bug, found and fixed along the way**: separately, the
+user reported the EQ icon (in the same top bar as the Song/Video pill)
+"takes the whole colour ... while the background surrounding keep
+changing and blending," when it's "supposed to be white." Root cause:
+`Icon(..., tint = if (gradientColors.isNotEmpty()) pillAccentColor else
+...)` — the icon's own content color was set to the artwork-extracted
+accent color that also drives the pill's animated backdrop tint, so the
+icon visually chased/blended into the shifting background instead of
+reading clearly against it. The Song/Video pill right next to it never
+had this problem, because its segment *text* color was always fixed
+(`MaterialTheme.colorScheme.onSurfaceVariant` when unselected, a fixed
+black/white computed once from luminance when selected) — the accent
+color was only ever meant to live in the pill's *background* surface,
+never applied directly to content sitting on top of it. Fixed to a flat
+`Color.White`, matching that existing pattern and the user's explicit
+instruction.
+
+**Seek-lead constant**: `VIDEO_TOGGLE_SEEK_LEAD_MS`, applied when
+seeking the (already-prepared) slave player at the moment of an actual
+toggle tap, to roughly cover the gap between `seekTo()`/
+`playWhenReady=true` and the first frame actually rendering. Was `+500`
+inline before this patch; the user explicitly specified `800` (ms) to
+use instead — set to `800L` as a named constant. Left an honest comment
+that this number predates the eager-pre-buffer change and hasn't been
+re-measured against the new, much-shorter fast path; the soft-sync loop
+elsewhere in the file will correct any residual drift within a second or
+so regardless, so this mostly affects how close the very first frame
+lands on tap, not correctness.
+
+### Views-count pill (new `ui/player/ViewCountPill.kt`)
+
+Ported from mavins' `playCountPill` + `AnimatedCounter`, matched as
+closely as this session could verify against the original TSX rather
+than approximated from memory of what such a pill "should" look like:
+same 3.5-second ease-out-quadratic (`1 - (1-t)^2`) count-up animation
+from 1 to the real count, same bare-number rendering with no "views"/
+"listens" text label (the icon alone carries the meaning in the
+original), same pill styling (translucent white background, 20dp corner
+radius). Mavins uses a headset/headphones icon here rather than an eye —
+kept that choice as-is since it reads as a deliberate "listens" framing
+for a music app rather than an arbitrary substitution, using
+`Icons.Filled.Headphones` (already used elsewhere in this codebase, in
+`AudioDeviceBottomSheet.kt`, so no new icon dependency).
+
+Data source: `YouTube.getMediaInfo(videoId).viewCount` — already used
+elsewhere in the app for the existing "Song Info" bottom sheet (see
+`ui/utils/ShowMediaInfo.kt`), just not previously surfaced on the player
+screen itself. Fetched per-track via a new `LaunchedEffect(mediaMetadata?.id,
+isCurrentSongLocal)`, skipped entirely for local media (no YouTube view
+count exists for a local file). Reuses the existing `formatCompactCount()`
+helper from `ui/utils/StringUtils.kt` for the K/M/B/T abbreviation rather
+than reimplementing mavins' own `formatCount` — the two do the same job
+in the same style, and duplicating a near-identical formatter felt worse
+than reusing the one already in the codebase.
+
+Placed in the same top-bar `Row` as the Song/Video pill and the EQ icon
+(`Arrangement.SpaceBetween`), between the two — the least invasive
+option given Velune's structure, where that Row is a single shared
+overlay used across every player design style (V3/Metro/etc.), rather
+than duplicated per style the way mavins' own single-screen layout
+didn't need to worry about. Gated on `!isCurrentSongLocal` like the
+Song/Video pill, but *not* on `hasVideo` — a plain audio-only YouTube
+track (no usable video stream) still has a real view count, so the two
+pills have different, independently-correct visibility conditions that
+happen to share the same top-level local-media gate.
+
+### What this section did NOT verify
+
+Same standing limitation as every EQ/DSP patch above, stated again here
+because this is a genuinely different feature area and someone reading
+only this section shouldn't have to cross-reference §0 to find it: **no
+Android SDK in this sandbox, so none of this has been built or run.**
+Specific things worth an on-device pass, roughly in order of how likely
+they are to actually be wrong:
+
+1. **The crossfade's `graphicsLayer` + conditional-composition interplay**
+   — `if (videoPlayer != null && (isVideoMode || videoAlpha > 0f))`
+   deciding whether the `AndroidView` exists at all, combined with
+   `animateFloatAsState` driving its alpha. Compose animation timing
+   racing against a composable being added/removed from the tree isn't
+   something a text-only review can fully rule out — worth confirming the
+   fade-out actually plays smoothly to completion rather than the
+   `PlayerView` disappearing early or a frame late.
+2. **The `hasVideo == null` fallback path** in `toggleVideo` — tapping
+   within the first moment of a track starting, before the eager
+   pre-buffer resolves. Exercised only by reasoning through the code, not
+   by actually triggering that narrow timing window on a device.
+3. **`VIDEO_TOGGLE_SEEK_LEAD_MS = 800L`** — the user specified this value
+   directly rather than it being derived/measured, so no claim is being
+   made that it's correct for the new pre-buffered fast path specifically
+   (see the in-code comment) — just that it's what was asked for.
+4. **The views pill's count-up re-triggering correctly on every track
+   change**, including rapid next/next/next skipping — `remember(target)`
+   keying `Animatable(0f)` fresh per target should handle this, but
+   hasn't been watched happen on a real device.
+5. **Network cost in practice** — how noticeable the always-on eager
+   video pre-buffer actually is on a real connection/data plan, not just
+   in the abstract "this is the trade-off" sense described above.
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:

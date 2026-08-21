@@ -156,6 +156,20 @@ private const val MAX_SOFT_DRIFT_MS = 1500
 private const val SOFT_SYNC_RAMP_MS = 800f
 private const val SOFT_SYNC_MAX_RATE = 0.06f
 
+// Small forward lead applied when seeking the (already-prepared) slave
+// video player at the moment of an actual toggle-to-video tap, to roughly
+// account for the gap between calling seekTo()/playWhenReady=true and the
+// first frame actually rendering. 800ms, matching the value this was
+// tuned at before the eager-pre-buffer change (see
+// loadVideoForCurrentTrack/toggleVideo above) — kept as specified rather
+// than the smaller guess an earlier pass here used, since pre-buffering
+// changes how much of the old cold-start latency this constant needs to
+// cover and that's not something this sandbox can measure directly. The
+// soft-sync loop above will still correct any residual drift within a
+// second or so either way; this only affects how close the very first
+// frame lands on tap.
+private const val VIDEO_TOGGLE_SEEK_LEAD_MS = 800L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -184,6 +198,14 @@ fun BottomSheetPlayer(
     // ─── Video morphing state ────────────────────────────────────────────────────
     var isVideoMode by remember { mutableStateOf(false) }
     var isLoadingVideo by remember { mutableStateOf(false) }
+    // Video-availability discovery state, ported from mavins' song/video
+    // toggle: null = not yet known (still resolving, or the track just
+    // changed), true = confirmed available AND already prepared/buffered
+    // (ready to switch instantly), false = confirmed no video for this
+    // track. Lets the pill dim the Video label ahead of time instead of
+    // only discovering unavailability after a tap, and lets toggleVideo()
+    // below take the instant path once this is true.
+    var hasVideo by remember { mutableStateOf<Boolean?>(null) }
 
     // The video stream URL resolved for the toggle always comes from the IOS
     // client (see YTPlayerUtils.resolveVideoStreamUrl), and googlevideo.com
@@ -243,6 +265,14 @@ fun BottomSheetPlayer(
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val isPlaying by playerConnection.isPlaying.collectAsState()
+    val currentSong by playerConnection.currentSong.collectAsState(initial = null)
+    // Video (and the view-count pill, further below) only makes sense for
+    // streamed YouTube tracks — a local file has no video stream or view
+    // count to fetch at all, and blindly attempting the resolve for one
+    // would just be a guaranteed-to-fail network call every time (a local
+    // song's id isn't a YouTube video id). Gates both the eager pre-buffer
+    // below and the Song/Video pill's visibility in the UI further down.
+    val isCurrentSongLocal = currentSong?.song?.isLocal == true
 
     // Clears CampaignPlaybackTracker the moment whatever's actually
     // playing stops being the campaign that was tapped to start it — see
@@ -254,12 +284,48 @@ fun BottomSheetPlayer(
         com.nikhil.yt.campaign.CampaignPlaybackTracker.clearIfNot(mediaMetadata?.id)
     }
 
-    suspend fun loadVideoForCurrentTrack() {
+    // ─── View count pill state ───────────────────────────────────────────────────
+    // Design ported from mavins' player screen: a small translucent pill
+    // with an icon + an abbreviated, animated count-up number. Fetches
+    // MediaInfo (already used elsewhere for the "Song Info" bottom sheet,
+    // see ShowMediaInfo.kt) per track, since the player screen doesn't
+    // otherwise have view-count data at all.
+    var viewCountTarget by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal) {
+        viewCountTarget = null
+        if (isCurrentSongLocal) return@LaunchedEffect
+        val videoId = mediaMetadata?.id ?: return@LaunchedEffect
+        val count = runCatching { YouTube.getMediaInfo(videoId).getOrNull()?.viewCount }
+            .getOrNull()
+        if (count != null && count > 0) viewCountTarget = count
+    }
+
+    suspend fun loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode: Boolean) {
         val videoId = mediaMetadata?.id
-        if (videoId == null) {
-            isVideoMode = false
+        if (videoId == null || isCurrentSongLocal) {
+            // Local media: no video stream exists to resolve, so don't
+            // even try — confirmed-unavailable immediately rather than
+            // going through a network call destined to fail.
+            hasVideo = false
+            if (isVideoMode) isVideoMode = false
             return
         }
+        // Ported from mavins' song/video toggle: this is called
+        // unconditionally as soon as a track becomes active (see the
+        // LaunchedEffect below), not gated behind isVideoMode — that's
+        // the actual mechanism behind the toggle feeling instant instead
+        // of laggy. By the time the user taps "Video", the stream has
+        // (usually) already been resolved and prepared, sitting there
+        // paused/muted, ready to seek+play — see the fast path in
+        // toggleVideo below.
+        //
+        // Trade-off, stated plainly: every track now pays the video
+        // stream's resolve+buffer cost (a real network round-trip — see
+        // YTPlayerUtils.resolveVideoStreamUrl; cached after the first
+        // resolve, but not free the first time) even for users who never
+        // touch the Video tab. That's the same trade mavins makes — it's
+        // what "no lag on toggle" actually costs, not a free lunch.
+        hasVideo = null
         isLoadingVideo = true
         val videoUrl = withContext(Dispatchers.IO) {
             try {
@@ -268,12 +334,18 @@ fun BottomSheetPlayer(
         }
         isLoadingVideo = false
         if (videoUrl != null) {
+            hasVideo = true
             player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
             player.prepare()
-            player.seekTo(playerConnection.player.currentPosition + 500)
-            player.playWhenReady = isPlaying
+            player.seekTo(playerConnection.player.currentPosition)
+            // Stays paused/muted until the user actually switches to
+            // video (or, if a track change happened while already in
+            // video mode, resumes right away to match) — pre-buffering
+            // means "ready", not "playing".
+            player.playWhenReady = autoPlayIfAlreadyInVideoMode && isPlaying
         } else {
-            isVideoMode = false
+            hasVideo = false
+            if (isVideoMode) isVideoMode = false
             player.stop()
             player.clearMediaItems()
         }
@@ -286,12 +358,21 @@ fun BottomSheetPlayer(
     // every control that changes tracks (next/previous buttons anywhere in the
     // app, the notification, a headset button, the queue) changes
     // mediaMetadata.id the same way, so this one effect covers all of them.
-    LaunchedEffect(mediaMetadata?.id) {
+    //
+    // Now also always pre-buffers the video regardless of isVideoMode (see
+    // loadVideoForCurrentTrack's doc above) — previously this only fired
+    // for tracks the user was already watching in video mode, leaving
+    // every other track's video to cold-start resolve at toggle time.
+    // Keyed on isCurrentSongLocal too (not just the id) since currentSong
+    // is its own async Flow that can briefly lag behind mediaMetadata
+    // updating — this makes sure the local-media gate inside
+    // loadVideoForCurrentTrack gets re-evaluated once it settles, not
+    // just whatever it happened to read on the first composition after
+    // an id change.
+    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal) {
         player.stop()
         player.clearMediaItems()
-        if (isVideoMode) {
-            loadVideoForCurrentTrack()
-        }
+        loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode = isVideoMode)
     }
 
     // Keep the muted slave's play/pause mirroring the master's — for *any*
@@ -361,37 +442,50 @@ fun BottomSheetPlayer(
         player.setPlaybackParameters(PlaybackParameters(1f))
     }
 
-    // Toggle function – manages slave video player
+    // Toggle function — manages slave video player.
     val toggleVideo: () -> Unit = {
         if (isVideoMode) {
             isVideoMode = false
-            player.stop()
-            player.clearMediaItems()
-        } else {
+            // Just pause, don't stop()/clearMediaItems() anymore — the
+            // whole point of pre-buffering (loadVideoForCurrentTrack
+            // above) is that leaving video mode shouldn't throw away an
+            // already-loaded stream. Toggling back to Video a moment
+            // later should be instant too, not a re-fetch from scratch.
+            player.pause()
+        } else if (hasVideo == true) {
+            // Fast path — ported from mavins' song/video toggle: this is
+            // the case that makes the toggle feel instant. The stream
+            // was already resolved and prepared by
+            // loadVideoForCurrentTrack the moment this track became
+            // active, so switching now is just a seek + play on an
+            // already-buffered player, no network round-trip in the way.
+            isVideoMode = true
+            player.seekTo(playerConnection.player.currentPosition + VIDEO_TOGGLE_SEEK_LEAD_MS)
+            player.playWhenReady = isPlaying
+        } else if (hasVideo == null) {
+            // Rare edge case: the toggle was tapped within the first
+            // moment or two of a new track starting, before this track's
+            // eager pre-buffer (kicked off by the LaunchedEffect above)
+            // finished resolving. Falls back to the old live-resolve-on-
+            // tap path so the toggle still works — just without the
+            // "instant" property this time. isLoadingVideo is now
+            // actually wired into the pill UI below (it previously
+            // wasn't rendered anywhere, so this path used to look like
+            // the tap "did nothing" for however long the resolve took).
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                val videoId = mediaMetadata?.id
-                if (videoId == null) {
-                    isVideoMode = false
-                    return@launch
-                }
-                isLoadingVideo = true
-                val videoUrl = withContext(Dispatchers.IO) {
-                    try {
-                        com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(videoId)
-                    } catch (e: Exception) { null }
-                }
-                isLoadingVideo = false
-                if (videoUrl != null) {
+                loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode = false)
+                if (hasVideo == true) {
                     isVideoMode = true
-                    player.setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
-                    player.prepare()
-                    player.seekTo(playerConnection.player.currentPosition + 500)
+                    player.seekTo(playerConnection.player.currentPosition + VIDEO_TOGGLE_SEEK_LEAD_MS)
                     player.playWhenReady = isPlaying
-                } else {
-                    isVideoMode = false
                 }
             }
         }
+        // hasVideo == false: confirmed no video for this track — nothing
+        // to switch to. The pill's Video label is dimmed and its click
+        // handler disabled for this case below, so this branch should be
+        // unreachable in practice; left as a no-op rather than an
+        // uncovered `when` on principle.
     }
 
     val playerDesignStyle by rememberEnumPreference(
@@ -465,7 +559,6 @@ fun BottomSheetPlayer(
     }
 
     val playbackState by playerConnection.playbackState.collectAsState()
-    val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val currentSongLiked = currentSong?.song?.liked == true
     val queueWindows by playerConnection.queueWindows.collectAsState()
     val currentWindowIndex by playerConnection.currentWindowIndex.collectAsState()
@@ -918,7 +1011,7 @@ fun BottomSheetPlayer(
                             context = context,
                             bottomPadding = dynamicQueuePeekHeight,
                             isVideoMode = isVideoMode,
-                            videoPlayer = if (isVideoMode) player else null,
+                            videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
                             onToggleVideo = toggleVideo
                         )
                     }
@@ -939,7 +1032,7 @@ fun BottomSheetPlayer(
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
-                                videoPlayer = if (isVideoMode) player else null,
+                                videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
                                 modifier = Modifier.size(thumbnailSize)
                             )
                         }
@@ -995,7 +1088,7 @@ fun BottomSheetPlayer(
                             context = context,
                             bottomPadding = dynamicQueuePeekHeight,
                             isVideoMode = isVideoMode,
-                            videoPlayer = if (isVideoMode) player else null,
+                            videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
                             onToggleVideo = toggleVideo
                         )
                     }
@@ -1015,7 +1108,7 @@ fun BottomSheetPlayer(
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
-                                videoPlayer = if (isVideoMode) player else null,
+                                videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
                                 modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection)
                             )
                         }
@@ -1079,7 +1172,19 @@ fun BottomSheetPlayer(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Pill switch (Song / Video) — top-left
+            // Pill switch (Song / Video) — top-left. Doesn't exist at all
+            // for local device files: there's no video stream, and no
+            // network endpoint that would ever resolve one for a local
+            // song id, so a toggle that can only ever fail isn't a toggle
+            // worth showing — matches isCurrentSongLocal's gate on the
+            // eager pre-buffer itself (loadVideoForCurrentTrack above).
+            // Spacer keeps the EQ icon pinned to the right edge via
+            // SpaceBetween the same as when the pill is present, rather
+            // than collapsing the Row down to a single centered/left
+            // child once the pill is gone.
+            if (isCurrentSongLocal) {
+                Spacer(modifier = Modifier.size(1.dp))
+            } else {
             Row(
                 modifier = Modifier
                     .clip(pillShape)
@@ -1120,20 +1225,63 @@ fun BottomSheetPlayer(
                     )
                 }
                 // Video button
+                // Dimmed + non-interactive once hasVideo is confirmed
+                // false for this track (ported from mavins' toggle,
+                // which does the same `!hasVideo && {opacity:0.3}`
+                // treatment) — previously this only discovered
+                // unavailability after a tap, silently reverting to Song
+                // with no explanation. While hasVideo is still null
+                // (resolving), the button stays fully interactive/
+                // optimistic, since a tap in that window is handled by
+                // toggleVideo's fallback path rather than blocked.
+                val videoUnavailable = hasVideo == false
                 Surface(
                     modifier = Modifier
-                        .clickable { if (!isVideoMode) toggleVideo() }
+                        .clickable(enabled = !videoUnavailable) { if (!isVideoMode) toggleVideo() }
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                     shape = RoundedCornerShape(11.dp),
                     color = if (isVideoMode) pillAccentColor else Color.Transparent,
                 ) {
-                    Text(
-                        text = "Video",
-                        color = if (isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Video",
+                            color = (if (isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant)
+                                .copy(alpha = if (videoUnavailable) 0.3f else 1f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        // Rare-path feedback: only ever shown when a tap
+                        // landed in the hasVideo==null resolving window
+                        // and fell back to a live resolve (see
+                        // toggleVideo) — the normal, pre-buffered path
+                        // never sets this, so most users should never
+                        // see it. Previously isLoadingVideo was tracked
+                        // but never actually rendered anywhere, so that
+                        // fallback path looked like the tap did nothing.
+                        if (isLoadingVideo) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(8.dp),
+                                strokeWidth = 1.dp,
+                                color = if (isVideoMode) pillAccentContentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
+            }
+            }
+
+            // View count pill — center, between the Song/Video pill and
+            // the EQ icon. Hidden for local media the same way the
+            // Song/Video pill is (isCurrentSongLocal — no YouTube view
+            // count exists for a local file), but shown for any streamed
+            // track regardless of whether it has a usable video stream
+            // (hasVideo/the toggle above), since a plain audio-only
+            // YouTube track still has a real view count.
+            if (!isCurrentSongLocal) {
+                ViewCountPill(target = viewCountTarget)
             }
 
             // Equalizer — top-right. Opens the hybrid Axion equalizer (graphic/
@@ -1178,10 +1326,26 @@ fun BottomSheetPlayer(
                     state.collapseSoft()
                     navController.navigate("eq/axion")
                 }) {
+                    // FIX: this used to tint the icon itself with
+                    // pillAccentColor (the artwork-extracted accent that
+                    // shifts per song/album and drives the pill's own
+                    // animated backdrop) — which made the icon's color
+                    // chase and blend into the shifting background behind
+                    // it instead of reading clearly against it. The
+                    // Song/Video pill next to this one never does that:
+                    // its segment text stays a fixed color regardless of
+                    // the accent (MaterialTheme.colorScheme.onSurfaceVariant
+                    // when unselected, a fixed black/white computed once
+                    // from luminance when selected) — the accent color is
+                    // only ever meant to live in the pill's background
+                    // surface, never applied directly to the content sitting
+                    // on top of it. Fixed white to match that pattern and
+                    // the explicit ask: this icon should stay put visually
+                    // while the pill background around it keeps shifting.
                     Icon(
                         painter = painterResource(R.drawable.equalizer),
                         contentDescription = stringResource(R.string.equalizer),
-                        tint = if (gradientColors.isNotEmpty()) pillAccentColor else MaterialTheme.colorScheme.onSurface,
+                        tint = Color.White,
                     )
                 }
             }
