@@ -1,10 +1,6 @@
 package com.nikhil.yt.campaign
 
-import android.content.Context
-import com.nikhil.yt.constants.SupabaseAnonKeyKey
-import com.nikhil.yt.constants.SupabaseUrlKey
-import com.nikhil.yt.utils.dataStore
-import com.nikhil.yt.utils.get
+import com.nikhil.yt.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,11 +27,20 @@ import timber.log.Timber
  * a projected/estimated/seeded field to this pipeline anywhere, that's a
  * sign to stop and reconsider the feature, not extend this class.
  *
- * Credentials ([SupabaseUrlKey]/[SupabaseAnonKeyKey]) are user-supplied via
- * Settings, same pattern as OpenRouterApiKey elsewhere in this app — never
- * committed to source. Until they're set, every method here simply returns
- * an empty result / no-ops rather than throwing, so the app works fine
- * before anyone wires a real project in and the campaign card just doesn't
+ * Credentials ([BuildConfig.SUPABASE_URL]/[BuildConfig.SUPABASE_ANON_KEY])
+ * are compiled in at build time — sourced from `local.properties` for a
+ * local dev build or CI secrets for a release build (see
+ * `app/build.gradle.kts`), never typed into the app at runtime. This is
+ * deliberately different from the per-user AI API keys elsewhere in this
+ * app (OpenRouterApiKey etc., which are DataStore/Settings-backed): the
+ * campaigns table is a single app-owned backend every install talks to,
+ * not a credential each user brings their own copy of. Embedding a
+ * Supabase *anon* key in a client build is the standard, documented way
+ * to use it from a mobile app — it's meant to be public; row level
+ * security in campaign_schema.sql is what actually gates access, not
+ * secrecy of this key. Until real values are supplied at build time,
+ * every method here simply returns an empty result / no-ops rather than
+ * throwing, so the app works fine and the campaign card just doesn't
  * render.
  *
  * Visibility (which rows even come back from Supabase at all) is enforced
@@ -46,14 +51,14 @@ import timber.log.Timber
  * defense in depth on top of that, not the only thing standing between an
  * expired campaign and a user seeing it.
  */
-class CampaignRepository(private val context: Context) {
+class CampaignRepository {
 
     private val client = OkHttpClient()
     private val jsonMediaType = "application/json".toMediaType()
 
     private fun config(): Pair<String, String>? {
-        val url = context.dataStore.get(SupabaseUrlKey, "").trimEnd('/')
-        val anonKey = context.dataStore.get(SupabaseAnonKeyKey, "")
+        val url = BuildConfig.SUPABASE_URL.trimEnd('/')
+        val anonKey = BuildConfig.SUPABASE_ANON_KEY
         if (url.isBlank() || anonKey.isBlank()) return null
         return url to anonKey
     }

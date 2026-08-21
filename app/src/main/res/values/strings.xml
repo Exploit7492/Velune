@@ -1716,9 +1716,6 @@ Velune will only extract your token, and everything else is stored locally.</str
     <string name="logout_keep_data">Logout Keep Data</string>
     <string name="logout_keep_data_desc">Logout Keep Data</string>
     <string name="logs_heading">Logs Heading</string>
-    <string name="promoted_content_heading">Promoted Content</string>
-    <string name="supabase_url">Supabase Project URL</string>
-    <string name="supabase_anon_key">Supabase Anon Key</string>
     <string name="logs_heading_desc">Logs Heading</string>
     <string name="lyrics_animation_metro">Lyrics Animation Metro</string>
     <string name="lyrics_animation_metro_desc">Lyrics Animation Metro</string>

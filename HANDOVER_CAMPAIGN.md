@@ -59,12 +59,16 @@ run manually in the Supabase SQL editor).
   never go stale the way a manually-copied value could.
 - **`CampaignRepository.kt`** — Supabase REST (PostgREST) client, plain
   OkHttp + org.json matching this app's existing network-call convention
-  (see `AiRecommendationHelper.kt`). `fetchActiveCampaigns()` fetches raw
-  rows and resolves each via `CampaignUrlResolver`; `recordPlay()` calls
-  the atomic `increment_campaign_play` RPC. Both no-op gracefully (return
-  empty / do nothing) if Supabase isn't configured yet or any call fails
-  — a broken promo fetch must never block the rest of Home, and a failed
-  play-count increment must never interrupt actual playback.
+  (see `AiRecommendationHelper.kt`). Credentials come from
+  `BuildConfig.SUPABASE_URL`/`BuildConfig.SUPABASE_ANON_KEY`, compiled in
+  at build time (see §5 — this changed from an earlier runtime-Settings
+  design in the same session, at the user's explicit correction).
+  `fetchActiveCampaigns()` fetches raw rows and resolves each via
+  `CampaignUrlResolver`; `recordPlay()` calls the atomic
+  `increment_campaign_play` RPC. Both no-op gracefully (return empty / do
+  nothing) if Supabase isn't configured yet or any call fails — a broken
+  promo fetch must never block the rest of Home, and a failed play-count
+  increment must never interrupt actual playback.
 - **`CampaignPlaybackTracker.kt`** — small app-scoped singleton
   (`StateFlow<CampaignCard?>`), not DI-wired, deliberately: the setter
   (`HomeScreen`'s campaign tap handler) and the reader (`Player.kt`'s
@@ -103,11 +107,17 @@ run manually in the Supabase SQL editor).
   in the same file, so `HomeScreen` (and any future screen) can expand/
   collapse the player without new parameter-threading through
   `NavigationBuilder.kt`.
-- **Settings UI** (`ContentSettings.kt`) — a new "Promoted Content" group
-  with two fields (Supabase URL, Supabase anon key), using this app's
-  existing `TextFieldDialog` pattern (same one `AiSettings.kt` uses for
-  API keys). Credentials are user-supplied via Settings, never committed
-  to source — same convention as `OpenRouterApiKey` elsewhere.
+- **Build-time config** (`app/build.gradle.kts`, `.github/workflows/build-tenant.yml`)
+  — `SUPABASE_URL`/`SUPABASE_ANON_KEY` are `buildConfigField`s, sourced
+  `local.properties` first (local dev) then `System.getenv(...)` (CI),
+  exactly the same priority order and pattern already used for
+  `LASTFM_API_KEY`/`ZAI_API_KEY`/`TOGETHER_BEARER_TOKEN`/
+  `DISCORD_APPLICATION_ID` in the same file. Wired into the "Build APK
+  with custom package name" step's `env:` block from
+  `secrets.SUPABASE_URL`/`secrets.SUPABASE_ANON_KEY`, matching the
+  `KEYSTORE_*` env-var pattern already used one step later for signing.
+  **This is deliberately not a per-user Settings field** — see §5 for
+  why, and don't reintroduce one without re-reading that section first.
 - **`campaign_schema.sql`** (repo root, not part of the app build) — the
   actual Supabase migration. `campaigns` table: `source_url`,
   `resolved_song_id` (cached extraction, re-derivable), `is_live`,
@@ -158,17 +168,40 @@ detection, or wants Radio/Podcast as real features, both are legitimate,
 separate, larger projects — flag that plainly rather than quietly
 building toward it.
 
-## 4. Not done / open
+## 5. Correction: build-time config, not per-user Settings
 
-- **Not committed, patched, or verified yet as of this file being
-  written in the same session that built it** — check `git log` after
-  cloning; if this file and the campaign work aren't on `main`, this
-  session ended before finishing that step. If they are, ignore this
-  bullet, it's stale.
+The first version of this feature (still visible in patch `0020`'s diff,
+if you're reading history rather than current `main`) put the Supabase
+URL/anon key in a Settings screen, following the same pattern as the
+per-user AI API keys elsewhere in this app (`OpenRouterApiKey` etc.). The
+user corrected this immediately: campaigns are a single, app-owned
+backend every install talks to, not a credential each user brings their
+own copy of — it belongs baked in via CI secrets like `KEYSTORE_BASE64`
+already is for signing, not typed into a screen per device.
+
+That correction was right, and it's also more correct Supabase practice,
+not just a preference: a Supabase **anon** key is specifically designed
+to be embedded in client apps (row level security is what actually gates
+access — see `campaign_schema.sql` — not secrecy of this key). A later
+patch reverted the Settings UI entirely and moved config to
+`BuildConfig.SUPABASE_URL`/`BuildConfig.SUPABASE_ANON_KEY`, sourced the
+same `local.properties`-then-CI-env-var way every other secret in
+`app/build.gradle.kts` already is. If a future session is tempted to add
+a runtime settings field for this again, re-read this paragraph first —
+it's not that a settings field is impossible, it's that it's the wrong
+model for a backend the app owner controls centrally.
+
+## 6. Not done / open
+
+- **Not committed, patched, or verified yet as of the config-source
+  correction (§5) being made** — check `git log` after cloning; if this
+  file and the campaign work aren't on `main`, this session ended before
+  finishing that step. If they are, ignore this bullet, it's stale.
 - **No real Supabase project wired in.** The user hadn't provided a URL/
-  anon key as of this session — the Settings fields exist and work, but
-  nothing will show on Home until real credentials are entered and at
-  least one campaign row exists and is inside its date window.
+  anon key as of this session — `local.properties`/CI secrets are unset,
+  so `BuildConfig.SUPABASE_URL`/`SUPABASE_ANON_KEY` build empty and
+  nothing will show on Home until real credentials are supplied (see §5)
+  and at least one campaign row exists and is inside its date window.
 - **Not tested on-device**, same caveat as every UI/integration patch in
   this project's history — reviewed by hand very carefully (every
   extension function, every class field, every composable signature used

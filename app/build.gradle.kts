@@ -85,6 +85,27 @@ android {
                 ?: System.getenv("DISCORD_REDIRECT_SCHEME")
                 ?: "velune"
         buildConfigField("String", "DISCORD_REDIRECT_SCHEME", "\"$discordRedirectScheme\"")
+
+        // Campaign/promoted-content feature (see campaign_schema.sql and
+        // app/src/main/kotlin/com/nikhil/yt/campaign/). This is a single
+        // app-owned Supabase project, not a per-user credential like the
+        // AI API keys above — every install of this app talks to the same
+        // campaigns table, so it belongs baked in at build time via CI
+        // secrets, not typed into Settings per device. A Supabase anon
+        // key is meant to be embedded in client apps (that's what row
+        // level security in campaign_schema.sql is for) — this is the
+        // standard way Supabase itself documents using it from a mobile
+        // client, not a security shortcut.
+        val supabaseUrl =
+            localProperties.getProperty("SUPABASE_URL")
+                ?: System.getenv("SUPABASE_URL")
+                ?: ""
+        val supabaseAnonKey =
+            localProperties.getProperty("SUPABASE_ANON_KEY")
+                ?: System.getenv("SUPABASE_ANON_KEY")
+                ?: ""
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     flavorDimensions += "abi"

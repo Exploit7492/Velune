@@ -815,13 +815,3 @@ val EqPitchSemitonesKey = floatPreferencesKey("eq_pitch_semitones")
 val EqConvolutionEnabledKey = booleanPreferencesKey("eq_convolution_enabled")
 val EqConvolutionIrPathKey = stringPreferencesKey("eq_convolution_ir_path")
 val EqConvolutionIrNameKey = stringPreferencesKey("eq_convolution_ir_name")
-
-// Campaign card (promoted-song banner at the top of Home) — Supabase
-// project config, same "user supplies their own credentials via Settings"
-// pattern as OpenRouterApiKey/DeeplApiKey above rather than a value
-// committed to source. Deliberately absent until the user sets it:
-// CampaignRepository treats an unset URL/key as "feature not configured
-// yet" and no-ops rather than erroring, so the app works fine before
-// anyone wires a real project in. See campaign/CampaignRepository.kt.
-val SupabaseUrlKey = stringPreferencesKey("supabase_url")
-val SupabaseAnonKeyKey = stringPreferencesKey("supabase_anon_key")

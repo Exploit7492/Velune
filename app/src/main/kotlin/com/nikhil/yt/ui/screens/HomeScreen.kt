@@ -75,7 +75,6 @@ import com.nikhil.yt.viewmodels.HomeViewModel
 import com.nikhil.yt.campaign.CampaignCardSection
 import com.nikhil.yt.campaign.CampaignRepository
 import com.nikhil.yt.innertube.YouTube
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -129,8 +128,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val lazylistState = rememberLazyListState()
 
-    val context = LocalContext.current
-    val campaignRepository = remember { CampaignRepository(context) }
+    val campaignRepository = remember { CampaignRepository() }
     val playerBottomSheetState = com.nikhil.yt.LocalPlayerBottomSheetState.current
     val onCampaignClick: (com.nikhil.yt.campaign.CampaignCard) -> Unit = { campaign ->
         scope.launch {
