@@ -948,6 +948,7 @@ class MainActivity : ComponentActivity() {
                             LocalDatabase provides database,
                             LocalContentColor provides if (pureBlack) Color.White else contentColorFor(MaterialTheme.colorScheme.surface),
                             LocalPlayerConnection provides playerConnection,
+                            LocalPlayerBottomSheetState provides playerBottomSheetState,
                             LocalPlayerAwareWindowInsets provides playerAwareWindowInsets,
                             LocalDownloadUtil provides downloadUtil,
                             LocalShimmerTheme provides ShimmerTheme,
@@ -1676,6 +1677,8 @@ class MainActivity : ComponentActivity() {
 val LocalDatabase = staticCompositionLocalOf<MusicDatabase> { error("No database provided") }
 val LocalPlayerConnection =
     staticCompositionLocalOf<PlayerConnection?> { error("No PlayerConnection provided") }
+val LocalPlayerBottomSheetState =
+    staticCompositionLocalOf<com.nikhil.yt.ui.component.BottomSheetState?> { null }
 val LocalPlayerAwareWindowInsets =
     compositionLocalOf<WindowInsets> { error("No WindowInsets provided") }
 val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No DownloadUtil provided") }

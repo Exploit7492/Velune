@@ -72,6 +72,10 @@ import com.nikhil.yt.ui.component.NavigationTitle
 import com.nikhil.yt.ui.utils.SnapLayoutInfoProvider
 import com.nikhil.yt.utils.rememberPreference
 import com.nikhil.yt.viewmodels.HomeViewModel
+import com.nikhil.yt.campaign.CampaignCardSection
+import com.nikhil.yt.campaign.CampaignRepository
+import com.nikhil.yt.innertube.YouTube
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -124,6 +128,38 @@ fun HomeScreen(
 
     val scope = rememberCoroutineScope()
     val lazylistState = rememberLazyListState()
+
+    val context = LocalContext.current
+    val campaignRepository = remember { CampaignRepository(context) }
+    val playerBottomSheetState = com.nikhil.yt.LocalPlayerBottomSheetState.current
+    val onCampaignClick: (com.nikhil.yt.campaign.CampaignCard) -> Unit = { campaign ->
+        scope.launch {
+            YouTube.queue(listOf(campaign.songId)).onSuccess { list ->
+                val mediaMetadata = list.firstOrNull()?.toMediaMetadata()
+                if (mediaMetadata != null) {
+                    // Mark this campaign as "the thing currently loading"
+                    // before playback starts, so Player.kt has it ready
+                    // the moment the player screen composes — see
+                    // CampaignPlaybackTracker's doc for the self-clearing
+                    // behavior once the user moves on to something else.
+                    com.nikhil.yt.campaign.CampaignPlaybackTracker.setActive(campaign)
+                    playerConnection.playQueue(YouTubeQueue.radio(mediaMetadata))
+                    // Unlike every other row on Home, a campaign tap goes
+                    // straight to the full player — this is a promoted
+                    // slot, meant to feel like an event, not a quiet
+                    // background start.
+                    playerBottomSheetState?.expandSoft()
+                    // Real playback actually started — record exactly one
+                    // real play against this campaign's real count. Fire-
+                    // and-forget: a failed/slow network call here should
+                    // never hold up or fail the actual playback the user
+                    // is waiting on. See CampaignRepository.recordPlay's
+                    // doc for why this is safe to not await.
+                    launch { campaignRepository.recordPlay(campaign.id) }
+                }
+            }
+        }
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val scrollToTop =
         backStackEntry?.savedStateHandle?.getStateFlow("scrollToTop", false)?.collectAsState()
@@ -299,6 +335,20 @@ fun HomeScreen(
                 state = lazylistState,
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
+                item {
+                    // First thing on Home, above everything else including
+                    // the category chips — a compact promoted-song banner.
+                    // Renders nothing if there's no active campaign or
+                    // Supabase isn't configured; see CampaignCardSection's
+                    // doc for why there's deliberately no placeholder/
+                    // skeleton state for an empty slot.
+                    CampaignCardSection(
+                        repository = campaignRepository,
+                        onCampaignClick = onCampaignClick,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                }
+
                 if (showHomeCategoryChips) {
                     item {
                         ChipsRow(

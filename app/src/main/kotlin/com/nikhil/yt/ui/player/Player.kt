@@ -17,6 +17,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -242,6 +243,16 @@ fun BottomSheetPlayer(
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val isPlaying by playerConnection.isPlaying.collectAsState()
+
+    // Clears CampaignPlaybackTracker the moment whatever's actually
+    // playing stops being the campaign that was tapped to start it — see
+    // CampaignPlaybackTracker's doc. Placed here rather than inside
+    // MetroPlayerContent so it fires regardless of which content variant
+    // is rendering, and fires on every real track change, not just ones
+    // that happen to recompose the content composable.
+    androidx.compose.runtime.LaunchedEffect(mediaMetadata?.id) {
+        com.nikhil.yt.campaign.CampaignPlaybackTracker.clearIfNot(mediaMetadata?.id)
+    }
 
     suspend fun loadVideoForCurrentTrack() {
         val videoId = mediaMetadata?.id
@@ -1330,6 +1341,31 @@ private fun MetroPlayerContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val trackedCampaign by com.nikhil.yt.campaign.CampaignPlaybackTracker.current.collectAsState()
+                    val campaign = trackedCampaign?.takeIf { it.songId == mediaMetadata.id }
+                    if (campaign != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        ) {
+                            if (campaign.certified) {
+                                Image(
+                                    painter = painterResource(
+                                        if (isSystemInDarkTheme()) R.drawable.campaign_badge_dark else R.drawable.campaign_badge_light
+                                    ),
+                                    contentDescription = "Reviewed pick",
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            Text(
+                                text = "Promoted",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = Color(0xFFD4AF37),
+                            )
+                        }
+                    }
                     Text(
                         text = mediaMetadata.title ?: "Unknown",
                         style = MaterialTheme.typography.titleLarge,

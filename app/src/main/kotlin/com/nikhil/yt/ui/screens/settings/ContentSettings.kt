@@ -115,6 +115,10 @@ import com.nikhil.yt.utils.PlaybackLogManager
 import com.nikhil.yt.utils.PlaybackLogsDialog
 import androidx.compose.runtime.collectAsState
 import java.net.Proxy
+import androidx.compose.ui.text.input.TextFieldValue
+import com.nikhil.yt.ui.component.TextFieldDialog
+import com.nikhil.yt.constants.SupabaseUrlKey
+import com.nikhil.yt.constants.SupabaseAnonKeyKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,6 +152,10 @@ highlightKey: String? = null) {
     val (proxyUrl, onProxyUrlChange) = rememberPreference(key = ProxyUrlKey, defaultValue = "host:port")
     val (proxyUsername, onProxyUsernameChange) = rememberPreference(key = ProxyUsernameKey, defaultValue = "username")
     val (proxyPassword, onProxyPasswordChange) = rememberPreference(key = ProxyPasswordKey, defaultValue = "password")
+    var supabaseUrl by rememberPreference(SupabaseUrlKey, "")
+    var supabaseAnonKey by rememberPreference(SupabaseAnonKeyKey, "")
+    var showSupabaseUrlDialog by rememberSaveable { mutableStateOf(false) }
+    var showSupabaseKeyDialog by rememberSaveable { mutableStateOf(false) }
     val (enableKugou, onEnableKugouChange) = rememberPreference(key = EnableKugouKey, defaultValue = true)
     val (enableLrclib, onEnableLrclibChange) = rememberPreference(key = EnableLrcLibKey, defaultValue = true)
     val (enableBetterLyrics, onEnableBetterLyricsChange) = rememberPreference(key = EnableBetterLyricsKey, defaultValue = true)
@@ -592,6 +600,32 @@ highlightKey: String? = null) {
             logs = playbackLogs,
             onClear = { PlaybackLogManager.clearLogs() },
             onDismiss = { showPlaybackLogsDialog = false }
+        )
+    }
+
+    if (showSupabaseUrlDialog) {
+        TextFieldDialog(
+            title = { Text(stringResource(R.string.supabase_url)) },
+            icon = { Icon(painterResource(R.drawable.link), null) },
+            initialTextFieldValue = TextFieldValue(text = supabaseUrl),
+            onDone = {
+                supabaseUrl = it
+                showSupabaseUrlDialog = false
+            },
+            onDismiss = { showSupabaseUrlDialog = false },
+        )
+    }
+
+    if (showSupabaseKeyDialog) {
+        TextFieldDialog(
+            title = { Text(stringResource(R.string.supabase_anon_key)) },
+            icon = { Icon(painterResource(R.drawable.lock), null) },
+            initialTextFieldValue = TextFieldValue(text = supabaseAnonKey),
+            onDone = {
+                supabaseAnonKey = it
+                showSupabaseKeyDialog = false
+            },
+            onDismiss = { showSupabaseKeyDialog = false },
         )
     }
 
@@ -1246,6 +1280,34 @@ highlightKey: String? = null) {
                     onClick = { navController.navigate("uptime") }
                 )
             )
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Material3SettingsGroup(
+            title = stringResource(R.string.promoted_content_heading),
+            items = listOf(
+                Material3SettingsItem(
+                    icon = painterResource(R.drawable.link),
+                    title = { Text(stringResource(R.string.supabase_url)) },
+                    description = {
+                        Text(supabaseUrl.ifBlank { stringResource(R.string.not_set) })
+                    },
+                    onClick = { showSupabaseUrlDialog = true },
+                ),
+                Material3SettingsItem(
+                    icon = painterResource(R.drawable.lock),
+                    title = { Text(stringResource(R.string.supabase_anon_key)) },
+                    description = {
+                        Text(
+                            if (supabaseAnonKey.isNotEmpty())
+                                "•".repeat(minOf(supabaseAnonKey.length, 8))
+                            else
+                                stringResource(R.string.not_set)
+                        )
+                    },
+                    onClick = { showSupabaseKeyDialog = true },
+                ),
+            ),
         )
         Spacer(modifier = Modifier.height(16.dp))
     
