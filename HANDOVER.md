@@ -1899,6 +1899,51 @@ they are to actually be wrong:
    video pre-buffer actually is on a real connection/data plan, not just
    in the abstract "this is the trade-off" sense described above.
 
+### CI hotfix (patch `0022`) — pre-existing broken imports in unrelated
+files, caught by patch `0021`'s CI run
+
+When `0021` (this section's own patch, above) was pushed, CI failed —
+but the errors (`EqScreen.kt:189/201/205/210`, `AxionEqScreen.kt:571-637`,
+`NeonVerticalFader.kt:84/115`) were **not in any file `0021` touched**.
+Confirmed this directly (`git show <0021's commit> --stat | grep` those
+three filenames came back empty) before assuming otherwise — these were
+pre-existing broken imports from the EQ/DSP thread's own earlier,
+already-merged patches (`2b36c19`/`2768d69`, the peak-meter/neon-vertical-
+fader work), sitting silently broken because — same standing gap as
+everything else in this project — nothing had actually triggered a real
+CI build on top of them until `0021` happened to be the next thing
+pushed.
+
+Three simple missing-import bugs, all the same shape:
+- `EqScreen.kt`: `Modifier.width/size/weight` used without importing
+  `androidx.compose.foundation.layout.{width,size,weight}`. `weight`
+  wasn't even in CI's own error list (compilers often truncate error
+  reporting past some threshold) — caught by grepping every `Modifier.`
+  call in the file against its import list rather than trusting the CI
+  log to be exhaustive.
+- `AxionEqScreen.kt`: bare `Canvas(...)` used in `PeakMeterView` without
+  `import androidx.compose.foundation.Canvas` — which cascades into
+  *every* symbol inside that Canvas lambda failing to resolve (`toPx`,
+  `size`, `drawRect`, `drawCircle`), since the compiler can't establish
+  the lambda's `DrawScope` receiver type without knowing what `Canvas`
+  itself is. Confirmed by finding a second, unrelated `Canvas` usage
+  (`SpectrumBarsCanvas`) in the same file that already worked around this
+  exact gap by fully-qualifying it (`androidx.compose.foundation.Canvas(...)`)
+  instead of fixing the import — meaning whoever wrote that one had
+  already silently hit and sidestepped this same bug.
+- `NeonVerticalFader.kt`: `val currentOnChange by rememberUpdatedState(...)`
+  without `import androidx.compose.runtime.getValue` — the operator
+  extension `by` delegation on `State<T>` needs to resolve to.
+
+Fixed all three as pure import additions, nothing else touched — these
+are real "missing import" bugs, not logic bugs, so the fix is exactly as
+narrow as it looks. Same standing caveat as always: this sandbox still
+has no Android SDK, so this is verified by careful manual read-through
+(tracing every symbol back to its import, the same way the compiler
+would) rather than by actually compiling it.
+
+
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
