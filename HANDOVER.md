@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v15)
+# Velune EQ/DSP Handover (v16)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1941,6 +1941,45 @@ narrow as it looks. Same standing caveat as always: this sandbox still
 has no Android SDK, so this is verified by careful manual read-through
 (tracing every symbol back to its import, the same way the compiler
 would) rather than by actually compiling it.
+
+
+
+## 2n. This session's work — the previous session's own import fix (§2 job
+"missing imports", commit f82feb9) introduced a new bogus import that
+broke the very next real CI run
+
+CI (build #166) failed on `EqScreen.kt:19:43`:
+`Cannot access 'val RowColumnParentData?.weight: Float': it is internal
+in file.` Traced to `f82feb9`'s own fix, which added
+`import androidx.compose.foundation.layout.weight` alongside two
+genuinely-correct import additions (`width`, `size`) for the same file.
+`width`/`size` really are importable top-level functions in that
+package, so the pattern-match looked reasonable — but `weight` isn't:
+per Compose's own docs (`RowScope`/`ColumnScope` reference pages,
+checked directly rather than assumed), `weight` is a member extension
+declared *inside* `RowScope`/`ColumnScope` themselves, not a top-level
+function anyone can import. It resolves automatically inside a
+`Row {}`/`Column {}` lambda via the implicit scope receiver, no import
+needed at all — and importing a name that happens to collide with an
+internal implementation symbol (`RowColumnParentData.weight`) is what
+produced this exact "internal in file" error, distinct from a normal
+"unresolved reference."
+
+Fix: deleted the one bad import line. All four `Modifier.weight(1f)`
+call sites in the file were already correctly inside `Row {}` scope
+(confirmed by reading each one directly), so nothing else needed to
+change — this was purely an extraneous, harmful import, not a missing
+one.
+
+Also grepped the whole `app/src/main/kotlin` tree for the same
+`import androidx.compose.foundation.layout.weight` line to confirm this
+was the only occurrence rather than assuming.
+
+**Not verified**: no real Gradle build available in this environment;
+correctness here rests on Compose's documented `RowScope`/`ColumnScope`
+scoping rules (checked directly) plus the same brace/paren-balance and
+single-occurrence checks used throughout this file, not an actual
+compile.
 
 
 
