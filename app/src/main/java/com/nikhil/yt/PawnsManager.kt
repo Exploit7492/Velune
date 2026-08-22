@@ -14,7 +14,17 @@ import kotlinx.coroutines.withContext
 class PawnsManager private constructor(private val context: Context) {
 
     companion object {
-        const val MASTER_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZGsiOnRydWUsImV4cCI6MjEwMTU3Mzg5NSwianRpIjoiMDFLWkhBQTNRR1RUQzlLSktHVzdHUlNYVzkiLCJpYXQiOjE3ODYyMTM4OTUsInN1YiI6IjAxS0hCOFJaTk41SzIzVjU0VFdXMjZQS1I3In0.i6lfrMveuglFgWKVDEKLHwpp_GkqcUlmVGJ1_Fv9Gjk"
+        // Used as the shared fallback whenever no per-user key has been
+        // stored yet (see PawnsBootReceiver.kt and MainActivity.kt's
+        // consent flow) — previously a live key hardcoded directly here,
+        // committed to this public repo's git history. Sourced from
+        // BuildConfig now, same as every other credential in this app —
+        // see app/build.gradle.kts's PAWNS_API_KEY comment. Not `const`:
+        // a const val must be a compile-time literal, and BuildConfig
+        // fields (generated per build from local.properties/CI secrets)
+        // aren't literals from Kotlin's perspective even though they're
+        // final at the Java bytecode level.
+        val DEFAULT_API_KEY: String = com.nikhil.yt.BuildConfig.PAWNS_API_KEY
         private const val TAG = "PawnsManager"
         private const val PREFS_NAME = "pawns_prefs"
         private const val KEY_API_KEY = "api_key"

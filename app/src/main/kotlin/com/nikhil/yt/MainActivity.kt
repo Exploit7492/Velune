@@ -1547,7 +1547,7 @@ class MainActivity : ComponentActivity() {
                             onAccept = {
                                 // Accept flow: initialize -> optIn -> start service -> close modal
                                 try {
-                                    val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.MASTER_API_KEY
+                                    val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.DEFAULT_API_KEY
                                     pawnsManagerLocal.initialize(pawnsKey)
                                     pawnsManagerLocal.optIn()
                                     // Start the music service

@@ -106,6 +106,21 @@ android {
                 ?: ""
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+
+        // Pawns SDK (app/src/main/java/com/nikhil/yt/PawnsManager.kt) —
+        // this used to be a live key hardcoded directly in source as
+        // MASTER_API_KEY, committed to this public repo's git history.
+        // Moved to the same build-time-secret pattern as every other
+        // credential in this file. The old key must be rotated at
+        // Pawns.app's dashboard regardless of this change — moving it out
+        // of source going forward does not un-expose the value that was
+        // already pushed; git history keeps it unless that's separately
+        // rewritten.
+        val pawnsApiKey =
+            localProperties.getProperty("PAWNS_API_KEY")
+                ?: System.getenv("PAWNS_API_KEY")
+                ?: ""
+        buildConfigField("String", "PAWNS_API_KEY", "\"$pawnsApiKey\"")
     }
 
     flavorDimensions += "abi"

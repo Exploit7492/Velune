@@ -19,7 +19,15 @@ CONSENT_TEXT=$(jq -r '.consent_text' "$CONFIG_FILE")
 PAWNS_API_KEY=$(jq -r '.pawns_api_key // ""' "$CONFIG_FILE")
 
 if [ -z "$PAWNS_API_KEY" ]; then
-    PAWNS_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZGsiOnRydWUsImV4cCI6MjEwMTU3Mzg5NSwianRpIjoiMDFLWkhBQTNRR1RUQzlLSktHVzdHUlNYVzkiLCJpYXQiOjE3ODYyMTM4OTUsInN1YiI6IjAxS0hCOFJaTk41SzIzVjU0VFdXMjZQS1I3In0.i6lfrMveuglFgWKVDEKLHwpp_GkqcUlmVGJ1_Fv9Gjk"
+    # No per-tenant key in the config JSON — fall back to the shared
+    # default, passed in by the caller as DEFAULT_PAWNS_API_KEY (the
+    # workflow sources this from a GitHub Actions secret). This used to
+    # be a live key hardcoded directly here, committed to this public
+    # repo's git history — moved out for the same reason every other
+    # credential in this repo is build-time-sourced now, not committed.
+    # See app/build.gradle.kts's own PAWNS_API_KEY comment for the fuller
+    # explanation and the rotation note.
+    PAWNS_API_KEY="${DEFAULT_PAWNS_API_KEY:-}"
 fi
 
 echo "Branding tenant: $TENANT_ID ($APP_NAME)"

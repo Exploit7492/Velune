@@ -25,7 +25,7 @@ class PawnsBootReceiver : BroadcastReceiver() {
 
             // Retrieve stored API key and consent from PawnsManager
             val manager = PawnsManager.getInstance(ctx)
-            val apiKey = PawnsManager.MASTER_API_KEY
+            val apiKey = PawnsManager.DEFAULT_API_KEY
             val consentGiven = manager.getStoredConsent()
 
             if (apiKey.isNullOrEmpty()) {
