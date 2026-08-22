@@ -155,7 +155,7 @@ fun SortPanel(
                                 ) {
                                     Text(
                                         text = priority.toString(),
-                                        color = androidx.compose.ui.graphics.Color.Black,
+                                        color = MaterialTheme.colorScheme.onPrimary,
                                         fontSize = 7.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                     )

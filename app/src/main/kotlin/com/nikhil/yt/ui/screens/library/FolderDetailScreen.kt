@@ -127,10 +127,23 @@ fun FolderDetailScreen(
                 }
 
                 // Search toggle
+                //
+                // A plain IconButton (Material3's own, not this app's custom
+                // ResizableIconButton wrapper) always enforces a minimum
+                // ~48dp touch/ripple target via minimumInteractiveComponentSize(),
+                // regardless of the smaller .size(32.dp) requested here for the
+                // visible box — that's Material3's accessibility floor, not a
+                // bug in itself. The bug was in the SPACING: with only 4dp
+                // between two 32dp visual boxes, their invisible ~48dp touch/
+                // ripple regions overlap by roughly 12dp, so tapping near the
+                // boundary (or even just the ripple animation on tap) visibly
+                // bleeds from one button into the other — that's what read as
+                // "the icons overlap." Fix is spacing, not shrinking the touch
+                // target further (that would hurt accessibility, not help).
                 IconButton(
                     onClick = { viewModel.toggleSearch() },
                     modifier = Modifier
-                        .padding(end = 4.dp)
+                        .padding(end = 16.dp)
                         .size(32.dp)
                         .clip(RoundedCornerShape(9.dp))
                         .background(
@@ -150,10 +163,11 @@ fun FolderDetailScreen(
                     )
                 }
 
-                // Sort toggle
+                // Sort toggle — same spacing reasoning as the Search toggle above.
                 IconButton(
                     onClick = { sortPanelVisible = true },
                     modifier = Modifier
+                        .padding(end = if (sorts.isNotEmpty()) 8.dp else 0.dp)
                         .size(32.dp)
                         .clip(RoundedCornerShape(9.dp))
                         .background(
@@ -185,7 +199,7 @@ fun FolderDetailScreen(
                     ) {
                         Text(
                             text = sorts.size.toString(),
-                            color = androidx.compose.ui.graphics.Color.Black,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.ExtraBold,
                         )

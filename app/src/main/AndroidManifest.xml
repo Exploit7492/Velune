@@ -3,6 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Required for MusicRecognitionService's mic capture (RecognitionScreen) — without
+         this declaration, ActivityResultContracts.RequestPermission().launch(RECORD_AUDIO)
+         has nothing to prompt for and the system permission dialog never appears at all,
+         silently no-oping instead of erroring, which is why this was easy to miss. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
