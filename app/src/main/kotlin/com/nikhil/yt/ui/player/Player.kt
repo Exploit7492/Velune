@@ -1027,13 +1027,21 @@ fun BottomSheetPlayer(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.weight(1f),
                         ) {
-                            val screenWidth = LocalConfiguration.current.screenWidthDp
-                            val thumbnailSize = (screenWidth * 0.4).dp
+                            // Was Modifier.size(screenWidth * 0.4f.dp) — a small, fixed-size
+                            // square floating in the middle of this half of the landscape
+                            // Row, leaving the rest of its Box empty. Asked to cover edge to
+                            // edge of its actual container instead (this Box, itself
+                            // weight(1f) of the Row — i.e. the full available half of the
+                            // screen), the same way VideoMorphingThumbnail's own internal
+                            // AsyncImage/PlayerView already crop-to-fill (ContentScale.Crop /
+                            // RESIZE_MODE_ZOOM) whatever size *they're* given — the gap was
+                            // entirely at this call site's modifier, not inside that
+                            // component. fillMaxSize() here is what actually closes it.
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
                                 videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
-                                modifier = Modifier.size(thumbnailSize)
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                         Column(
@@ -1105,11 +1113,21 @@ fun BottomSheetPlayer(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.weight(1f),
                         ) {
+                            // Was missing any size modifier at all — relied entirely on
+                            // ambiguous constraint propagation from a weight(1f) Box inside a
+                            // Column with no explicit width, which is not the same thing as
+                            // actually filling this Box's real available area. Explicit
+                            // fillMaxSize() (matching the fix applied to the landscape call
+                            // site above) is what makes this cover edge to edge of its
+                            // container instead of sizing to whatever ambiguous constraint
+                            // happened to fall out of that chain.
                             VideoMorphingThumbnail(
                                 thumbnailUrl = mediaMetadata?.thumbnailUrl?.toHighResThumbnail(),
                                 isVideoMode = isVideoMode,
                                 videoPlayer = player, // always passed so the crossfade (see VideoMorphingComponents.kt) has a stable player reference to fade out from, not just fade in to
-                                modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection)
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(state.preUpPostDownNestedScrollConnection)
                             )
                         }
 

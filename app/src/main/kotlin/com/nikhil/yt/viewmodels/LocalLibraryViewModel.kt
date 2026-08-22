@@ -379,8 +379,8 @@ class LocalLibraryViewModel @Inject constructor(
                         b.title.ifBlank { UNKNOWN }
                     )
                     LocalSortKey.ARTIST -> compareValues(
-                        a.artist.takeIf { it != "Unknown Artist" } ?: UNKNOWN,
-                        b.artist.takeIf { it != "Unknown Artist" } ?: UNKNOWN
+                        a.artist.takeIf { it != com.nikhil.yt.utils.LocalTrackMetadata.UPCOMING_ARTIST } ?: UNKNOWN,
+                        b.artist.takeIf { it != com.nikhil.yt.utils.LocalTrackMetadata.UPCOMING_ARTIST } ?: UNKNOWN
                     )
                     LocalSortKey.ALBUM -> compareValues(a.album, b.album)
                     LocalSortKey.FILENAME -> compareValues(

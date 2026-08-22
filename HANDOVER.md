@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v16)
+# Velune EQ/DSP Handover (v17)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -1983,14 +1983,112 @@ compile.
 
 
 
+### "Upcoming Artist" filename parsing + edge-to-edge video/cover art
+
+sizing, ported from phoenix-boss/mavins (expo-video branch)
+
+Another §3-adjacent item, same "not part of the EQ/DSP thread" flag —
+files touched this time: new `utils/LocalTrackMetadata.kt`,
+`utils/LocalMediaStoreManager.kt`, `repository/LocalMusicRepository.kt`,
+`viewmodels/LocalLibraryViewModel.kt`, `ui/player/Player.kt`. Cloned
+`https://github.com/phoenix-boss/Mavins.git` — the `expo-video` branch
+specifically, per explicit pointer — to see the real reference
+implementation before writing anything, rather than work from the
+paraphrased description alone.
+
+**Artist parsing** (`libs/playerSetup.tsx` → `LocalTrackMetadata.kt`,
+new file): Mavins' real logic is smarter than "first word before the
+hyphen" — split on a hyphen/en-dash/em-dash, take whichever side is
+shorter (and under 30 chars, since artist names tend to run shorter
+than titles) or the right-hand side otherwise (the more common
+"Artist - Title" convention), then fall back through a "feat. X"
+credit, a trailing "[X]" bracket, a trailing "(X)" parenthetical
+(excluding remix/live/version-looking ones), and finally
+`UPCOMING_ARTIST`. "Upcoming Artist" replaces "Unknown Artist" as the
+generic fallback throughout, matching Mavins' wording. A real ID3
+artist tag is never touched — only fires on null/blank/`"<unknown>"`
+(a known Android MediaStore quirk for untagged files) or an already-
+generic value.
+
+Wired into both of this app's local-file MediaStore scan paths
+(confirmed via grep these are the *only* two places that build a local
+track's title/artist from a raw cursor:
+`LocalMediaStoreManager.getTracksForAlbum`,
+`LocalMusicRepository.queryTracksInFolder`) and fixed
+`LocalLibraryViewModel`'s artist sort comparator, which was still
+checking the literal string `"Unknown Artist"` — a comparison that
+would have silently stopped doing anything the moment the scan itself
+stopped ever producing that exact string.
+
+**Verified with a Python port before writing the Kotlin** (same
+approach used for the DSP work above — no Kotlin toolchain in this
+sandbox): confirmed real tags are never clobbered, "Artist - Title"
+filenames parse correctly, hopeless/empty input safely falls back with
+no crash, and — worth remembering — the translation deliberately
+preserves a real limitation in Mavins' *own* regex (its bracket-match
+is end-anchored, so a leading `"[TAG] Song.mp3"` prefix doesn't match
+it) rather than silently "improving" on the source unasked.
+
+**Video toggle "isn't toggling to switch"**: traced the already-landed
+toggle logic (from `0021`/`c0356cc` + the CI-fix follow-ups
+immediately above) and it reads as correct and already carefully
+reasoned through — hasVideo/isVideoMode state, the pre-buffered fast
+path, the `hasVideo==null` fallback, the disabled/dimmed video button.
+The CI failures those follow-ups fixed were real compile-breaking
+missing imports in *unrelated* EQ/DSP files — exactly the kind of thing
+that'd make everything, toggle included, look totally broken if tested
+against that build. Nothing changed here; this looks like an
+already-fixed regression the report likely predates. If it's still
+broken after pulling latest, it's something neither this session nor
+`0021`'s found yet — get a fresh repro rather than assume this section
+covers it.
+
+**Cover art / video edge-to-edge sizing**: explicitly told not to copy
+Mavins' own sizing (smaller, inset) — just needed this app's own call
+sites fixed. `VideoMorphingComponents.kt` itself was already correct
+internally (`ContentScale.Crop` / `RESIZE_MODE_ZOOM`, both crop-to-fill
+whatever size they're handed) — the gap was entirely at the call
+sites in `Player.kt`:
+- Legacy landscape layout: was `Modifier.size(screenWidth * 0.4.dp)`,
+  a small fixed square floating mid-Row. Now `Modifier.fillMaxSize()`.
+- Legacy portrait layout: had *no* size modifier at all, just
+  `.nestedScroll(...)` — relied on ambiguous constraint propagation
+  through an unsized `weight(1f)` Box in a Column with no explicit
+  width. Added `.fillMaxSize()` ahead of the nestedScroll modifier.
+- `MetroPlayerContent` (V5 design): already correct
+  (`.fillMaxSize().aspectRatio(1f)` inside its own 32dp-padded Box) —
+  a deliberately inset square "card" look, not a gap. Left alone —
+  don't "fix" this one later without re-reading this note.
+
+**One thing flagged, not changed**: Mavins' real toggle
+(`components/player/playerContent.tsx`) fully *hides* the Song/Video
+switch for local tracks (`{!isLocal && (...)}`), it doesn't grey it
+out — confirmed by reading the actual source, which doesn't match the
+"greyed out in local mode" description this was requested against.
+Velune's own already-landed port already matches Mavins' *real*
+behavior (hides the whole pill for local, separately dims+disables
+just the Video half when `hasVideo==false` for a non-local track).
+Left as-is since it matches the reference implementation being pointed
+to, but flag this discrepancy back to the user if a visible-but-
+disabled treatment for local tracks specifically turns out to be what
+was actually wanted.
+
+**Not verified on-device** — same standing caveat as everything else:
+the sizing fix and wiring are reasoned through carefully and the
+parsing logic itself is verified in an executed Python port, but
+nothing here has been watched render on an actual screen.
+
+
+
 ## 4. Suggested next step
 
 Ask the user directly, `ask_user_input_v0` style:
 
 1. **On-device verification pass** — nothing convolution-, spectrum-,
-   peak-meter-, canonical-engine-, preset-picker-, or tempo/pitch-fast-
-   path-related has ever run on an actual phone; this is arguably overdue
-   given how much has been built on top of it.
+   peak-meter-, canonical-engine-, preset-picker-, tempo/pitch-fast-
+   path-, or local-artist/video-sizing-related has ever run on an
+   actual phone; this is arguably the single biggest open gap given how
+   much has been built on top of it by now.
 2. **The rest of "and other polishes"** — get specifics; see §2k's closing
    note for what's still unitemized (meter label/dB scale, broader restyle
    pass, or something else entirely).
@@ -1998,7 +2096,11 @@ Ask the user directly, `ask_user_input_v0` style:
    grep there is currently zero flanger implementation anywhere in the
    codebase, so this is a genuine from-scratch DSP build, not a "make it
    work" fix.
-4. Something else the user names.
+4. **Hide-vs-grey discrepancy on the local-track video toggle** — see
+   §3's local-artist-parsing subsection above; flagged, not resolved.
+   Confirm which treatment is actually wanted before touching it either
+   way.
+5. Something else the user names.
 
 (Preset picker moved to the top of Simple is now done — see §2d. The
 spectrum "isn't showing" investigation is now done too — see §2e. The

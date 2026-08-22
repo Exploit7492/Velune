@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
-
 @Singleton
 class LocalMediaStoreManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -69,9 +68,12 @@ class LocalMediaStoreManager @Inject constructor(
             while (cursor.moveToNext()) {
                 val id = cursor.getString(idCol) ?: continue
                 val data = cursor.getString(dataCol) ?: continue
+                val (enrichedTitle, enrichedArtist) = LocalTrackMetadata.enrich(
+                    cursor.getString(titleCol), cursor.getString(artistCol), data
+                )
                 tracks.add(TrackInfo(
-                    id = id, title = cursor.getString(titleCol) ?: "Unknown",
-                    artist = cursor.getString(artistCol) ?: "Unknown Artist",
+                    id = id, title = enrichedTitle,
+                    artist = enrichedArtist,
                     album = cursor.getString(albumCol) ?: "Unknown Album",
                     albumId = albumId, duration = cursor.getLong(durationCol),
                     fileUri = data, lastModified = cursor.getLong(dateModCol) * 1000

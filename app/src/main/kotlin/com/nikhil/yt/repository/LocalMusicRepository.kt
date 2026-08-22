@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.nikhil.yt.db.LocalMusicDao
 import com.nikhil.yt.db.entities.LocalFolderEntity
 import com.nikhil.yt.db.entities.LocalTrackEntity
+import com.nikhil.yt.utils.LocalTrackMetadata
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -203,12 +204,16 @@ class LocalMusicRepository @Inject constructor(
                     albumId
                 ).toString()
 
+                val (enrichedTitle, enrichedArtist) = LocalTrackMetadata.enrich(
+                    cursor.getString(titleCol), cursor.getString(artistCol), filePath
+                )
+
                 tracks.add(
                     LocalTrackEntity(
                         id = id,
                         folderId = albumId.toString(),
-                        title = cursor.getString(titleCol) ?: "Unknown Track",
-                        artist = cursor.getString(artistCol) ?: "Unknown Artist",
+                        title = enrichedTitle,
+                        artist = enrichedArtist,
                         album = cursor.getString(albumCol) ?: "Unknown Album",
                         duration = cursor.getLong(durationCol),
                         fileUri = contentUri,
