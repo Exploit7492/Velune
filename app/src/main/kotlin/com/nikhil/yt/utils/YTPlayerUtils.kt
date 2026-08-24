@@ -135,16 +135,69 @@ object YTPlayerUtils {
      * known to return video formats (IOS), so the toggle reliably has a stream to
      * play even when the currently-playing audio came from a music-only client.
      */
+    /**
+     * The order video-format resolution tries clients in. IOS is tried
+     * first — it's the client this function originally used exclusively,
+     * so keeping it first preserves whatever was already working. If IOS
+     * fails for a given video (wrong playability status, no video-only
+     * adaptive formats, a cipher this client's scheme can't decrypt),
+     * this used to just give up — the video toggle would silently never
+     * work for that track, with no visible symptom beyond "the button
+     * does nothing," since [MetroPlayerContent]'s Video pill disables
+     * itself whenever `hasVideo == false`.
+     *
+     * The rest of this list reuses [STREAM_FALLBACK_CLIENTS] verbatim —
+     * the same client set already proven, in production, to reliably
+     * resolve *audio* streams for this app. It's not a new/unverified
+     * client list invented for video specifically; it's the existing
+     * resilience strategy this codebase already trusts, applied to a
+     * code path that never had any fallback at all. Not every client in
+     * that list necessarily returns video-capable adaptive formats (some
+     * are YT-Music-branded and may be audio-only by design) — rather
+     * than pre-guess which ones do, each client is actually queried and
+     * simply skipped if it returns no usable video-only formats, so this
+     * doesn't depend on that assumption being right.
+     */
+    private val VIDEO_STREAM_CLIENTS: List<YouTubeClient> =
+        listOf(IOS) + STREAM_FALLBACK_CLIENTS.filterNot { it === IOS }
+
     suspend fun resolveVideoStreamUrl(videoId: String): String? {
-        getVideoStreamUrl(videoId)?.let { return it }
+        getVideoStreamUrl(videoId)?.let {
+            Timber.tag(logTag).d("resolveVideoStreamUrl($videoId): cache hit")
+            return it
+        }
 
+        for (client in VIDEO_STREAM_CLIENTS) {
+            val url = tryResolveVideoStreamUrlForClient(videoId, client)
+            if (url != null) return url
+        }
+        Timber.tag(logTag).w("resolveVideoStreamUrl($videoId): every client in VIDEO_STREAM_CLIENTS failed")
+        return null
+    }
+
+    private suspend fun tryResolveVideoStreamUrlForClient(videoId: String, client: YouTubeClient): String? {
+        if (isStreamClientTemporarilyBlocked(videoId, client.clientName)) {
+            Timber.tag(logTag).d("resolveVideoStreamUrl($videoId): skipping ${client.clientName}, recently blocked (403/429)")
+            return null
+        }
         return runCatching {
-            val response = YouTube.player(videoId, null, IOS, null).getOrNull()
-                ?: return@runCatching null
+            val playerResult = YouTube.player(videoId, null, client, null)
+            val response = playerResult.getOrElse { e ->
+                Timber.tag(logTag).w(e, "resolveVideoStreamUrl($videoId): ${client.clientName} player() call failed")
+                return@runCatching null
+            }
 
-            if (response.playabilityStatus.status != "OK") return@runCatching null
+            if (response.playabilityStatus.status != "OK") {
+                Timber.tag(logTag).w(
+                    "resolveVideoStreamUrl($videoId): ${client.clientName} playability = ${response.playabilityStatus.status} (${response.playabilityStatus.reason})"
+                )
+                return@runCatching null
+            }
             val expiresInSeconds = response.streamingData?.expiresInSeconds
-                ?: return@runCatching null
+            if (expiresInSeconds == null) {
+                Timber.tag(logTag).w("resolveVideoStreamUrl($videoId): ${client.clientName} had no streamingData/expiresInSeconds")
+                return@runCatching null
+            }
 
             val candidates = response.streamingData?.adaptiveFormats
                 ?.asSequence()
@@ -154,16 +207,23 @@ object YTPlayerUtils {
                 ?.take(5)
                 ?.toList()
                 .orEmpty()
+            Timber.tag(logTag).d("resolveVideoStreamUrl($videoId): ${client.clientName} returned ${candidates.size} video-only candidates")
 
             for (candidate in candidates) {
-                val url = findUrlOrNull(candidate, videoId, IOS) ?: continue
+                val url = findUrlOrNull(candidate, videoId, client) ?: continue
                 videoStreamUrlCache[buildCacheKey(videoId, candidate.itag)] = CachedStreamUrl(
                     url = url,
                     expiresAtMs = System.currentTimeMillis() + (expiresInSeconds * 1000L),
                 )
+                Timber.tag(logTag).i("resolveVideoStreamUrl($videoId): resolved via ${client.clientName}")
                 return@runCatching url
             }
+            if (candidates.isNotEmpty()) {
+                Timber.tag(logTag).w("resolveVideoStreamUrl($videoId): ${client.clientName} candidates all failed findUrlOrNull (cipher/signature resolution)")
+            }
             null
+        }.onFailure { e ->
+            Timber.tag(logTag).e(e, "resolveVideoStreamUrl($videoId): ${client.clientName} attempt threw")
         }.getOrNull()
     }
 

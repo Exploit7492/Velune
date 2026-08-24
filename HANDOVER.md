@@ -2078,7 +2078,107 @@ the sizing fix and wiring are reasoned through carefully and the
 parsing logic itself is verified in an executed Python port, but
 nothing here has been watched render on an actual screen.
 
+### Video toggle "does nothing at all" — root cause found and fixed
 
+Third report of essentially the same complaint (`d6d1f9a`, `7c76abe`
+fixed two earlier, different-shaped versions of "video toggle doesn't
+work" — read those commit messages before assuming a new report is the
+same root cause; it usually isn't). This time: **zero visual response,
+not even a button highlight, on every track tried** — that specific
+symptom matters, see below.
+
+A prior pass through this same session (before the fix below) read
+`resolveVideoStreamUrl`, `toggleVideo()`, the click handler, the IOS
+client's version string, and `PlaybackAuthState.needsServiceIntegrity`
+line by line and found nothing wrong — all of it was already correct.
+That's recorded here so the next session doesn't repeat the same read-
+through a third time: **the bug was never in any of that code. It was
+architectural** — found only by directly reading the actual reference
+implementation in `phoenix-boss/mavins` (`expo-video` branch,
+`components/MusicPlayerContext.tsx`), not by re-reading Velune's own
+code again.
+
+**What Mavins actually does, that Velune didn't**: Mavins' stream
+resolution (`getStreamInfoWithFallback`) tries *multiple independent
+extraction attempts* before giving up — including a visitor-data
+refresh and retry. Velune's `resolveVideoStreamUrl`, by contrast, tried
+exactly **one** InnerTube client (`IOS`) and gave up immediately on any
+failure — no fallback at all. Given the reported symptom (button
+visibly present but completely inert, for every track, no exceptions),
+this is exactly what you'd see if IOS-client requests were failing for
+some external reason (YouTube-side change, transient block, etc.) with
+nothing to catch the failure.
+
+**The actual fix, done without inventing anything new**: Velune's own
+*audio* resolution path already has a rich, production-proven 17-client
+fallback list (`STREAM_FALLBACK_CLIENTS` — MOBILE, ANDROID_MUSIC,
+ANDROID_VR_NO_AUTH, IOS, IOS_MUSIC, TVHTML5_SIMPLY_EMBEDDED_PLAYER, and
+more), used successfully for every song played in this app. The video
+path never used it — it was hardcoded to IOS alone, in a completely
+separate function that didn't share the audio path's resilience at all.
+`resolveVideoStreamUrl` now tries IOS first (preserving whatever
+worked before), then falls through the rest of that same proven client
+list, actually querying each one and skipping it if it returns no
+usable video-only formats — no assumption is made about which clients
+support video and which don't, since that's discoverable per-client
+directly from the response rather than worth guessing.
+
+This is why a full NewPipeExtractor-based rewrite (which is what
+`MavinEngine` actually is under the hood, given its `serviceId=0`
+parameter — a NewPipeExtractor service-registry index) was **not**
+attempted here: that's a real, substantially larger undertaking
+(porting a whole independent extraction pipeline, not extending an
+existing one), and this sandbox has no way to verify NewPipeExtractor's
+actual current API surface against real behavior. The multi-client
+fallback fix reuses code and a resilience pattern **already proven
+correct in this exact codebase** — a fundamentally lower-risk fix that
+directly addresses the "one client, no fallback" gap Mavins' own
+architecture pointed at, without requiring a new library integration
+this session couldn't fully verify. If the multi-client fallback
+*doesn't* fully resolve this — i.e. every single client in the list
+fails for a given video — that's the actual signal a NewPipeExtractor-
+based path is worth the bigger undertaking, not something to assume
+upfront.
+
+Also added: `isStreamClientTemporarilyBlocked(videoId, clientKey)` is
+now checked before each client attempt, same call pattern already used
+by the audio path — skips a client already known to have 403/429'd
+recently for this video, rather than wasting a request repeating a
+failure that's already been recorded elsewhere (populated by whatever
+layer handles actual playback HTTP errors, not by this function itself
+— confirmed `markStreamClientFailed` is public and called from outside
+this file, not something this resolve path needed to also populate).
+
+Diagnostic logging (tag `YTPlayerUtils`, matching the file's own
+`logTag` convention) is included at every failure point per client —
+cache hit, `player()` failure, non-OK playability with reason, missing
+`streamingData`, candidate count, per-candidate cipher-resolution
+failure, and which client eventually succeeded (or that all of them
+failed). This supersedes an earlier, narrower logging-only patch from
+this same session that never got merged (it only ever existed as a
+handed-off `.patch` file, not applied) — if you see a reference to a
+patch that added logging without the multi-client fallback, that patch
+is obsolete; this version replaces it entirely, don't try to apply both.
+
+**Also checked, for a related but separate question**: whether Velune
+and Mavins' Pawns SDK integrations use the *same* API key/account,
+since the user said they're supposed to. Neither repo commits the
+literal key value to source anymore (Velune's was moved to
+`BuildConfig`/`local.properties` in an earlier fix; Mavins was already
+sourcing it from `EXPO_PUBLIC_PAWNS_API_KEY`, never hardcoded). That
+means this can't be verified by reading source in either repo — it can
+only be confirmed by comparing the actual values in each project's own
+`local.properties`/env config, which is something only the user can do
+directly. Said so plainly rather than guessing a "yes" or "no".
+
+**Not verified on-device** — same caveat as everything else in this
+file. The reasoning here is stronger than the earlier logging-only pass
+(a real architectural gap was found and directly addressed with an
+already-proven pattern, not a guess), but "should work" and "confirmed
+working" are still different claims. If it's still broken after this,
+the per-client logging will show exactly which of the 17 attempts
+failed and why — that's the next debugging step, not another code
+read-through.
 
 ## 4. Suggested next step
 
