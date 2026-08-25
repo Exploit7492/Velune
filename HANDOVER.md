@@ -2301,23 +2301,70 @@ file for how fast that happens in this repo).
    find the setting's DataStore/preference key, then find (or discover
    there isn't) anywhere in the UI that actually reads it.
 
-4. **Hardcoded "Echo Music"/"Velune" strings instead of the dynamic app
-   name, in multiple places**, all reported together:
-   - Some settings pages.
-   - The equalizer screen specifically has something called "Echo
-     Tuning" — the word "Echo" needs to become the dynamic app name
-     there too.
-   - The Listen Together page.
-   - The Discord integration page.
-   This app already has a dynamic-app-name mechanism somewhere (it must,
-   for this to be a "should use it but doesn't" bug rather than a
-   feature to build) — find that mechanism first (likely a string
-   resource, a BuildConfig field, or a runtime-configurable value used
-   correctly in most of the app already) and grep for literal "Echo"/
-   "Velune" string literals across `res/values/strings.xml` and any
-   hardcoded Kotlin string literals to find every remaining instance,
-   not just the four places named above — the user is reporting examples
-   they noticed, not necessarily an exhaustive list.
+4. **DONE this session — Hardcoded "Echo Music"/"Velune" strings instead
+   of the dynamic app name, in multiple places.**
+
+   Confirmed the mechanism first, per §6's earlier note: it's build-time,
+   not runtime — `app/build.gradle.kts` injects `resValue("string",
+   "app_name", appName)` (and `config_app_name`) from Gradle properties,
+   read via `stringResource(R.string.app_name)` in Compose or
+   `context.getString(R.string.app_name)` elsewhere. Most of the app
+   already used this correctly; the remaining instances split into two
+   distinct bugs, not one:
+
+   - **`strings.xml` resources had "Velune" baked directly into the
+     resource text**, even though several call sites were already
+     (uselessly) passing `app_name` as a format arg with no `%1$s`
+     placeholder to receive it — i.e. the Kotlin side was already
+     "fixed" and the bug was purely in the string resource. Affected:
+     `discord_information`, `music_together`, `spotify_import_desc`,
+     `crash_description`, `crash_report_subject`. Added the placeholder
+     to each and wired up the remaining call sites that weren't already
+     passing the arg (`SettingsScreen.kt`, `SpotifyImportScreen.kt`,
+     `CrashActivity.kt` x2).
+   - **Plain Kotlin string literals** instead of `stringResource`/
+     `context.getString`: `GatewayClient.kt`/`DiscordSocialPresenceClient.kt`
+     (Discord identify/presence payloads), `AxionEqViewModel.kt` (the
+     "Echo Tuning" EQ preset name — the exact item originally reported),
+     `PermissionHandler.kt` (both storage-permission explainer strings),
+     `ThemeCreatorScreen.kt` (default exported theme name),
+     `DiscordExperimental.kt` (both "Go to Velune" button-label
+     defaults — `DiscordSettings.kt` already had the correct pattern for
+     the same preference, `DiscordExperimental.kt` just hadn't been
+     brought in line with it), `VeluneSettingsScreen.kt`/`MainActivity.kt`
+     (logo `contentDescription` accessibility labels), `UpdateScreen.kt`
+     (the two updater warning/explanation strings, each duplicated across
+     two dialogs), `DiscordRPC.kt` (the "Go to Velune" button fallback and
+     the "`<text>` on Velune" RPC small-text suffix).
+
+   **Deliberately left alone — not app-name usages, despite matching the
+   grep**: GitHub repo URLs (`Zapier-codes/Velune` links, functional, not
+   display text); the `VeluneBackup` XML serialization tag and
+   `VeluneAdminToken` DataStore key in `BackupRestoreViewModel.kt`/
+   `MusicService.kt` (internal identifiers — renaming would break
+   backup-file compatibility with existing exports); the ListenBrainz
+   `submission_client` JSON field in `ListenBrainzManager.kt` (an API
+   identifier sent to an external service, not UI text);
+   `UptimeScreen.kt`'s "Echo Canvas"/"Echo Find (Shazam)" (named external
+   services this app talks to, not this app's own name);
+   `ListenTogetherServers.kt`'s default relay server name/operator (a
+   specific, externally-operated server — renaming the display text
+   wouldn't change who actually operates it); `SearchableSettings.kt`'s
+   "Echo Extractor" (a named feature/route, like "Echo Canvas", not a
+   reference to the app itself); and `Updater.kt`'s literal
+   `"Velune.apk"` (the actual release-asset filename on GitHub, fixed
+   regardless of the runtime app name). If any of these turn out to be
+   wrong — e.g. if "Echo Canvas"/"Echo Find"/"Echo Extractor" were
+   actually meant to rebrand too — that's a call for the user to make
+   explicitly, not something to infer from the original bug report's
+   four named locations.
+
+   Not independently re-verified on-device or via a full Gradle build in
+   this sandbox (no Android SDK / no access to Google's Maven repo from
+   this container's allowed egress list — same constraint noted
+   elsewhere in this file); verified via careful manual diff review and
+   a post-edit grep sweep confirming no remaining bare "Echo Music"/
+   "Velune" literals outside the intentionally-excluded list above.
 
 5. **DONE this session — Remove the About page entirely.** Not hide, not
    gate behind a flag — remove the screen, its nav route, and its entry
@@ -2580,18 +2627,9 @@ actual code, not guessed.
     scratch. This is graphics/rendering feature work spanning multiple
     files, not a one-line patch — treat it as its own session.
 
-- **Item 4 (hardcoded "Echo"/"Velune" strings) — the dynamic-app-name
-  mechanism confirmed.** It's build-time, not runtime:
-  `app/build.gradle.kts` injects `resValue("string", "app_name",
-  appName)` and `resValue("string", "config_app_name", configAppName)`
-  from Gradle properties (see `scripts/brand.sh`). So the correct fix
-  pattern for every hardcoded literal is switching it to
-  `stringResource(R.string.app_name)` (or `config_app_name`, check which
-  one the rest of the app already uses for user-facing vs internal
-  contexts) — not adding a new mechanism. Have not yet grepped the four
-  specific reported locations (some settings pages, "Echo Tuning" on the
-  EQ screen, Listen Together page, Discord integration page) for their
-  exact literal strings — that's the remaining work.
+- **Item 4 (hardcoded "Echo"/"Velune" strings) — now DONE, see item 4's
+  own entry above in §5 for the full list of what was fixed and what
+  was deliberately left alone.**
 
 - **Items 6/8 (Supabase campaign read connection) — the plumbing already
   exists, just needs the schema check the user asked for.** Confirmed:
