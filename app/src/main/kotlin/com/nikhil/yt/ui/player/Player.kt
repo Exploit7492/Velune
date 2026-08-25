@@ -1506,9 +1506,18 @@ private fun MetroPlayerContent(
                 thumbnailUrl = mediaMetadata.thumbnailUrl?.toHighResThumbnail(),
                 isVideoMode = isVideoMode,
                 videoPlayer = videoPlayer,
+                // aspectRatio(1f) is correct for the Song-mode cover art (a
+                // square is the intentional look there) but is exactly what
+                // was capping the video at edge-to-edge horizontally only:
+                // this Box is taller than it is wide (weight(1f) inside a
+                // Column), so forcing a 1:1 square left empty space above
+                // and below whenever a video was actually showing. Dropping
+                // the constraint while isVideoMode is true lets the video
+                // genuinely fill the full weight(1f) height, matching the
+                // edge-to-edge-horizontally behavior that already worked.
                 modifier = Modifier
                     .fillMaxSize()
-                    .aspectRatio(1f)
+                    .let { if (isVideoMode) it else it.aspectRatio(1f) }
                     .clip(RoundedCornerShape(12.dp))
             )
         }
