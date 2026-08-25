@@ -2319,9 +2319,25 @@ file for how fast that happens in this repo).
    not just the four places named above — the user is reporting examples
    they noticed, not necessarily an exhaustive list.
 
-5. **Remove the About page entirely.** Not hide, not gate behind a flag
-   — remove the screen, its nav route, and its entry point(s) in
-   settings.
+5. **DONE this session — Remove the About page entirely.** Not hide, not
+   gate behind a flag — remove the screen, its nav route, and its entry
+   point(s) in settings.
+
+   Turned out there are two parallel settings UIs in this codebase, only
+   one of which is actually reachable: the `"settings"` route maps to
+   `VeluneSettingsScreen.kt` (live), while `SettingsScreen.kt` and
+   `SearchableSettings.kt` (which also each had their own About entry)
+   are never invoked from anywhere — dead code, not a second live
+   screen. Fixed all three anyway (cheap, and correct if either is ever
+   wired back up), plus deleted `AboutScreen.kt` and its
+   `composable("settings/about")` route + import in
+   `NavigationBuilder.kt`. Left the `about`/`about_desc` string
+   resources in place across all locale files — same precedent as the
+   already-existing unused `new_update_available` string noted in §6;
+   removing translated strings is a separate, lower-value cleanup and
+   not what was asked for here. Confirmed with a full grep afterward:
+   no remaining references to `AboutScreen`, `settings/about`, or a
+   literal `"About"` label anywhere in `app/src/main/kotlin`.
 
 6. **Remove "Manage campaign" from settings entirely.** User: "a
    separate app is being built for that purpose entirely this one
