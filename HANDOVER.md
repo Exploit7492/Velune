@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v17)
+# Velune EQ/DSP Handover (v18)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -2221,3 +2221,186 @@ it up automatically on clone instead of depending on this exact chat
 transcript still being around. And check the repo's actual current `main`
 right before you generate that patch, not just at the start of your
 session — as this entry itself demonstrates, it can move while you work.
+
+## 5. New backlog — reported directly by the user, 2026-08, none of this
+started yet
+
+Thirteen items, all from one message, none investigated this session —
+this session's only job was capturing them accurately for whichever
+session(s) pick each one up. Do not treat the file/root-cause guesses
+below as confirmed the way the rest of this document's entries are
+(everything above this section describes *completed, verified* work);
+these are starting points for investigation, not diagnoses. Grep/read
+the actual current code before assuming any of this is still accurate —
+plenty has moved since this was written (see the whole rest of this
+file for how fast that happens in this repo).
+
+1. **Music recognition (Shazam-style) doesn't work — "temporarily
+   unavailable"**. User's exact words: the recognise-music component
+   "isn't working fully as the Shazam service shows temporarily
+   unavailable and it should be available to recognise any song even
+   when the app is minimized." Two distinct requirements bundled in one
+   report: (a) whatever's causing "temporarily unavailable" — could be
+   an API key/quota/endpoint issue, could be a permission or foreground-
+   service gap, not yet looked at; (b) recognition should keep working
+   when the app is backgrounded/minimized, which likely needs a
+   foreground service (or confirmation one already exists and isn't
+   being used for this) rather than something tied to an Activity's
+   lifecycle. Find the recognition feature's actual implementation
+   first (search for "shazam", "recogni[sz]e", "acr" or similar) before
+   assuming either cause.
+
+2. **"Recently updated" text on the home page should never show.**
+   User: "even if the app was updated the user should [not] see any
+   text of such." Sounds like a banner/label tied to an app-update or
+   first-launch-after-update check. Find where it's sourced (likely
+   compares a stored version code/name against the current one) and
+   remove the UI entirely, not just hide it conditionally.
+
+3. **Liquid glass setting toggles but visibly does nothing.** User: "I
+   turn it on the whole app remains the same like nothing happened."
+   This is a toggle that isn't wired to anything, or is wired to
+   something that isn't actually applied anywhere in the render path —
+   find the setting's DataStore/preference key, then find (or discover
+   there isn't) anywhere in the UI that actually reads it.
+
+4. **Hardcoded "Echo Music"/"Velune" strings instead of the dynamic app
+   name, in multiple places**, all reported together:
+   - Some settings pages.
+   - The equalizer screen specifically has something called "Echo
+     Tuning" — the word "Echo" needs to become the dynamic app name
+     there too.
+   - The Listen Together page.
+   - The Discord integration page.
+   This app already has a dynamic-app-name mechanism somewhere (it must,
+   for this to be a "should use it but doesn't" bug rather than a
+   feature to build) — find that mechanism first (likely a string
+   resource, a BuildConfig field, or a runtime-configurable value used
+   correctly in most of the app already) and grep for literal "Echo"/
+   "Velune" string literals across `res/values/strings.xml` and any
+   hardcoded Kotlin string literals to find every remaining instance,
+   not just the four places named above — the user is reporting examples
+   they noticed, not necessarily an exhaustive list.
+
+5. **Remove the About page entirely.** Not hide, not gate behind a flag
+   — remove the screen, its nav route, and its entry point(s) in
+   settings.
+
+6. **Remove "Manage campaign" from settings entirely.** User: "a
+   separate app is being built for that purpose entirely this one
+   should only display the placed campaign and it gets the campaign
+   from supabase which we will connect now as another session task[]."
+   So this item has two parts with different urgency:
+   - Now: delete the "Manage campaign" settings entry/screen — this app
+     is display-only for campaigns, management happens in a different
+     app entirely.
+   - Later, separate session: wire up the actual Supabase connection so
+     this app can *read* placed campaigns. The user explicitly asked
+     that whichever session picks this up **starts by inspecting the
+     existing Supabase schema** rather than guessing table/column names,
+     since "the supabase already has some tables." The command for that
+     — give the user this directly, don't just describe it — is a plain
+     SQL introspection query that works regardless of local CLI/auth
+     state, run in the Supabase dashboard's SQL Editor (or via `psql`
+     against the project's connection string):
+     ```sql
+     select table_name, column_name, data_type, is_nullable
+     from information_schema.columns
+     where table_schema = 'public'
+     order by table_name, ordinal_position;
+     ```
+     If the Supabase CLI is set up and linked to the project locally,
+     `supabase db dump --schema public --data-only=false` is the
+     alternative that dumps full DDL (table definitions, constraints,
+     indexes) rather than just the columns list. Either one, run first,
+     before writing any Supabase-reading code for campaigns — see item
+     8 below for how campaign placement/ordering needs to interact with
+     whatever that schema turns out to actually look like.
+
+7. **Queue should preload the next song's video ahead of time.**
+   Currently (per the user) it re-resolves on every transition instead
+   of having the next item ready, which is also called out again in
+   item 12 below as the specific cause of a playback hitch when the
+   video view is involved. Find wherever the queue/player currently
+   resolves a track's playable source and check whether there's any
+   lookahead/prefetch for the *next* queue item at all, or whether
+   resolution is purely reactive to "this is now the current item."
+
+8. **Campaign placement/rotation logic — a real feature to build, not a
+   bug fix**, once item 6's Supabase read connection exists. Exact rule
+   set, in the user's own terms:
+   - Every 4 regular songs, the 5th slot is a campaign.
+   - If there are multiple campaigns, they occupy that 5th-slot position
+     one after another in sequence (1st campaign at the first 5th-slot,
+     2nd campaign at the next 5th-slot, etc.).
+   - When all campaigns in the list have played once, loop back to the
+     first campaign — continuous loop, never runs out.
+   - If there's only one campaign placed, that single campaign occupies
+     every 5th-slot position (still a "loop," just a loop of one).
+   - This must be **the same for every user** ("persist on every user's
+     queue") — i.e. campaign placement is not per-user randomized, it's
+     a deterministic sequence everyone sees the same way.
+   - **Must survive shuffle**: "even if the user shuffles the song list,
+     the position of the placed campaign remains the same." So campaign
+     slots are computed on top of/independent of whatever ordering
+     (shuffled or not) the user's own queue is in — the 5th/10th/15th/
+     etc. position always resolves to the correct campaign in sequence,
+     regardless of what shuffle did to the surrounding regular tracks.
+   This has real design questions to work through before coding it
+   (e.g.: is "position" counted from the start of the whole queue, or
+   does it reset per session/per day; what happens if the queue is
+   shorter than 5 songs; does inserting a campaign shift indices for
+   everything after it or does it occupy a slot the regular queue
+   already accounted for) — worth confirming the exact intended
+   behavior with the user again once the Supabase schema (item 6) shows
+   what data is actually available to work with, rather than guessing.
+
+9. **Library → Downloads page shows cache files, not actual downloads.**
+   User: "the user is never to see the cache files even though they
+   exist so on click on downloads route to the download page not cache
+   page." Sounds like the Downloads nav destination is currently
+   pointed at (or reading from) a cache directory/table instead of the
+   real downloaded-files one — find the actual downloads storage
+   mechanism (likely a Room table or a dedicated downloads directory)
+   and confirm the Downloads screen reads from *that*, not from
+   whatever cache mechanism it's apparently showing now.
+
+10. **"Most Played" crashes the app.** Exact error given:
+    `java.lang.NumberFormatException: For input string: "Top"`. That's a
+    very specific, very greppable signature — almost certainly a
+    `.toInt()`/`.toIntOrNull()`-without-fallback (or similar numeric
+    parse) call somewhere being fed a literal string like "Top" (as in
+    "Top Played," "Top 50," a sort-key or tab-label string) instead of
+    a number it expected. Grep for the literal string `"Top"` combined
+    with `toInt(` in the library/most-played screen's source first —
+    this one has enough detail in the report to probably find the exact
+    line quickly rather than needing broad investigation.
+
+11. **Hamburger-menu sidebar (also opens via edge-swipe gesture) sits
+    too high, overlapping the page header.** User: it "should show
+    after the page header that position is perfect so the side bar is
+    fully seen" — i.e. the sidebar's top edge should start below
+    wherever the page header/top bar ends, not overlap or sit above it.
+
+12. **Video player: not edge-to-edge vertically (only horizontally
+    right now); loading spinner should be a skeleton loader; next-song
+    video re-resolves instead of using a preload, causing a playback
+    hitch.** Three related items on the same screen/component:
+    - The video thumbnail/player container already fills edge-to-edge
+      *horizontally* (confirmed working per the user) but not
+      *vertically* — needs the same edge-to-edge treatment applied on
+      the vertical axis too.
+    - Replace whatever spinner currently shows while a video is loading
+      with a skeleton loader instead.
+    - "If the next song is to load it goes to re-resolve it causing an
+      issue in the smooth playback" — this is the video-specific
+      manifestation of item 7's queue-preload gap; likely the same
+      underlying fix (preload/resolve the next item ahead of time)
+      fixes both, but confirm that once item 7 is actually being worked
+      on rather than assuming they're one ticket.
+
+13. **Status bar should be hidden on every screen, app-wide.** Not
+    per-screen opt-in — the user wants this as a global default across
+    the whole app (immersive/edge-to-edge with the status bar hidden
+    everywhere, not just on the player or video screens).
+
