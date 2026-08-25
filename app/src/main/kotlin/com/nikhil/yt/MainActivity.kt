@@ -425,6 +425,15 @@ class MainActivity : ComponentActivity() {
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        // Status bar is hidden app-wide by default (see MainActivity's
+        // Compose tree for the corresponding always-on enforcement once
+        // insets/config changes can re-show it). BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        // still lets a user swipe it into view temporarily; it re-hides itself.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.statusBars())
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             val initialLocale = PreferenceStore.get(AppLanguageKey)
                 ?.takeUnless { it == SYSTEM_DEFAULT }
@@ -737,15 +746,16 @@ class MainActivity : ComponentActivity() {
 
                         var yearInMusicSavedPlayerAnchor by rememberSaveable { mutableIntStateOf(-1) }
 
-                        LaunchedEffect(isYearInMusicScreen) {
+                        LaunchedEffect(Unit) {
+                            // Status bar stays hidden app-wide (see onCreate for the
+                            // initial hide) regardless of which screen is showing —
+                            // this used to only hide it for isYearInMusicScreen and
+                            // re-show it everywhere else. Kept the systemBarsBehavior
+                            // assignment so a user swipe still transiently reveals it.
                             val controller = WindowCompat.getInsetsController(window, window.decorView)
-                            if (isYearInMusicScreen) {
-                                controller.systemBarsBehavior =
-                                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                                controller.hide(WindowInsetsCompat.Type.statusBars())
-                            } else {
-                                controller.show(WindowInsetsCompat.Type.statusBars())
-                            }
+                            controller.systemBarsBehavior =
+                                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                            controller.hide(WindowInsetsCompat.Type.statusBars())
                         }
 
                         LaunchedEffect(isYearInMusicScreen, playerConnection) {

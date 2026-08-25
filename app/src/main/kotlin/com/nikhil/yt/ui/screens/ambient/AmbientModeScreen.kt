@@ -68,7 +68,10 @@ fun AmbientModeScreen(navController: NavController) {
             activity?.requestedOrientation = originalOrientation
             if (window != null) {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                windowInsetsController?.show(WindowInsetsCompat.Type.systemBars())
+                // Only restore the navigation bar here — the status bar is hidden
+                // app-wide (see MainActivity), and showing systemBars() (both)
+                // would silently undo that the moment ambient mode is exited.
+                windowInsetsController?.show(WindowInsetsCompat.Type.navigationBars())
             }
         }
     }
