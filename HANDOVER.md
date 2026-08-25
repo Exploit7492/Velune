@@ -2386,7 +2386,37 @@ file for how fast that happens in this repo).
    no remaining references to `AboutScreen`, `settings/about`, or a
    literal `"About"` label anywhere in `app/src/main/kotlin`.
 
-6. **Remove "Manage campaign" from settings entirely.** User: "a
+6. **DONE this session (the "now" half only) — Remove "Manage campaign"
+    from settings entirely.** The "later" half (wire up the actual
+    Supabase read connection) is untouched — still its own session, see
+    below for exactly what's still open there.
+
+    Removed the "Manage Campaigns" entry from Settings → Content
+    (`ContentSettings.kt`) along with the now-empty "Promoted Content"
+    settings group it was the only member of, the `"campaign/admin"` nav
+    route in `NavigationBuilder.kt`, and — same precedent as the
+    About-page removal (item 5): actually delete the screen, don't just
+    unlink it — `CampaignAdminScreen.kt` and `CampaignAdminRepository.kt`
+    outright. Confirmed via grep afterward that neither class name nor
+    the `"campaign/admin"` route string appears anywhere else in `app/`.
+
+    Left alone, deliberately: the read-only display path this app still
+    needs — `CampaignCard.kt`, `CampaignCardSection.kt`,
+    `CampaignPlaybackTracker.kt`, `CampaignRepository.kt`,
+    `CampaignUrlResolver.kt` — and `campaign_schema.sql`. Also left the
+    `manage_campaigns`/`manage_campaigns_desc`/`promoted_content_heading`
+    string resources in every locale file, same reasoning as the
+    unused `about`/`about_desc`/`new_update_available` strings noted
+    elsewhere in this file: removing translated strings is a separate,
+    lower-value cleanup, not what was asked for here.
+
+    Not verified on-device (same sandbox build limitation noted
+    throughout this file) — verified via manual diff review and a
+    post-edit grep sweep.
+
+    **Original ticket text below, for the still-open "later" half:**
+
+    User: "a
    separate app is being built for that purpose entirely this one
    should only display the placed campaign and it gets the campaign
    from supabase which we will connect now as another session task[]."
