@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v18)
+# Velune EQ/DSP Handover (v19)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -2240,15 +2240,52 @@ file for how fast that happens in this repo).
    "isn't working fully as the Shazam service shows temporarily
    unavailable and it should be available to recognise any song even
    when the app is minimized." Two distinct requirements bundled in one
-   report: (a) whatever's causing "temporarily unavailable" — could be
-   an API key/quota/endpoint issue, could be a permission or foreground-
-   service gap, not yet looked at; (b) recognition should keep working
-   when the app is backgrounded/minimized, which likely needs a
-   foreground service (or confirmation one already exists and isn't
-   being used for this) rather than something tied to an Activity's
-   lifecycle. Find the recognition feature's actual implementation
-   first (search for "shazam", "recogni[sz]e", "acr" or similar) before
-   assuming either cause.
+   report.
+
+   **(b) — DONE this session.** Confirmed root cause by reading the
+   actual code, not guessing: `RecognitionForegroundService.kt` already
+   existed and already does this correctly (a real foreground service,
+   independent of any Activity's lifecycle, `foregroundServiceType=
+   "microphone"` in the manifest, an ongoing notification) — but it was
+   only reachable from the Quick Settings tile
+   (`MusicRecognizerTileService`) and `RecognitionLaunchActivity`, never
+   from the in-app Recognition screen (`RecognitionScreen.kt`), which is
+   presumably how most users actually trigger it. That screen was
+   instead calling `MusicRecognitionService.recognize(context)` directly
+   inside `scope.launch {}`, where `scope` was
+   `rememberCoroutineScope()` — cancelled the moment the screen leaves
+   composition (backgrounding, navigating away), well before a
+   10-second recording + network round trip finishes. Fixed by routing
+   all three call sites in `RecognitionScreen.kt` through
+   `RecognitionForegroundService` instead, the same
+   `startForegroundService`/`ForegroundServiceStartNotAllowedException`
+   pattern `RecognitionLaunchActivity.startRecognitionService()` already
+   used. The UI didn't need any other changes: it already observes
+   `MusicRecognitionService.recognitionStatus`, a shared app-wide
+   `StateFlow` the service updates as it progresses — only *where* the
+   work runs changed, not how the result gets back to the screen.
+
+   **(a) — still open, honestly.** The exact string "Shazam service
+   temporarily unavailable" comes from `ShazamClient.kt`'s
+   `performRecognition()`, thrown for *any* HTTP 5xx response from
+   `amp.shazam.com` — an unofficial, reverse-engineered endpoint (no
+   real API key; spoofs a random Android user-agent/timezone/
+   geolocation to mimic the real app). Checked the request/response
+   models (`ShazamModels.kt`) against the commonly-documented shape for
+   this exact endpoint (used by several other open-source Shazam
+   clients) and found nothing structurally wrong. Also checked: this
+   sandbox cannot reach `amp.shazam.com` at all (not in the container's
+   allowed egress domain list, and it's a signed POST endpoint anyway,
+   not something a GET-based fetch tool could exercise), so whether
+   requests are *currently* succeeding, being rate-limited, or being
+   actively blocked by Shazam's anti-bot defenses (a known, recurring
+   failure mode for this whole class of unofficial client — corroborated
+   by public reports from other reverse-engineered Shazam client
+   projects hitting the same kind of block) could not be tested from
+   here. `UptimeScreen.kt` already pings `https://amp.shazam.com`
+   directly as a health check ("Echo Find (Shazam)"), which is the
+   fastest way to check current live status on a real device before
+   assuming anything further needs to change in `ShazamClient.kt`.
 
 2. **"Recently updated" text on the home page should never show.**
    User: "even if the app was updated the user should [not] see any

@@ -45,10 +45,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.nikhil.yt.R
 import com.nikhil.yt.recognition.MusicRecognitionService
+import com.nikhil.yt.recognition.RecognitionForegroundService
 import com.nikhil.yt.recognition.RecognitionHistoryDataStore
 import com.nikhil.yt.recognition.models.RecognitionStatus
 import com.nikhil.yt.ui.utils.backToMain
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +57,6 @@ fun RecognitionScreen(
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val context = LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val status by MusicRecognitionService.recognitionStatus.collectAsState()
     var hasPermission by remember {
         mutableStateOf(MusicRecognitionService.hasRecordPermission(context))
@@ -68,7 +67,7 @@ fun RecognitionScreen(
     ) { granted ->
         hasPermission = granted
         if (granted) {
-            scope.launch { MusicRecognitionService.recognize(context) }
+            startRecognition(context)
         }
     }
 
@@ -96,7 +95,7 @@ fun RecognitionScreen(
                     onRequestPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                     onStartRecognition = {
                         if (hasPermission) {
-                            scope.launch { MusicRecognitionService.recognize(context) }
+                            startRecognition(context)
                         } else {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
@@ -121,7 +120,7 @@ fun RecognitionScreen(
                     message = currentStatus.message,
                     onRetry = {
                         if (hasPermission) {
-                            scope.launch { MusicRecognitionService.recognize(context) }
+                            startRecognition(context)
                         } else {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
@@ -363,5 +362,50 @@ private fun RecognitionError(
         androidx.compose.material3.TextButton(onClick = onDismiss) {
             Text(stringResource(R.string.done))
         }
+    }
+}
+
+/**
+ * FIX (the "should keep working when the app is minimized" report): this
+ * used to be `scope.launch { MusicRecognitionService.recognize(context) }`
+ * at all three call sites in this screen — a coroutine scoped to this
+ * composable's own composition, via `rememberCoroutineScope()`. That
+ * coroutine is cancelled the moment this screen leaves composition, which
+ * happens on backgrounding/navigation, well before a 10-second recording +
+ * network round trip can finish — recognition would simply die silently.
+ *
+ * [RecognitionForegroundService] already existed and already does this
+ * correctly (a real foreground service, independent of any Activity's
+ * lifecycle, with a persistent notification) — but it was only reachable
+ * from the Quick Settings tile (`MusicRecognizerTileService`) and
+ * `RecognitionLaunchActivity`, never from this in-app screen, which is
+ * presumably how most users actually trigger recognition day to day. This
+ * routes through the exact same service instead of duplicating
+ * `MusicRecognitionService.recognize()`'s call site a third time — see
+ * `RecognitionLaunchActivity.startRecognitionService()` for the identical
+ * pattern this was ported from. The UI keeps working exactly as before
+ * with zero other changes needed: this screen already observes
+ * `MusicRecognitionService.recognitionStatus` (a shared, app-wide
+ * StateFlow), which the service updates as it progresses — starting the
+ * work via a Service instead of a local coroutine doesn't change how the
+ * result gets back to this screen, only whether the work itself survives
+ * this screen going away.
+ */
+private fun startRecognition(context: android.content.Context) {
+    val serviceIntent = android.content.Intent(context, RecognitionForegroundService::class.java)
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        try {
+            context.startForegroundService(serviceIntent)
+        } catch (e: Exception) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+                e is android.app.ForegroundServiceStartNotAllowedException
+            ) {
+                // Ignored -- matches RecognitionLaunchActivity's existing handling.
+            } else {
+                throw e
+            }
+        }
+    } else {
+        context.startService(serviceIntent)
     }
 }
