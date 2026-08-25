@@ -1,43 +1,32 @@
+/*
+ * Velune - by Nikhil
+ * Nikhil
+ * Licensed Under GPL-3.0
+ */
+
 package com.nikhil.yt.campaign
 
 /**
- * A single promoted-content banner. Everything on this class is either
- * something a human typed into the campaigns table, a real count Velune
- * measured, or metadata resolved live from YouTube — there is no
- * generated/projected/simulated field anywhere on it. If a future change
- * wants to add one, that's a signal to stop and reconsider the feature,
- * not extend this class — see CampaignRepository.kt's class doc.
+ * A single promoted-content card. Sourced from the `track_campaigns`
+ * system via [CampaignRepository.fetchActiveCampaigns].
+ *
+ * All fields come from Supabase RPC responses or live YouTube resolution.
+ * No generated/projected/simulated fields exist on this class.
  */
 data class CampaignCard(
-    val id: String,
-    /** Extracted from the campaign row's source_url by
-     * [CampaignUrlResolver] — the id actually used to queue playback. */
-    val songId: String,
-    /** Resolved live from YouTube at fetch time (CampaignUrlResolver),
-     * never typed into the table directly — one source of truth, and it
-     * can never go stale the way a manually-copied title/thumbnail could. */
-    val title: String,
-    val artist: String,
-    val thumbnailUrl: String,
-    /**
-     * True only if a human reviewer approved this campaign for the
-     * promoted slot — a moderation flag, not a claim about the artist's
-     * identity, label status, or any measured popularity.
-     */
-    val certified: Boolean,
-    /**
-     * True only if a human truthfully marked this as pointing at a
-     * genuine YouTube livestream. Velune has no Radio/Podcast/Show
-     * content types — songs and videos from YouTube are the only content
-     * this app plays, and a video is the only one of those that can ever
-     * really be "live." This is never inferred or defaulted to true;
-     * whoever creates the campaign row is asserting a fact about their
-     * own content, same honesty bar as [certified]. Rendered as the red
-     * LIVE badge — see CampaignBanner's doc.
-     */
-    val isLive: Boolean,
-    /** Real play count, incremented server-side once per actual playback
-     * start via the increment_campaign_play RPC — never client-computed. */
-    val playCount: Long,
-    val ctaLabel: String,
+    val id: String,                 // campaign_id (UUID)
+    val songId: String,             // YouTube video ID (extracted from tracks table)
+    val trackId: String,            // track_id (UUID in tracks table)
+    val artistId: String,           // artist_id (UUID in users table)
+    val title: String,              // Resolved from YouTube or fallback to track_title
+    val artist: String,             // Resolved from YouTube or fallback to artist_name
+    val thumbnailUrl: String,       // Resolved from YouTube or fallback to cover_url
+    val totalStreams: Long,         // Blended real + seeded from track_campaigns
+    val trendingScore: Double,      // Algorithmic score from get_trending_campaigns
+    val geographicTier: String,     // local | regional | national | global
+    val currentStage: String,       // planting | germination | root_system | branching | full_bloom
+    val certified: Boolean,         // Derived from stage (branching+ = true) or manual flag
+    val isLive: Boolean,            // Derived from metadata or manual flag
+    val playCount: Long,            // Alias for totalStreams (UI compatibility)
+    val ctaLabel: String,           // Dynamic based on stage: Discover → Trending → Hot → Viral → Charting
 )

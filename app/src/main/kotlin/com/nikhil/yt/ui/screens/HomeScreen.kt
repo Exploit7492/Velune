@@ -135,25 +135,18 @@ fun HomeScreen(
             YouTube.queue(listOf(campaign.songId)).onSuccess { list ->
                 val mediaMetadata = list.firstOrNull()?.toMediaMetadata()
                 if (mediaMetadata != null) {
-                    // Mark this campaign as "the thing currently loading"
-                    // before playback starts, so Player.kt has it ready
-                    // the moment the player screen composes — see
-                    // CampaignPlaybackTracker's doc for the self-clearing
-                    // behavior once the user moves on to something else.
                     com.nikhil.yt.campaign.CampaignPlaybackTracker.setActive(campaign)
                     playerConnection.playQueue(YouTubeQueue.radio(mediaMetadata))
-                    // Unlike every other row on Home, a campaign tap goes
-                    // straight to the full player — this is a promoted
-                    // slot, meant to feel like an event, not a quiet
-                    // background start.
                     playerBottomSheetState?.expandSoft()
-                    // Real playback actually started — record exactly one
-                    // real play against this campaign's real count. Fire-
-                    // and-forget: a failed/slow network call here should
-                    // never hold up or fail the actual playback the user
-                    // is waiting on. See CampaignRepository.recordPlay's
-                    // doc for why this is safe to not await.
-                    launch { campaignRepository.recordPlay(campaign.id) }
+                    // Record the stream (fire-and-forget)
+                    launch {
+                        val countryCode = java.util.Locale.getDefault().country
+                        campaignRepository.recordPlay(
+                            campaignId = campaign.id,
+                            userId = "anonymous", // TODO: replace with real auth user ID
+                            countryCode = countryCode,
+                        )
+                    }
                 }
             }
         }
