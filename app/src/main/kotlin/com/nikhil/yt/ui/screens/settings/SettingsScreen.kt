@@ -582,22 +582,6 @@ fun SettingsScreen(
                             onClick = { navController.navigate("settings/misc") },
                         ),
                     )
-
-                    add(
-                        PremiumSettingsItem(
-                            icon = painterResource(R.drawable.info),
-                            title = stringResource(R.string.about),
-                            subtitle = stringResource(R.string.app_name),
-                            accentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            keywords = listOf(
-                                "about",
-                                "app info",
-                                "license",
-                                "contributors",
-                            ),
-                            onClick = { navController.navigate("settings/about") },
-                        ),
-                    )
                 },
             ),
         )

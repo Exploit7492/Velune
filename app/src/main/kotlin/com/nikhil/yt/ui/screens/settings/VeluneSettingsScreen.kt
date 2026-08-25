@@ -204,14 +204,6 @@ fun VeluneSettingsScreen(
                 )
             }
 
-            item {
-                SettingsItemScreenshotStyle(
-                    icon = painterResource(R.drawable.info),
-                    title = "About",
-                    onClick = { navController.navigate("settings/about") }
-                )
-            }
-
             item { Spacer(Modifier.height(32.dp)) }
         }
 

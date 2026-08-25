@@ -65,7 +65,6 @@ import com.nikhil.yt.ui.screens.playlist.OnlinePlaylistScreen
 import com.nikhil.yt.ui.screens.playlist.TopPlaylistScreen
 import com.nikhil.yt.ui.screens.playlist.CachePlaylistScreen
 import com.nikhil.yt.ui.screens.search.OnlineSearchResult
-import com.nikhil.yt.ui.screens.settings.AboutScreen
 import com.nikhil.yt.ui.screens.settings.AppearanceSettings
 import com.nikhil.yt.ui.screens.settings.CustomizeBackground
 import com.nikhil.yt.ui.screens.settings.BackupAndRestore
@@ -384,9 +383,6 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/discord/login") {
         DiscordLoginScreen(navController)
-    }
-    composable("settings/about") {
-        AboutScreen(navController, scrollBehavior)
     }
     composable("settings/po_token") {
         PoTokenScreen(navController, scrollBehavior)

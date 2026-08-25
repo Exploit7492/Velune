@@ -15,7 +15,6 @@ data class SearchableSetting(
 @Composable
 fun getAllSearchableSettings(): List<SearchableSetting> {
     return listOf(
-            SearchableSetting(stringResource(R.string.about), stringResource(R.string.about_desc), "About", "settings/about"),
             SearchableSetting(stringResource(R.string.account), stringResource(R.string.account_desc), "Account", "settings/account"),
             SearchableSetting(stringResource(R.string.action_exported), stringResource(R.string.action_exported_desc), "Appearance", "settings/appearance"),
             SearchableSetting(stringResource(R.string.action_logout), stringResource(R.string.action_logout_desc), "Account", "settings/account"),
