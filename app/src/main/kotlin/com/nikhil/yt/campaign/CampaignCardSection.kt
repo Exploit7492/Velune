@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nikhil.yt.R
+import kotlinx.coroutines.launch
 
 /**
  * Below this real play count, the card shows a "New" pill instead of the
@@ -74,6 +76,11 @@ private fun formatPlayCount(count: Long): String = when {
  * been configured yet — see [CampaignRepository]'s empty-list behavior in
  * both cases. No placeholder/skeleton card either: an empty promo slot
  * isn't something worth occupying space to announce.
+ *
+ * ## Play Recording
+ * Every tap on a campaign card records a play via [CampaignRepository.recordPlay]
+ * before starting playback. This is a fire-and-forget call — the user
+ * experience is never blocked by the network round-trip.
  */
 @Composable
 fun CampaignCardSection(
@@ -82,6 +89,7 @@ fun CampaignCardSection(
     modifier: Modifier = Modifier,
 ) {
     var campaigns by remember { mutableStateOf<List<CampaignCard>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         campaigns = repository.fetchActiveCampaigns()
@@ -96,7 +104,13 @@ fun CampaignCardSection(
             items(campaigns, key = { it.id }) { campaign ->
                 CampaignBanner(
                     campaign = campaign,
-                    onClick = { onCampaignClick(campaign) },
+                    onClick = {
+                        // Record the play fire-and-forget before starting playback
+                        scope.launch {
+                            repository.recordPlay(campaign.id)
+                        }
+                        onCampaignClick(campaign)
+                    },
                 )
             }
         }
@@ -140,8 +154,6 @@ private fun CampaignBanner(
             )
             // Moderation badge — shown only when a human reviewer actually
             // approved this campaign, see CampaignCard.certified's doc.
-            // Bleeds slightly past the corner, same placement Mavins used
-            // for the real art asset this is ported from.
             if (campaign.certified) {
                 Image(
                     painter = painterResource(
@@ -170,9 +182,6 @@ private fun CampaignBanner(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                // Real, human-asserted live-stream flag only — see
-                // CampaignCard.isLive's doc for why this is scoped to
-                // genuine YouTube livestreams and nothing else.
                 if (campaign.isLive) {
                     Spacer(Modifier.width(6.dp))
                     LiveBadge(color = liveRed)

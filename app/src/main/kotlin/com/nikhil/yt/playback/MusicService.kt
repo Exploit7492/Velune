@@ -140,6 +140,7 @@ import com.nikhil.yt.constants.SkipSilenceKey
 import com.nikhil.yt.constants.SmartTrimmerKey
 import com.nikhil.yt.constants.StopMusicOnTaskClearKey
 import com.nikhil.yt.constants.TogetherClientIdKey
+import com.nikhil.yt.constants.CampaignDeviceIdKey
 import com.nikhil.yt.constants.YtmSyncKey
 import com.nikhil.yt.db.MusicDatabase
 import com.nikhil.yt.db.entities.AlbumEntity
@@ -500,6 +501,14 @@ class MusicService :
         if (existing.isNotBlank()) return existing
         val generated = java.util.UUID.randomUUID().toString()
         dataStore.edit { prefs -> prefs[TogetherClientIdKey] = generated }
+        return generated
+    }
+
+    private suspend fun getOrCreateCampaignDeviceId(): String {
+        val existing = dataStore.getAsync(CampaignDeviceIdKey)?.trim().orEmpty()
+        if (existing.isNotBlank()) return existing
+        val generated = java.util.UUID.randomUUID().toString()
+        dataStore.edit { prefs -> prefs[CampaignDeviceIdKey] = generated }
         return generated
     }
 
@@ -3605,6 +3614,29 @@ class MusicService :
         }
     }
     ensurePresenceManager()
+    // ── Campaign stream recording ─────────────────────────────────
+    // If the currently playing item is a campaign song, record the stream.
+    val campaignId = CampaignPlaybackTracker.current.value?.id
+    if (campaignId != null) {
+        val currentSongId = (mediaItem?.metadata ?: player.currentMetadata)?.id?.trim().orEmpty()
+        val trackedSongId = CampaignPlaybackTracker.current.value?.songId
+        if (currentSongId == trackedSongId) {
+            scope.launch(SilentHandler) {
+                val deviceId = getOrCreateCampaignDeviceId()
+                CampaignRepository().recordCampaignStream(
+                    campaignId = campaignId,
+                    userId = deviceId,
+                    listenDurationSeconds = (player.currentPosition / 1000).toInt(),
+                    isFullListen = player.currentPosition >= (player.duration * 0.8).coerceAtLeast(1)
+                )
+            }
+        }
+    }
+    CampaignPlaybackTracker.clearIfNot(
+        (mediaItem?.metadata ?: player.currentMetadata)?.id?.trim().orEmpty()
+    )
+    // ───────────────────────────────────────────────────────────────
+
 }
 
     override fun onPlaybackStateChanged(@Player.State playbackState: Int) {

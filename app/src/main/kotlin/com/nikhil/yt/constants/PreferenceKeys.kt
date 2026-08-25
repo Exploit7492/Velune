@@ -815,3 +815,6 @@ val EqPitchSemitonesKey = floatPreferencesKey("eq_pitch_semitones")
 val EqConvolutionEnabledKey = booleanPreferencesKey("eq_convolution_enabled")
 val EqConvolutionIrPathKey = stringPreferencesKey("eq_convolution_ir_path")
 val EqConvolutionIrNameKey = stringPreferencesKey("eq_convolution_ir_name")
+
+// Campaign system — persistent anonymous device ID for stream attribution
+val CampaignDeviceIdKey = stringPreferencesKey("campaign_device_id")

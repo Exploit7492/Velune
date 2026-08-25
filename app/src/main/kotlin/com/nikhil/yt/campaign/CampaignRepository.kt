@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import java.util.UUID
 
 class CampaignRepository {
 
@@ -33,30 +34,37 @@ class CampaignRepository {
         return url to anonKey
     }
 
-    suspend fun fetchActiveCampaigns(limit: Int = 10): List<CampaignCard> = withContext(Dispatchers.IO) {
+    /**
+     * Fetch trending campaigns via the get_trending_campaigns RPC.
+     * Returns resolved [CampaignCard] objects ready for UI display.
+     */
+    suspend fun fetchActiveCampaigns(
+        limit: Int = 10,
+        countryCode: String? = null,
+        genre: String? = null
+    ): List<CampaignCard> = withContext(Dispatchers.IO) {
         val (url, anonKey) = config() ?: return@withContext emptyList()
         try {
             val request = Request.Builder()
                 .url(
-                    "$url/rest/v1/track_campaigns" +
-                        "?is_active=eq.true" +
-                        "&is_paused=eq.false" +
-                        "&select=id,source_url,resolved_song_id,total_streams,current_stage" +
-                        "&order=created_at.desc" +
-                        "&limit=$limit"
+                    "$url/rest/v1/rpc/get_trending_campaigns" +
+                        "?p_limit=$limit" +
+                        (countryCode?.let { "&p_country_code=$it" } ?: "") +
+                        (genre?.let { "&p_genre=$it" } ?: "")
                 )
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
-                .get()
+                .header("Content-Type", "application/json")
+                .post("{}".toRequestBody(jsonMediaType))
                 .build()
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchActiveCampaigns: HTTP ${response.code}")
+                    Timber.tag(TAG).w("fetchActiveCampaigns: HTTP ${'$'}{response.code}")
                     return@use emptyList()
                 }
                 val body = response.body?.string().orEmpty()
-                parseCampaignRows(body).mapNotNull { row ->
+                parseTrendingRows(body).mapNotNull { row ->
                     CampaignUrlResolver.resolve(row)
                 }
             }
@@ -66,6 +74,10 @@ class CampaignRepository {
         }
     }
 
+    /**
+     * Fetch active campaigns as raw MediaItems for queue injection.
+     * Used by CampaignInjectedQueue to get playable campaign songs.
+     */
     suspend fun fetchActiveCampaignMediaItems(): List<MediaItem> = withContext(Dispatchers.IO) {
         val campaigns = fetchActiveCampaigns(limit = 10)
         if (campaigns.isEmpty()) return@withContext emptyList()
@@ -76,52 +88,93 @@ class CampaignRepository {
                 val metadata = result?.firstOrNull()?.toMediaMetadata()
                 metadata?.toMediaItem()
             } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Failed to resolve campaign ${campaign.id}")
+                Timber.tag(TAG).e(e, "Failed to resolve media item for ${'$'}{campaign.songId}")
                 null
             }
         }
     }
 
-    suspend fun recordPlay(campaignId: String) = withContext(Dispatchers.IO) {
+    /**
+     * Record a campaign stream play via the record_campaign_stream RPC.
+     * Called whenever a campaign song is played (full or partial listen).
+     *
+     * @param campaignId The campaign UUID
+     * @param userId The listener's user UUID (real user or seed)
+     * @param listenDurationSeconds How many seconds the user listened
+     * @param countryCode ISO country code of the listener
+     * @param isFullListen Whether the user listened to the full track
+     */
+    suspend fun recordCampaignStream(
+        campaignId: String,
+        userId: String? = null,
+        listenDurationSeconds: Int = 0,
+        countryCode: String? = null,
+        isFullListen: Boolean = false
+    ) = withContext(Dispatchers.IO) {
         val (url, anonKey) = config() ?: return@withContext
         try {
             val payload = JSONObject().apply {
-                put("campaign_id_input", campaignId)
+                put("p_campaign_id", campaignId)
+                put("p_user_id", userId ?: UUID.randomUUID().toString())
+                put("p_listen_duration_seconds", listenDurationSeconds)
+                put("p_country_code", countryCode ?: "unknown")
+                put("p_is_full_listen", isFullListen)
             }
             val request = Request.Builder()
-                .url("$url/rest/v1/rpc/increment_campaign_play")
+                .url("$url/rest/v1/rpc/record_campaign_stream")
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
                 .header("Content-Type", "application/json")
                 .post(payload.toString().toRequestBody(jsonMediaType))
                 .build()
+
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("recordPlay: HTTP ${response.code}")
+                    Timber.tag(TAG).w("recordCampaignStream: HTTP ${'$'}{response.code}")
+                } else {
+                    Timber.tag(TAG).d("Recorded stream for campaign $campaignId")
                 }
             }
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "recordPlay failed")
+            Timber.tag(TAG).e(e, "recordCampaignStream failed for $campaignId")
         }
     }
 
-    private fun parseCampaignRows(body: String): List<CampaignRow> {
+    /**
+     * Legacy increment wrapper — redirects to the new RPC.
+     * Kept for backward compatibility with existing call sites.
+     */
+    suspend fun recordPlay(campaignId: String) {
+        recordCampaignStream(campaignId = campaignId)
+    }
+
+    private fun parseTrendingRows(body: String): List<CampaignRow> {
         val array = try {
             JSONArray(body)
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Malformed response")
+            Timber.tag(TAG).e(e, "Malformed trending response")
             return emptyList()
         }
         return (0 until array.length()).mapNotNull { i ->
             val row = array.optJSONObject(i) ?: return@mapNotNull null
-            val id = row.optString("id", "")
+            val campaignId = row.optString("campaign_id", "")
             val sourceUrl = row.optString("source_url", "")
-            if (id.isBlank() || sourceUrl.isBlank()) return@mapNotNull null
+            if (campaignId.isBlank()) return@mapNotNull null
+
             CampaignRow(
-                id = id,
-                sourceUrl = sourceUrl,
+                id = campaignId,
+                sourceUrl = sourceUrl.ifBlank { "https://youtube.com/watch?v=${'$'}{row.optString("resolved_song_id", "")}" },
                 resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() },
-                certified = false,
+                trackId = row.optString("track_id", "").takeIf { it.isNotBlank() },
+                artistId = row.optString("artist_id", "").takeIf { it.isNotBlank() },
+                totalStreams = row.optLong("total_streams", 0L),
+                trendingScore = row.optDouble("trending_score", 0.0),
+                geographicTier = row.optString("geographic_tier", "local"),
+                currentStage = row.optString("current_stage", "planting"),
+                certified = when (row.optString("current_stage", "planting")) {
+                    "branching", "full_bloom" -> true
+                    else -> false
+                },
                 isLive = false,
                 playCount = row.optLong("total_streams", 0L),
                 ctaLabel = when (row.optString("current_stage", "planting")) {
