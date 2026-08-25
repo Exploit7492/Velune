@@ -2304,12 +2304,28 @@ file for how fast that happens in this repo).
    nothing more productive to do on it from a sandbox with no path to
    `amp.shazam.com`.
 
-2. **"Recently updated" text on the home page should never show.**
-   User: "even if the app was updated the user should [not] see any
-   text of such." Sounds like a banner/label tied to an app-update or
-   first-launch-after-update check. Find where it's sourced (likely
-   compares a stored version code/name against the current one) and
-   remove the UI entirely, not just hide it conditionally.
+2. **DONE — "Recently updated" text on the home page should never show.**
+   Original ticket text (kept for reference — the actual root cause
+   turned out different from the initial guess): "even if the app was
+   updated the user should [not] see any text of such." Read initially
+   as a banner/label tied to an app-update or first-launch-after-update
+   check — that guess was wrong; grepping every version-code/first-
+   launch/changelog code path in the app turned up nothing that matches
+   "home page, right before a section's cards."
+
+   **Root cause, confirmed directly with the user** ("It's a text just
+   before the trending section cards"): `HomePage.Section.label` — this
+   is YouTube Music's own server-side "strapline" text
+   (`musicCarouselShelfBasicHeaderRenderer.strapline`, parsed in
+   `innertube/.../pages/HomePage.kt`), not anything this app authors —
+   was being passed straight through to `NavigationTitle`'s `label`
+   slot in `HomePageSectionTitle` (`HomeScreenComponents.kt`), which
+   renders it directly above whichever home section's title/cards it
+   belongs to. Confirmed via grep this is the *only* call site in the
+   app that ever wires `section.label` through to something rendered —
+   every other `NavigationTitle` usage passes a fixed, locally-authored
+   label (or none). Fix: stop passing `section.label` there;
+   `section.title` (the actual section name) is untouched.
 
 3. **Liquid glass setting toggles but visibly does nothing.** User: "I
    turn it on the whole app remains the same like nothing happened."
