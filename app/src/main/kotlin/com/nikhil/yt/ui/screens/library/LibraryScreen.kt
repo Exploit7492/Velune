@@ -52,6 +52,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +86,12 @@ fun LibraryScreen(navController: NavController) {
     var showSidebar by remember { mutableStateOf(false) }
     var showFolderBrowser by remember { mutableStateOf(false) }
     var showPermissionDenied by remember { mutableStateOf(false) }
+    // Bottom edge of the page header (global header inset + this screen's own
+    // mode-toggle row), in window coordinates. The sidebar panel is positioned
+    // below this so it never overlaps the header — see LibrarySidebar's
+    // topOffset param.
+    var sidebarTopOffset by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
 
     androidx.activity.compose.BackHandler(enabled = selectionMode || selectedFolder != null || showSidebar) {
         when {
@@ -218,14 +227,22 @@ fun LibraryScreen(navController: NavController) {
                     onModeChange = { viewModel.setLibraryMode(it) },
                     onAddClick = { showFolderBrowser = true },
                     onMenuClick = { showSidebar = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            sidebarTopOffset = with(density) { coordinates.boundsInWindow().bottom.toDp() }
+                        },
                 )
             } else {
                 SelectionHeader(
                     selectedCount = selectedCount,
                     onClear = { viewModel.exitSelectionMode() },
                     onSelectAll = { viewModel.selectAll(viewModel.watchedFolders.value.map { it.id }) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            sidebarTopOffset = with(density) { coordinates.boundsInWindow().bottom.toDp() }
+                        },
                 )
             }
 
@@ -290,6 +307,7 @@ fun LibraryScreen(navController: NavController) {
         visible = showSidebar,
         onDismiss = { showSidebar = false },
         currentMode = libraryMode,
+        topOffset = sidebarTopOffset,
         onModeChange = { viewModel.setLibraryMode(it) },
         onNavigate = { route ->
             showSidebar = false

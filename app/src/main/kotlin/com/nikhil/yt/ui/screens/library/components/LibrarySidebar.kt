@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import com.nikhil.yt.constants.LibraryMode
 import com.nikhil.yt.constants.TopSize
 import com.nikhil.yt.utils.rememberPreference
@@ -70,6 +71,7 @@ fun LibrarySidebar(
     currentMode: LibraryMode,
     onModeChange: (LibraryMode) -> Unit,
     onNavigate: (String) -> Unit,
+    topOffset: Dp = 0.dp,
 ) {
     val primary = MaterialTheme.colorScheme.primary
     // Same route every other "Most Played" entry point uses
@@ -127,16 +129,21 @@ fun LibrarySidebar(
             )
         }
 
-        // Panel — icon-only, content-width, no title
+        // Panel — icon-only, content-width, no title. Positioned below the
+        // page header (topOffset = header's bottom edge in window
+        // coordinates) so it never overlaps it and is fully visible, per
+        // the user's report that it previously sat too high.
         AnimatedVisibility(
             visible = visible,
             enter = slideInHorizontally { it },
             exit = slideOutHorizontally { it },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = topOffset + 8.dp),
         ) {
             Column(
                 modifier = Modifier
                     .width(64.dp)
-                    .align(Alignment.CenterEnd)
                     .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     .border(
                         0.5.dp,
