@@ -429,7 +429,7 @@ fun SettingsScreen(
                     PremiumSettingsItem(
                         icon = painterResource(R.drawable.music_note),
                         title = stringResource(R.string.spotify_import),
-                        subtitle = stringResource(R.string.spotify_import_desc),
+                        subtitle = stringResource(R.string.spotify_import_desc, stringResource(R.string.app_name)),
                         accentColor = MaterialTheme.colorScheme.primary,
                         keywords = listOf(
                             "spotify",

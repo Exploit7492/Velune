@@ -240,7 +240,7 @@ private fun SpotifyLoginPrompt(onLogin: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.spotify_import_desc),
+            text = stringResource(R.string.spotify_import_desc, stringResource(R.string.app_name)),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant

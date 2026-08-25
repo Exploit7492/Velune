@@ -151,13 +151,13 @@ fun UpdateScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "⚠️ By using Velune's in-app updater, you are getting updates straight from the developer. These updates are not checked by whatever app store you might have installed Velune from.",
+                        text = "⚠️ By using ${stringResource(R.string.app_name)}'s in-app updater, you are getting updates straight from the developer. These updates are not checked by whatever app store you might have installed ${stringResource(R.string.app_name)} from.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
 
                     Text(
-                        text = "Velune provides two download channels for builds:",
+                        text = "${stringResource(R.string.app_name)} provides two download channels for builds:",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
@@ -236,13 +236,13 @@ fun UpdateScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "⚠️ By using Velune's in-app updater, you are getting updates straight from the developer. These updates are not checked by whatever app store you might have installed Velune from.",
+                        text = "⚠️ By using ${stringResource(R.string.app_name)}'s in-app updater, you are getting updates straight from the developer. These updates are not checked by whatever app store you might have installed ${stringResource(R.string.app_name)} from.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
 
                     Text(
-                        text = "Velune provides two download channels for builds:",
+                        text = "${stringResource(R.string.app_name)} provides two download channels for builds:",
                         style = MaterialTheme.typography.bodyMedium
                     )
 

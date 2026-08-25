@@ -94,7 +94,7 @@ class CrashActivity : ComponentActivity() {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_report_subject))
+                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_report_subject, getString(R.string.app_name)))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             
@@ -104,7 +104,7 @@ class CrashActivity : ComponentActivity() {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, crashLog)
-                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_report_subject))
+                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_report_subject, getString(R.string.app_name)))
             }
             startActivity(Intent.createChooser(shareIntent, getString(R.string.crash_share_title)))
         }
@@ -173,7 +173,7 @@ fun CrashScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
-                text = stringResource(R.string.crash_description),
+                text = stringResource(R.string.crash_description, stringResource(R.string.app_name)),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

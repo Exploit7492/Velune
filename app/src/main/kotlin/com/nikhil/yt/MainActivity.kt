@@ -1073,7 +1073,7 @@ class MainActivity : ComponentActivity() {
                                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                                             Image(
                                                                 painter = painterResource(id = R.drawable.ic_velune_concept),
-                                                                contentDescription = "Velune Logo",
+                                                                contentDescription = stringResource(R.string.app_name) + " Logo",
                                                                 modifier = Modifier
                                                                     .size(35.dp)
                                                                     .padding(end = 6.dp)

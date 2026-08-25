@@ -92,7 +92,7 @@ fun VeluneSettingsScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_velune_concept),
-                            contentDescription = "Velune Logo",
+                            contentDescription = stringResource(R.string.app_name) + " Logo",
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(12.dp)

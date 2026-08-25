@@ -286,7 +286,7 @@ fun ThemeCreatorScreen(
                     onClick = {
                         val safeName = themeName
                             .trim()
-                            .ifBlank { "Velune Theme" }
+                            .ifBlank { "${context.getString(R.string.app_name)} Theme" }
                             .replace(Regex("[^a-zA-Z0-9 _\\-]"), "_")
                             .take(64)
                         exportLauncher.launch("$safeName.json")

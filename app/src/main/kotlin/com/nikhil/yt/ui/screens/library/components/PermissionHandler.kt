@@ -8,6 +8,7 @@ package com.nikhil.yt.ui.screens.library.components
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import com.nikhil.yt.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -95,7 +97,7 @@ fun PermissionDeniedScreen(
         )
 
         Text(
-            text = "Velune needs access to your storage to find and play your local music files.",
+            text = "${stringResource(R.string.app_name)} needs access to your storage to find and play your local music files.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
@@ -186,7 +188,7 @@ fun LocalMusicPermissionGate(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Velune needs access to your storage to find and play your local music files.",
+                text = "${stringResource(R.string.app_name)} needs access to your storage to find and play your local music files.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,

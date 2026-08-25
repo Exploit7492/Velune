@@ -809,7 +809,7 @@ class AxionEqViewModel @Inject constructor(
             
             val profile = SavedEQProfile(
                 id = "echo_tuning",
-                name = "Echo Tuning",
+                name = context.getString(R.string.app_name) + " Tuning",
                 deviceModel = "Equalizer",
                 bands = bands,
                 preamp = _preampDb.value.toDouble(),
