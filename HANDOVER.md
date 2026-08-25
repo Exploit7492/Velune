@@ -2447,11 +2447,38 @@ file for how fast that happens in this repo).
     and navigate to `"top_playlist/$topSize"`, matching every other
     entry point exactly.
 
-11. **Hamburger-menu sidebar (also opens via edge-swipe gesture) sits
-    too high, overlapping the page header.** User: it "should show
-    after the page header that position is perfect so the side bar is
-    fully seen" — i.e. the sidebar's top edge should start below
-    wherever the page header/top bar ends, not overlap or sit above it.
+11. **DONE this session — Hamburger-menu sidebar (also opens via
+    edge-swipe gesture) sat too high, overlapping the page header.**
+    User: it "should show after the page header that position is
+    perfect so the side bar is fully seen" — i.e. the sidebar's top
+    edge should start below wherever the page header/top bar ends, not
+    overlap or sit above it.
+
+    Root cause: this sidebar is `LibrarySidebar.kt`, rendered as a
+    top-level sibling in `LibraryScreen.kt` inside its own
+    `Box(Modifier.fillMaxSize())` — a full-screen overlay with no
+    awareness of the page header's height. The panel itself was
+    `Alignment.CenterEnd`, vertically centered over the *entire* screen
+    including the area under the header, so on shorter screens (or
+    with more sidebar items than currently) its top edge could land
+    under/behind the header instead of starting cleanly below it.
+
+    Fix: `LibraryScreen.kt` now measures the actual bottom edge of
+    whichever header row is currently showing (`LibraryModeHeader` or
+    `SelectionHeader`) via `onGloballyPositioned` + `boundsInWindow()`,
+    converts it to Dp with `LocalDensity`, and stores it in a new
+    `sidebarTopOffset` state var — this is window-coordinate based, not
+    parent-relative, so it stays correct even though the sidebar Box
+    and the header live in different parts of the composition tree.
+    That offset is passed into `LibrarySidebar` as a new `topOffset`
+    param; the panel is now `Alignment.TopEnd` with
+    `.padding(top = topOffset + 8.dp)` instead of `CenterEnd`, so it
+    always starts just below the header regardless of screen size or
+    which header variant (mode-toggle vs. selection) is active. The
+    density-conversion pattern (`with(density) { ...boundsInWindow()
+    .bottom.toDp() }`) mirrors what `FloatingNavigationToolbar.kt`
+    already does elsewhere in this codebase, rather than inventing a
+    new approach.
 
 12. **Video player: not edge-to-edge vertically (only horizontally
     right now); loading spinner should be a skeleton loader; next-song
