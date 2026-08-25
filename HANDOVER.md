@@ -2287,6 +2287,23 @@ file for how fast that happens in this repo).
    fastest way to check current live status on a real device before
    assuming anything further needs to change in `ShazamClient.kt`.
 
+   **Follow-up investigation (later session, same conclusion, no code
+   changed):** re-read `ShazamClient.kt` in full end to end — request
+   queuing, rate limiting, retry/backoff on 429s, per-status-code error
+   messages — nothing structurally wrong found. Also researched other
+   reverse-engineered Shazam clients externally for any known recent
+   header/URL requirement change that might explain the 5xx: found
+   nothing concrete, but did find corroborating evidence this is a real,
+   ongoing arms race rather than a simple missing-header bug — one
+   actively-maintained third-party client (ShazamIO, Python) has moved
+   its recognition core to Rust specifically to keep up with Shazam's
+   evolving anti-bot defenses. Deliberately did **not** make speculative
+   header/URL tweaks — unverifiable guesses here would just cost the
+   user a wasted test cycle if wrong. **This item still needs real-device
+   testing before any further code changes are worth making** — there is
+   nothing more productive to do on it from a sandbox with no path to
+   `amp.shazam.com`.
+
 2. **"Recently updated" text on the home page should never show.**
    User: "even if the app was updated the user should [not] see any
    text of such." Sounds like a banner/label tied to an app-update or
