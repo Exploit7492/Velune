@@ -2327,12 +2327,58 @@ file for how fast that happens in this repo).
    label (or none). Fix: stop passing `section.label` there;
    `section.title` (the actual section name) is untouched.
 
-3. **Liquid glass setting toggles but visibly does nothing.** User: "I
-   turn it on the whole app remains the same like nothing happened."
-   This is a toggle that isn't wired to anything, or is wired to
-   something that isn't actually applied anywhere in the render path —
-   find the setting's DataStore/preference key, then find (or discover
-   there isn't) anywhere in the UI that actually reads it.
+3. **DONE this session — Liquid glass setting toggles but visibly does
+   nothing.** User: "I turn it on the whole app remains the same like
+   nothing happened."
+
+   Confirmed root cause first: the 13 `LiquidGlass*` DataStore keys
+   (written by `GlassEffectSettings.kt`) were never read anywhere.
+   Two dead-end implementations already existed side by side — a
+   `GlassEffectStubs.kt` stub that always no-op'd, and a fully-built
+   `GlassNavigationBar`/`GlassMiniPlayer` pair that looked correct but
+   was never called from anywhere *and*, on inspection, faked its
+   backdrop with a flat dimmed rect (`rememberCanvasBackdrop { drawRect(dimColor) }`)
+   instead of actually sampling the screen behind it — so even wiring
+   it up as-is would have blurred a solid color, not the app.
+
+   Fix pulled the real implementation from the echo-music sibling
+   project rather than reinventing it: vendored the backdrop-blur
+   library (Kyant0/backdrop, Apache-2.0, attribution preserved) under
+   `ui/component/backdrop/`, repackaged to `com.nikhil.yt.*` (echo-music
+   vendors it too, for the same reason — binary AARs built against
+   newer Compose broke at runtime for them). Rewrote
+   `GlassEffectStubs.kt` with a real `GlassEffectConfig`, a
+   `GlassComponent` enum (`PLAYER`/`MINI_PLAYER`/`NAV_BAR`) with
+   per-component toggles, and a real `Modifier.liquidGlass()`.
+   `MainActivity` now reads all 13 keys, builds the config, and
+   provides a genuine content-sampling `LocalAppBackdrop`
+   (`rememberLayerBackdrop { drawRect(base); drawContent() }` applied
+   via `Modifier.layerBackdrop` to the actual content root) — this
+   also fixes the flat-rect fake-backdrop bug, not just the wiring.
+
+   Wired into the three surfaces that are actually rendered at
+   runtime: `FluidSlidingNavigationBar` (the live nav bar —
+   `GlassNavigationBar` was dead code and was left alone),
+   `MiniPlayer`'s `NewMiniPlayer`, and `Player.kt`'s `PlayerBackground`
+   layer (an *additive* frosted pane on top of the existing
+   art/gradient/blur background, not a replacement — deliberately
+   didn't touch the shared `BottomSheet` component or any gesture/sheet
+   logic). The player layer uses `applyEdgeEffects=false` and a heavier
+   `PLAYER_BLUR_MULTIPLIER`: on a surface that large the lens
+   refraction rim reads as a stray band of light rather than a glass
+   edge. `AppNavigation.kt`'s `AppNavigationBar` (also dead code, never
+   called) was updated only enough to keep compiling against the new
+   config shape.
+
+   **NOT build-verified** — no Android SDK available when this was
+   written. Checked by hand (every vendored-library call site
+   cross-referenced against the actual source files rather than
+   assumed, brace balance, no stale references to the old config
+   shape anywhere in the tree), but a real `./gradlew assembleDebug`
+   or Android Studio sync is a required next step before this ships,
+   not optional. Also worth a look on a real device:
+   `applyEdgeEffects=false` on the player was a judgment call based on
+   reading the effect code, not something seen rendered.
 
 4. **DONE this session — Hardcoded "Echo Music"/"Velune" strings instead
    of the dynamic app name, in multiple places.**
