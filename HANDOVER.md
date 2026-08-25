@@ -2544,10 +2544,50 @@ file for how fast that happens in this repo).
       fixes both, but confirm that once item 7 is actually being worked
       on rather than assuming they're one ticket.
 
-13. **Status bar should be hidden on every screen, app-wide.** Not
-    per-screen opt-in — the user wants this as a global default across
-    the whole app (immersive/edge-to-edge with the status bar hidden
-    everywhere, not just on the player or video screens).
+13. **DONE this session — Status bar should be hidden on every screen,
+    app-wide.** Not per-screen opt-in — the user wants this as a global
+    default across the whole app (immersive/edge-to-edge with the status
+    bar hidden everywhere, not just on the player or video screens).
+
+    Root cause: `MainActivity` only hid the status bar while
+    `isYearInMusicScreen` was true, and explicitly called
+    `controller.show(WindowInsetsCompat.Type.statusBars())` for every
+    other screen via a `LaunchedEffect(isYearInMusicScreen)` — exactly
+    the per-screen opt-in behavior reported. Fixed by hiding it
+    unconditionally in `onCreate` (so it's hidden from the first frame,
+    not just once Compose recomposes) and simplifying that
+    `LaunchedEffect` to always hide rather than branch — kept
+    `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` in both places so a swipe
+    still reveals it temporarily (it re-hides itself, standard Android
+    immersive behavior — not something to change unless the user
+    specifically objects to it).
+
+    Also found and fixed a real regression this change would otherwise
+    have caused: `AmbientModeScreen.kt`'s `onDispose` called
+    `show(WindowInsetsCompat.Type.systemBars())` (status **and**
+    navigation bars) when leaving that screen — which would have
+    silently undone the new global hide the instant someone exited
+    ambient mode. Narrowed it to `show(Type.navigationBars())` only.
+    Confirmed via grep that `MainActivity.kt` and `AmbientModeScreen.kt`
+    are the *only* two files in the app touching
+    `WindowInsetsControllerCompat`/`statusBars()`/`systemBars()` (and
+    that there's no legacy `systemUiVisibility`/`SYSTEM_UI_FLAG_*` usage
+    anywhere either), so there's no other hidden place re-showing it.
+
+    There's also an orphaned `HideStatusBarOnFullscreenKey` DataStore
+    preference with a real toggle in Appearance settings
+    (`AppearanceSettings.kt`) that was **already** dead before this
+    session — the key is written but never read anywhere, same failure
+    pattern as the Liquid Glass toggle in item 3. This session's fix
+    makes that toggle even more moot (status bar is now always hidden
+    regardless of its value), but it wasn't touched — removing or
+    repurposing a settings entry is a separate decision the user should
+    make explicitly, not something to infer from this ticket. Flagging
+    it here so the next session doesn't have to rediscover it.
+
+    Not verified on-device (see the note elsewhere in this file about
+    this sandbox's build limitations) — verified via full-repo grep for
+    every window-insets/status-bar touchpoint plus manual diff review.
 
 ## 6. Reconnaissance on the still-open 2026-08 backlog items — not fixed
 this session, but real findings so the next session isn't starting from
