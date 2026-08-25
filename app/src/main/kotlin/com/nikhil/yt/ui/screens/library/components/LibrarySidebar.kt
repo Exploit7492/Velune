@@ -54,6 +54,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nikhil.yt.constants.LibraryMode
+import com.nikhil.yt.constants.TopSize
+import com.nikhil.yt.utils.rememberPreference
 
 data class SidebarItem(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -70,6 +72,12 @@ fun LibrarySidebar(
     onNavigate: (String) -> Unit,
 ) {
     val primary = MaterialTheme.colorScheme.primary
+    // Same route every other "Most Played" entry point uses
+    // (LibraryMixScreen/LibraryPlaylistsScreen) — a real song count, not
+    // the literal word "Top". TopPlaylistViewModel does `top.toInt()` on
+    // this, so passing the label instead of the count crashes with
+    // NumberFormatException.
+    val (topSize) = rememberPreference(TopSize, defaultValue = "50")
 
     val items = listOf(
         SidebarItem(
@@ -85,7 +93,13 @@ fun LibrarySidebar(
         SidebarItem(
             icon = Icons.Outlined.CloudDownload,
             label = "Downloads",
-            action = { onNavigate("cache_playlist/downloaded"); onDismiss() },
+            // Real downloads live behind "downloaded", handled by
+            // AutoPlaylistViewModel (filters on DownloadUtil's
+            // Download.STATE_COMPLETED) — same route LibraryMixScreen/
+            // LibraryPlaylistsScreen already use correctly. cache_playlist
+            // is the *cache* screen (temp/streamed files), a different
+            // thing the user should never land on from "Downloads".
+            action = { onNavigate("auto_playlist/downloaded"); onDismiss() },
         ),
         SidebarItem(
             icon = Icons.Outlined.History,
@@ -95,7 +109,7 @@ fun LibrarySidebar(
         SidebarItem(
             icon = Icons.Outlined.TrendingUp,
             label = "Most Played",
-            action = { onNavigate("top_playlist/Top"); onDismiss() },
+            action = { onNavigate("top_playlist/$topSize"); onDismiss() },
         ),
     )
 

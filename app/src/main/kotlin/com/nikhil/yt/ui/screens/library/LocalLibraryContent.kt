@@ -50,6 +50,8 @@ import com.nikhil.yt.ui.screens.library.components.LocalEmptyState
 import com.nikhil.yt.ui.screens.library.components.QuickPill
 import com.nikhil.yt.ui.screens.library.components.SelectionBottomBar
 import com.nikhil.yt.viewmodels.LocalLibraryViewModel
+import com.nikhil.yt.constants.TopSize
+import com.nikhil.yt.utils.rememberPreference
 
 @Composable
 fun LocalLibraryContent(
@@ -121,6 +123,13 @@ fun BrowseLibraryContent(
     navController: NavController,
     onShowFolderBrowser: () -> Unit,
 ) {
+    // Same route every other "Most Played" entry point uses
+    // (LibraryMixScreen/LibraryPlaylistsScreen) — a real song count, not
+    // the literal word "Top". TopPlaylistViewModel does `top.toInt()` on
+    // this, so passing the label instead of the count crashes with
+    // NumberFormatException.
+    val (topSize) = rememberPreference(TopSize, defaultValue = "50")
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp),
@@ -152,7 +161,14 @@ fun BrowseLibraryContent(
                 },
                 label = "Downloads",
                 sub = "Offline listening",
-                onClick = { navController.navigate("cache_playlist/downloaded") },
+                // Real downloads live behind "downloaded", handled by
+                // AutoPlaylistViewModel (filters on DownloadUtil's
+                // Download.STATE_COMPLETED) — same route LibraryMixScreen/
+                // LibraryPlaylistsScreen already use correctly.
+                // cache_playlist is the *cache* screen (temp/streamed
+                // files), a different thing the user should never land on
+                // from "Downloads".
+                onClick = { navController.navigate("auto_playlist/downloaded") },
             )
         }
         item {
@@ -182,7 +198,7 @@ fun BrowseLibraryContent(
                 },
                 label = "Most Played",
                 sub = "Your top tracks",
-                onClick = { navController.navigate("top_playlist/Top") },
+                onClick = { navController.navigate("top_playlist/$topSize") },
             )
         }
         item {

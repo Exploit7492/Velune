@@ -1,4 +1,4 @@
-# Velune EQ/DSP Handover (v19)
+# Velune EQ/DSP Handover (v20)
 
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
@@ -2392,26 +2392,44 @@ file for how fast that happens in this repo).
    behavior with the user again once the Supabase schema (item 6) shows
    what data is actually available to work with, rather than guessing.
 
-9. **Library → Downloads page shows cache files, not actual downloads.**
-   User: "the user is never to see the cache files even though they
-   exist so on click on downloads route to the download page not cache
-   page." Sounds like the Downloads nav destination is currently
-   pointed at (or reading from) a cache directory/table instead of the
-   real downloaded-files one — find the actual downloads storage
-   mechanism (likely a Room table or a dedicated downloads directory)
-   and confirm the Downloads screen reads from *that*, not from
-   whatever cache mechanism it's apparently showing now.
+9. **DONE this session — Library → Downloads page shows cache files, not
+   actual downloads.** Root cause was more precise than the symptom
+   suggested: the sidebar's "Downloads" entry and `LocalLibraryContent`'s
+   "Downloads" quick pill both navigated to `cache_playlist/downloaded`
+   — the *cache* screen (`CachePlaylistScreen`/`CachePlaylistViewModel`),
+   which **ignores its `{playlist}` route argument entirely** and always
+   computes `cachedIds.subtract(downloadedIds)` (pure-cache, explicitly
+   excluding real downloads), regardless of whether the arg says
+   `"downloaded"` or `"cached"`. So there was no code path that could
+   ever show real downloads from that screen — passing a different arg
+   wouldn't have helped. The actual real-downloads screen already
+   existed and was already correct: `auto_playlist/downloaded` →
+   `AutoPlaylistScreen`/`AutoPlaylistViewModel`, which filters on
+   `DownloadUtil.downloads` for `Download.STATE_COMPLETED` — the same
+   route `LibraryMixScreen.kt`/`LibraryPlaylistsScreen.kt` already use
+   correctly for their own "Downloads" entries. Fix was routing-only:
+   changed both stray call sites from `cache_playlist/downloaded` to
+   `auto_playlist/downloaded`. `CachePlaylistViewModel` itself is
+   untouched — it's correct for the "Cached" entry point, just was being
+   reused for something it was never meant to serve.
 
-10. **"Most Played" crashes the app.** Exact error given:
-    `java.lang.NumberFormatException: For input string: "Top"`. That's a
-    very specific, very greppable signature — almost certainly a
-    `.toInt()`/`.toIntOrNull()`-without-fallback (or similar numeric
-    parse) call somewhere being fed a literal string like "Top" (as in
-    "Top Played," "Top 50," a sort-key or tab-label string) instead of
-    a number it expected. Grep for the literal string `"Top"` combined
-    with `toInt(` in the library/most-played screen's source first —
-    this one has enough detail in the report to probably find the exact
-    line quickly rather than needing broad investigation.
+10. **DONE this session — "Most Played" crashes the app.** Confirmed
+    exact cause: `LibrarySidebar.kt` and `LocalLibraryContent.kt` both
+    navigated to the literal route `top_playlist/Top` — passing the
+    word "Top" as the `{top}` argument instead of a song count.
+    `TopPlaylistViewModel.kt` does `top.toInt()` on that value
+    unconditionally (`val top = savedStateHandle.get<String>("top")!!`
+    then `top.toInt()` inside the `topSongs` flow), which is exactly
+    `NumberFormatException: For input string: "Top"`. Every *other*
+    call site of this route (`LibraryMixScreen.kt`,
+    `LibraryPlaylistsScreen.kt`, both twice) correctly passes
+    `"top_playlist/$topSize"`, where `topSize` comes from the
+    `TopSize` DataStore preference (`stringPreferencesKey("topSize")`,
+    default `"50"`). Only the two sidebar/quick-pill entry points had
+    the literal-string bug. Fix: both now read the same `TopSize`
+    preference via `rememberPreference(TopSize, defaultValue = "50")`
+    and navigate to `"top_playlist/$topSize"`, matching every other
+    entry point exactly.
 
 11. **Hamburger-menu sidebar (also opens via edge-swipe gesture) sits
     too high, overlapping the page header.** User: it "should show
@@ -2440,4 +2458,113 @@ file for how fast that happens in this repo).
     per-screen opt-in — the user wants this as a global default across
     the whole app (immersive/edge-to-edge with the status bar hidden
     everywhere, not just on the player or video screens).
+
+## 6. Reconnaissance on the still-open 2026-08 backlog items — not fixed
+this session, but real findings so the next session isn't starting from
+the raw symptom again. Everything below was confirmed by reading the
+actual code, not guessed.
+
+- **Item 2 ("Recently updated" text on home) — could not find it.**
+  Exhaustive search (every string resource in every locale file, every
+  Home-screen/Home-component Kotlin file, the launcher widget, the
+  updater/changelog machinery — `Updater.kt`, `ReleaseNotesCard.kt`,
+  `UpdateInfoDialog.kt`, `ChangelogScreen.kt`, `UpdateScreen.kt`,
+  `AboutScreen.kt`) turned up nothing. No "Recently updated" string, no
+  first-launch-after-update banner, no version-comparison check that
+  drives visible text on the in-app Home tab. The only "update"-adjacent
+  UI that exists lives on the separate Settings → Updates screen, plus
+  an unused `new_update_available` string defined in every locale file
+  but never referenced from any Kotlin code (dead string). Before
+  touching anything here, get the user to confirm exactly where they see
+  this — it may be the Android launcher's home-screen *widget*
+  (`PlaylistWidget.kt`) rather than the in-app Home tab, given this
+  repo's own history of "home" meaning two different things (see the
+  campaign banner note in `HomeScreen.kt`). Don't guess and patch blind.
+
+- **Item 3 (Liquid Glass toggle does nothing) — root cause is deeper
+  than a wiring bug, and there's a second, correctly-wired "liquid
+  glass" system elsewhere worth knowing about so it isn't confused with
+  this one.**
+  - The Settings → Liquid Glass screen (`GlassEffectSettings.kt`) writes
+    ~13 `LiquidGlass*` DataStore keys (global enabled, per-component
+    enabled, vibrancy, blur radius, lens height/amount, chromatic
+    aberration, depth, tint, opacity, text color). **Nothing else in the
+    app reads any of these keys** — confirmed by grepping every one of
+    them individually. The settings screen is a fully self-contained
+    dead end.
+  - There IS a real, live rendering mechanism for a "liquid glass" nav
+    bar: `Modifier.liquidGlass()` in `GlassEffectStubs.kt`, driven by
+    `LocalGlassEffectConfig` (a `CompositionLocalOf<GlassEffectConfig>`),
+    consumed in `AppNavigation.kt`'s `AppNavigationBar` composable
+    (gated on `glassEnabled && glassConfig.globalEnabled &&
+    glassConfig.navBarEnabled`). But two things sink it: (1)
+    `LocalGlassEffectConfig` is never provided by any
+    `CompositionLocalProvider` anywhere in the app, so `.current` always
+    resolves to the hardcoded default (`enabled = false, globalEnabled =
+    false`) — permanently off, no matter what Settings says; and (2)
+    `AppNavigationBar` itself is **never called from anywhere** — dead
+    code, same as `GlassNavigationBar.kt`/`GlassMiniPlayer.kt`
+    (a *third*, separately-named glass nav bar/mini-player pair driven
+    by yet another set of keys — `GlassBlurIntensityKey`,
+    `GlassVibrancyEnabledKey`, `GlassLensEnabledKey` — also never called
+    from anywhere). The nav bar actually rendered on screen,
+    `FluidSlidingNavigationBar.kt`, has zero glass/blur code of any
+    kind.
+  - **The "separate name" system that IS real and IS live:**
+    `LyricsGlassStyle.kt` — a small set of named presets (`FrostedDark`,
+    `FrostedLight`, `ClearGlass`, `DeepBlur`, `VividGlow`, plus a
+    palette-derived `fromPalette()` variant) genuinely used by
+    `Lyrics.kt` (the in-app lyrics screen background/picker,
+    `selectedGlassStyle`/`paletteGlassStyle`) and
+    `LyricsImageCard.kt`/`ComposeToImage.kt` (lyrics image export card).
+    This is a completely separate system from Settings' "Liquid Glass"
+    — different file, different data class, different keys, only
+    touches the lyrics screen, and the user never sees a settings
+    toggle for it at all (it's a style picker inside the lyrics screen
+    itself).
+  - **Net effect**: three independent "glass" implementations exist
+    (`LiquidGlass*` settings + `liquidGlass()`/`LocalGlassEffectConfig`,
+    `Glass*` + `GlassNavigationBar`/`GlassMiniPlayer`, and
+    `LyricsGlassStyle`), and only the lyrics one actually renders
+    anything a user can see. Making the Settings toggle do something
+    real means either (a) wiring `AppNavigationBar` + a real
+    `CompositionLocalProvider` for `LocalGlassEffectConfig` into
+    `MainActivity`'s nav bar call site (currently
+    `FluidSlidingNavigationBar`, which would need the glass treatment
+    added or need to be swapped for `AppNavigationBar`), or (b) doing
+    the equivalent wiring for the `Glass*`-prefixed pair instead — both
+    are real rendering code sitting unused, not something to build from
+    scratch. This is graphics/rendering feature work spanning multiple
+    files, not a one-line patch — treat it as its own session.
+
+- **Item 4 (hardcoded "Echo"/"Velune" strings) — the dynamic-app-name
+  mechanism confirmed.** It's build-time, not runtime:
+  `app/build.gradle.kts` injects `resValue("string", "app_name",
+  appName)` and `resValue("string", "config_app_name", configAppName)`
+  from Gradle properties (see `scripts/brand.sh`). So the correct fix
+  pattern for every hardcoded literal is switching it to
+  `stringResource(R.string.app_name)` (or `config_app_name`, check which
+  one the rest of the app already uses for user-facing vs internal
+  contexts) — not adding a new mechanism. Have not yet grepped the four
+  specific reported locations (some settings pages, "Echo Tuning" on the
+  EQ screen, Listen Together page, Discord integration page) for their
+  exact literal strings — that's the remaining work.
+
+- **Items 6/8 (Supabase campaign read connection) — the plumbing already
+  exists, just needs the schema check the user asked for.** Confirmed:
+  `campaign_schema.sql` at repo root already defines a `public.campaigns`
+  table (source_url, resolved_song_id, is_live, a play-count RPC,
+  RLS-enforced date-window visibility — see the file's own header
+  comments for the full design). `SUPABASE_URL`/`SUPABASE_ANON_KEY` are
+  already wired via `BuildConfig` from `local.properties`/env
+  (`app/build.gradle.kts`). There's already a live `CampaignCardSection`
+  rendering on Home (`HomeScreen.kt`, above the category chips) backed
+  by `CampaignRepository`/`CampaignUrlResolver` — so campaign *reading*
+  may already substantially work; what's unconfirmed is whether the
+  **live** Supabase database's actual schema still matches this
+  `campaign_schema.sql` file (the user was explicit that it might not —
+  "the supabase already has some tables"). Still do the schema
+  introspection query from item 6 above before assuming this file is
+  ground truth. The "Manage campaign" settings-removal half of item 6
+  (display-only, no in-app management) has not been done yet.
 
