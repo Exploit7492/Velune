@@ -2557,22 +2557,79 @@ file for how fast that happens in this repo).
     already does elsewhere in this codebase, rather than inventing a
     new approach.
 
-12. **Video player: not edge-to-edge vertically (only horizontally
-    right now); loading spinner should be a skeleton loader; next-song
-    video re-resolves instead of using a preload, causing a playback
-    hitch.** Three related items on the same screen/component:
-    - The video thumbnail/player container already fills edge-to-edge
-      *horizontally* (confirmed working per the user) but not
-      *vertically* — needs the same edge-to-edge treatment applied on
-      the vertical axis too.
-    - Replace whatever spinner currently shows while a video is loading
-      with a skeleton loader instead.
-    - "If the next song is to load it goes to re-resolve it causing an
-      issue in the smooth playback" — this is the video-specific
-      manifestation of item 7's queue-preload gap; likely the same
-      underlying fix (preload/resolve the next item ahead of time)
-      fixes both, but confirm that once item 7 is actually being worked
-      on rather than assuming they're one ticket.
+12. **DONE this session (2 of 3 sub-items) — Video player: not
+    edge-to-edge vertically (only horizontally right now); loading
+    spinner should be a skeleton loader; next-song video re-resolves
+    instead of using a preload, causing a playback hitch.**
+
+    **(1) Edge-to-edge vertically — DONE.** Root cause:
+    `MetroPlayerContent` (the active player UI, per item 1(b)'s earlier
+    finding) pinned `VideoMorphingThumbnail`'s modifier to
+    `aspectRatio(1f)` unconditionally. That's the correct, intentional
+    look for the static Song-mode cover art, but its containing Box is
+    taller than it is wide (`weight(1f)` inside a `Column`), so forcing
+    a 1:1 square left empty space above and below whenever a video was
+    actually showing — edge-to-edge horizontally (confirmed working per
+    the user) but not vertically, exactly as reported. Fixed by only
+    applying `aspectRatio(1f)` while `!isVideoMode`; video mode now
+    genuinely `fillMaxSize()`s both axes. Confirmed via grep this was
+    the *only* `aspectRatio(1f)` tied to the video thumbnail — the other
+    two `VideoMorphingThumbnail` call sites (the landscape/portrait
+    fallback player styles, not V5/Metro) already use a plain
+    `fillMaxSize()` with no aspect constraint at all, per an earlier
+    session's fix (see those call sites' own comments in `Player.kt`).
+
+    **(2) Skeleton loader instead of spinner — DONE.** Root cause: the
+    "spinner" was Media3's own built-in buffering indicator
+    (`PlayerView.SHOW_BUFFERING_WHEN_PLAYING`), not anything this app
+    drew itself. Replaced with a real skeleton, matching the shimmer
+    treatment already used everywhere else loading state is shown in
+    this app (`ShimmerHost` + the `com.valentinilk.shimmer` library,
+    already a dependency — see `GridItemPlaceHolder` for the existing
+    pattern this follows). Added a `Player.Listener` on the slave video
+    `ExoPlayer` inside `VideoMorphingThumbnail` to track
+    `STATE_BUFFERING` as Compose state (separate from `isLoadingVideo`
+    in `Player.kt`, which only covers the rare live-resolve fallback
+    inside `toggleVideo()` — this covers the much more common case of
+    ExoPlayer itself buffering an already-resolved stream, e.g. a slow
+    network on the initial switch or after a seek). The skeleton
+    overlays the video surface at the same crossfade alpha, and only
+    shows while `isVideoMode` is true *and* actually buffering — not
+    during the fade back to Song, where the last real video frame
+    should stay visible, not a loading skeleton.
+
+    **(3) Next-song video preload — still open, honestly; confirmed the
+    exact gap rather than guessing at a fix.** This is the same
+    underlying issue as item 7 below, and per that item's own note
+    ("confirm that once item 7 is actually being worked on rather than
+    assuming they're one ticket") it wasn't attempted blind here. What
+    *was* confirmed: `loadVideoForCurrentTrack()` in `Player.kt` is the
+    only call site of `YTPlayerUtils.resolveVideoStreamUrl()` anywhere
+    in the app (grepped), and it only fires from a
+    `LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal)` — i.e.
+    strictly reactive to a track *already having become current*, not
+    ahead of time for whatever the queue's next item is. There genuinely
+    is no lookahead/prefetch mechanism for the next queue item's video
+    at all right now, confirming item 7's suspicion exactly.
+    `resolveVideoStreamUrl` does have its own internal cache (a
+    same-video-id cache, see `YTPlayerUtils.kt`'s "cache hit" log line)
+    — so a *second* play of the same track resolves instantly — but
+    that's not the same thing as pre-warming the *next, different* track
+    before it becomes current, which is what causes the hitch. Building
+    real lookahead means deciding where a prefetched-but-not-yet-current
+    URL/prepared player lives (a second slave player? a pending-URL
+    cache keyed by the next queue item's id, swapped in on transition?)
+    and what it costs to prefetch a video for every queue advance even
+    when the user never opens Video mode for that track — real design
+    surface, not a one-line patch, so left for whoever picks up item 7.
+
+    Not verified on-device for (1)/(2) either (no Android SDK/toolchain
+    in this sandbox, same constraint noted throughout this file) —
+    verified via manual diff review, confirming the shimmer library and
+    `ShimmerHost` pattern already exist and match how every other
+    loading state in this app is shown, and a grep sweep for other
+    `aspectRatio`/`SHOW_BUFFERING` call sites that might have needed the
+    same treatment (none found).
 
 13. **DONE this session — Status bar should be hidden on every screen,
     app-wide.** Not per-screen opt-in — the user wants this as a global
