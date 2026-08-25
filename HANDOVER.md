@@ -2447,14 +2447,13 @@ file for how fast that happens in this repo).
      8 below for how campaign placement/ordering needs to interact with
      whatever that schema turns out to actually look like.
 
-7. **Queue should preload the next song's video ahead of time.**
-   Currently (per the user) it re-resolves on every transition instead
-   of having the next item ready, which is also called out again in
-   item 12 below as the specific cause of a playback hitch when the
-   video view is involved. Find wherever the queue/player currently
-   resolves a track's playable source and check whether there's any
-   lookahead/prefetch for the *next* queue item at all, or whether
-   resolution is purely reactive to "this is now the current item."
+7. **DONE — Queue should preload the next song's video ahead of time.**
+   See §6.1 below for the full writeup — fixed by warming
+   `resolveVideoStreamUrl`'s cache for the next queue item while the
+   current track is still playing, so the reactive resolve on actual
+   transition (see item 12 below) hits a cache hit instead of a cold
+   network round-trip. Same fix covers item 12's 3rd sub-item — they
+   were the same underlying gap, described from two angles.
 
 8. **Campaign placement/rotation logic — a real feature to build, not a
    bug fix**, once item 6's Supabase read connection exists. Exact rule
@@ -2557,7 +2556,7 @@ file for how fast that happens in this repo).
     already does elsewhere in this codebase, rather than inventing a
     new approach.
 
-12. **DONE this session (2 of 3 sub-items) — Video player: not
+12. **DONE this session (all 3 sub-items) — Video player: not
     edge-to-edge vertically (only horizontally right now); loading
     spinner should be a skeleton loader; next-song video re-resolves
     instead of using a preload, causing a playback hitch.**
@@ -2598,30 +2597,59 @@ file for how fast that happens in this repo).
     during the fade back to Song, where the last real video frame
     should stay visible, not a loading skeleton.
 
-    **(3) Next-song video preload — still open, honestly; confirmed the
-    exact gap rather than guessing at a fix.** This is the same
-    underlying issue as item 7 below, and per that item's own note
-    ("confirm that once item 7 is actually being worked on rather than
-    assuming they're one ticket") it wasn't attempted blind here. What
-    *was* confirmed: `loadVideoForCurrentTrack()` in `Player.kt` is the
-    only call site of `YTPlayerUtils.resolveVideoStreamUrl()` anywhere
-    in the app (grepped), and it only fires from a
-    `LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal)` — i.e.
-    strictly reactive to a track *already having become current*, not
-    ahead of time for whatever the queue's next item is. There genuinely
-    is no lookahead/prefetch mechanism for the next queue item's video
-    at all right now, confirming item 7's suspicion exactly.
-    `resolveVideoStreamUrl` does have its own internal cache (a
-    same-video-id cache, see `YTPlayerUtils.kt`'s "cache hit" log line)
-    — so a *second* play of the same track resolves instantly — but
-    that's not the same thing as pre-warming the *next, different* track
-    before it becomes current, which is what causes the hitch. Building
-    real lookahead means deciding where a prefetched-but-not-yet-current
-    URL/prepared player lives (a second slave player? a pending-URL
-    cache keyed by the next queue item's id, swapped in on transition?)
-    and what it costs to prefetch a video for every queue advance even
-    when the user never opens Video mode for that track — real design
-    surface, not a one-line patch, so left for whoever picks up item 7.
+    **(3) Next-song video preload — DONE.** Same underlying issue as
+    item 7 (they were confirmed to be the same gap, not two separate
+    tickets, once actually investigated). The earlier recon on this
+    exact spot was accurate: `loadVideoForCurrentTrack()` was the only
+    call site of `resolveVideoStreamUrl()`, firing strictly reactively
+    from `LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal)` — never
+    ahead of time for the queue's next item, with the slave player
+    stopped/cleared immediately on every transition before a fresh
+    resolve even started. That gap between "cleared" and "resolved" was
+    the hitch.
+
+    Fix, deliberately the *smaller* of the two options the earlier recon
+    considered (a pending-URL cache keyed by next-item id, vs. a second
+    prepared player) — no new player, no new cache: `resolveVideoStreamUrl`
+    already checks a same-video-id URL cache before doing any network
+    work (`getVideoStreamUrl`, confirmed it matches on video id
+    regardless of which client/itag originally populated it). So a new
+    `LaunchedEffect`, keyed identically to the existing transition
+    effect, reads `playerConnection.player.nextMediaItemIndex` /
+    `getMediaItemAt(...)` (both already-proven APIs — `CrossfadeAudio.kt`
+    already does the exact same next-item lookahead for audio
+    crossfading) and calls `resolveVideoStreamUrl` for *that* id in the
+    background while the current track is still playing. By the time
+    the real transition happens, the cache already has it — the
+    reactive resolve becomes a cache hit instead of a cold round-trip.
+
+    Skips local media without touching the database: a real YouTube
+    video id is always exactly 11 characters from a fixed alphabet
+    (same fact `CampaignUrlResolver.VIDEO_ID_REGEX` already encodes,
+    reused here) while a local track's mediaId is its own local DB row
+    id — essentially certain not to collide with that shape. A false
+    negative here (skipping a prefetch that could have succeeded) just
+    means the existing reactive resolve still runs at transition time,
+    same as before this fix — the prefetch is a pure optimization, never
+    something correctness depends on.
+
+    Cost, stated plainly since the earlier recon flagged it as a real
+    question: yes, this means prefetching a video stream URL for every
+    queue advance even when the user never opens Video mode for that
+    track — the same trade `loadVideoForCurrentTrack` itself already
+    makes for the *current* track (see that function's own doc comment,
+    written when the toggle-lag fix landed). Extending that same
+    already-accepted trade one track further ahead is consistent, not a
+    new cost category.
+
+    **Not verified on-device** — same caveat as everything else in this
+    file. Specifically unconfirmed: whether the prefetch reliably
+    finishes before a typical track's remaining playback time on a real
+    network, and whether rapid skip-through-several-tracks behaves
+    correctly (each skip starts a new prefetch for the new "next" item;
+    older in-flight prefetches were designed to just complete harmlessly
+    into an unused cache entry rather than being explicitly cancelled —
+    reasoned through, not watched happen).
 
     Not verified on-device for (1)/(2) either (no Android SDK/toolchain
     in this sandbox, same constraint noted throughout this file) —

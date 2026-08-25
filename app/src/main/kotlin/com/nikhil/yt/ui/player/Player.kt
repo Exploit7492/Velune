@@ -375,6 +375,48 @@ fun BottomSheetPlayer(
         loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode = isVideoMode)
     }
 
+    // Prefetch the *next* queue item's video stream ahead of time, so
+    // whenever the transition above actually happens, its call to
+    // resolveVideoStreamUrl hits a cache hit (see that function's
+    // cache-first check in YTPlayerUtils.kt) instead of a cold network
+    // resolve — the actual cause of the reported "next-song video
+    // hitch": until this was added, the current track's video only
+    // ever got resolved *reactively*, after the transition had already
+    // happened and the slave player had already been stopped/cleared,
+    // so there was nothing to show until a fresh resolve completed.
+    //
+    // Keyed the same as the effect above so this re-fires every time
+    // the current track (and therefore "next") changes — including
+    // when the user skips ahead of a prefetch that hadn't finished yet,
+    // which simply starts a new prefetch for the now-different next
+    // item; the old one's result, if it ever lands, just sits harmlessly
+    // in the cache unused rather than being raced against or cancelled
+    // explicitly.
+    //
+    // Deliberately does NOT touch the local Room database to check
+    // whether the next track is local media (unlike isCurrentSongLocal
+    // above, which does) — that would mean threading a database
+    // reference into this composable that doesn't otherwise need one.
+    // Instead, a real YouTube video id is always exactly 11 characters
+    // from a fixed alphanumeric alphabet (matching
+    // CampaignUrlResolver.VIDEO_ID_REGEX's own definition of the same
+    // fact, established when that class was built), while a local
+    // track's mediaId is its own local database row id — essentially
+    // certain not to coincidentally match that exact shape. Skipping
+    // the prefetch on a false negative here just means the existing
+    // reactive resolve still runs when that track actually becomes
+    // current, same as today — this prefetch is a pure optimization,
+    // never behavior-load-bearing.
+    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal) {
+        val nextIndex = playerConnection.player.nextMediaItemIndex
+        if (nextIndex == androidx.media3.common.C.INDEX_UNSET) return@LaunchedEffect
+        val nextId = playerConnection.player.getMediaItemAt(nextIndex).mediaId
+        if (!Regex("[A-Za-z0-9_-]{11}").matches(nextId)) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            runCatching { com.nikhil.yt.utils.YTPlayerUtils.resolveVideoStreamUrl(nextId) }
+        }
+    }
+
     // Keep the muted slave's play/pause mirroring the master's — for *any*
     // control that changed it, not just this screen's own button. That's what
     // makes "press pause while in video mode -> video pauses too" work
