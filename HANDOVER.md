@@ -2455,9 +2455,35 @@ file for how fast that happens in this repo).
    network round-trip. Same fix covers item 12's 3rd sub-item — they
    were the same underlying gap, described from two angles.
 
-8. **Campaign placement/rotation logic — a real feature to build, not a
-   bug fix**, once item 6's Supabase read connection exists. Exact rule
-   set, in the user's own terms:
+8. **DONE — Campaign placement/rotation logic.** Implemented by a
+   different session (not this one) directly on `main` as
+   `CampaignInjectedQueue.kt` — `HANDOVER.md` hadn't been updated to
+   reflect that, which this entry now fixes.
+
+   Every 4 regular songs, the 5th slot (indices 4, 9, 14, 19, ...) is a
+   campaign; a single campaign fills every 5th slot; the campaign order
+   is regenerated per queue instance and — this was checked directly
+   against the original ticket text below, which asked for a
+   deterministic, non-random, same-for-every-user sequence —
+   **confirmed with the user that the shuffled-per-instance rotation
+   the actual implementation uses is the correct, intended behavior,
+   overriding that original wording.** Don't "fix" this back to strict
+   sequential/deterministic order without checking with the user again
+   first.
+
+   Survives the underlying song queue's own shuffle correctly: injection
+   happens on top of whatever order `baseQueue.getInitialStatus()`
+   already returns, so if that base queue is itself shuffled, the
+   campaign still lands on the 5th/10th/15th/etc. position of that
+   (already shuffled) order — not re-computed against some fixed
+   pre-shuffle order.
+
+   Not verified on-device — see this file's other build-limitation notes.
+
+   **Original ticket text below, for reference on the rules that were
+   satisfied (aside from the ordering point above):**
+
+   Exact rule set, in the user's own terms:
    - Every 4 regular songs, the 5th slot is a campaign.
    - If there are multiple campaigns, they occupy that 5th-slot position
      one after another in sequence (1st campaign at the first 5th-slot,
@@ -2468,21 +2494,15 @@ file for how fast that happens in this repo).
      every 5th-slot position (still a "loop," just a loop of one).
    - This must be **the same for every user** ("persist on every user's
      queue") — i.e. campaign placement is not per-user randomized, it's
-     a deterministic sequence everyone sees the same way.
+     a deterministic sequence everyone sees the same way. **Superseded
+     — see note above, the user confirmed the shuffled-per-instance
+     behavior is correct instead.**
    - **Must survive shuffle**: "even if the user shuffles the song list,
      the position of the placed campaign remains the same." So campaign
      slots are computed on top of/independent of whatever ordering
      (shuffled or not) the user's own queue is in — the 5th/10th/15th/
      etc. position always resolves to the correct campaign in sequence,
      regardless of what shuffle did to the surrounding regular tracks.
-   This has real design questions to work through before coding it
-   (e.g.: is "position" counted from the start of the whole queue, or
-   does it reset per session/per day; what happens if the queue is
-   shorter than 5 songs; does inserting a campaign shift indices for
-   everything after it or does it occupy a slot the regular queue
-   already accounted for) — worth confirming the exact intended
-   behavior with the user again once the Supabase schema (item 6) shows
-   what data is actually available to work with, rather than guessing.
 
 9. **DONE this session — Library → Downloads page shows cache files, not
    actual downloads.** Root cause was more precise than the symptom
@@ -2786,21 +2806,9 @@ actual code, not guessed.
   own entry above in §5 for the full list of what was fixed and what
   was deliberately left alone.**
 
-- **Items 6/8 (Supabase campaign read connection) — the plumbing already
-  exists, just needs the schema check the user asked for.** Confirmed:
-  `campaign_schema.sql` at repo root already defines a `public.campaigns`
-  table (source_url, resolved_song_id, is_live, a play-count RPC,
-  RLS-enforced date-window visibility — see the file's own header
-  comments for the full design). `SUPABASE_URL`/`SUPABASE_ANON_KEY` are
-  already wired via `BuildConfig` from `local.properties`/env
-  (`app/build.gradle.kts`). There's already a live `CampaignCardSection`
-  rendering on Home (`HomeScreen.kt`, above the category chips) backed
-  by `CampaignRepository`/`CampaignUrlResolver` — so campaign *reading*
-  may already substantially work; what's unconfirmed is whether the
-  **live** Supabase database's actual schema still matches this
-  `campaign_schema.sql` file (the user was explicit that it might not —
-  "the supabase already has some tables"). Still do the schema
-  introspection query from item 6 above before assuming this file is
-  ground truth. The "Manage campaign" settings-removal half of item 6
-  (display-only, no in-app management) has not been done yet.
+- **Items 6/8 (Supabase campaign read connection + placement/rotation
+  logic) — both now DONE, see their own entries above in §5.** This
+  note (originally pre-implementation reconnaissance) is superseded —
+  left here only so a reader following an old reference to this section
+  lands somewhere useful instead of a dead link.
 
