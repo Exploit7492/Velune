@@ -7,6 +7,25 @@
 package com.nikhil.yt
 
 import com.nikhil.yt.ui.component.FluidSlidingNavigationBar
+import com.nikhil.yt.ui.component.GlassComponent
+import com.nikhil.yt.ui.component.GlassEffectConfig
+import com.nikhil.yt.ui.component.LocalAppBackdrop
+import com.nikhil.yt.ui.component.LocalGlassEffectConfig
+import com.nikhil.yt.ui.component.backdrop.backdrops.rememberLayerBackdrop
+import com.nikhil.yt.ui.component.backdrop.backdrops.layerBackdrop
+import com.nikhil.yt.constants.LiquidGlassBlurRadiusKey
+import com.nikhil.yt.constants.LiquidGlassChromaticAberrationKey
+import com.nikhil.yt.constants.LiquidGlassDepthEffectKey
+import com.nikhil.yt.constants.LiquidGlassGlobalEnabledKey
+import com.nikhil.yt.constants.LiquidGlassLensAmountKey
+import com.nikhil.yt.constants.LiquidGlassLensHeightKey
+import com.nikhil.yt.constants.LiquidGlassMiniPlayerEnabledKey
+import com.nikhil.yt.constants.LiquidGlassNavBarEnabledKey
+import com.nikhil.yt.constants.LiquidGlassPlayerEnabledKey
+import com.nikhil.yt.constants.LiquidGlassSurfaceOpacityKey
+import com.nikhil.yt.constants.LiquidGlassSurfaceTintColorKey
+import com.nikhil.yt.constants.LiquidGlassTextColorKey
+import com.nikhil.yt.constants.LiquidGlassVibrancyKey
 import android.annotation.SuppressLint
 import android.Manifest
 import android.app.ActivityManager
@@ -531,6 +550,51 @@ class MainActivity : ComponentActivity() {
             val pureBlackEnabled by rememberPreference(PureBlackKey, defaultValue = true)
             val pureBlack = pureBlackEnabled && useDarkTheme
 
+            val liquidGlassGlobalEnabled by rememberPreference(LiquidGlassGlobalEnabledKey, defaultValue = false)
+            val liquidGlassVibrancy by rememberPreference(LiquidGlassVibrancyKey, defaultValue = 1f)
+            val liquidGlassBlurRadius by rememberPreference(LiquidGlassBlurRadiusKey, defaultValue = 8f)
+            val liquidGlassLensHeight by rememberPreference(LiquidGlassLensHeightKey, defaultValue = 0.5f)
+            val liquidGlassLensAmount by rememberPreference(LiquidGlassLensAmountKey, defaultValue = 0.5f)
+            val liquidGlassChromaticAberration by rememberPreference(LiquidGlassChromaticAberrationKey, defaultValue = true)
+            val liquidGlassDepthEffect by rememberPreference(LiquidGlassDepthEffectKey, defaultValue = true)
+            val liquidGlassSurfaceTintColorInt by rememberPreference(LiquidGlassSurfaceTintColorKey, defaultValue = 0)
+            val liquidGlassSurfaceOpacity by rememberPreference(LiquidGlassSurfaceOpacityKey, defaultValue = 0.4f)
+            val liquidGlassTextColorInt by rememberPreference(LiquidGlassTextColorKey, defaultValue = 0)
+            val liquidGlassPlayerEnabled by rememberPreference(LiquidGlassPlayerEnabledKey, defaultValue = true)
+            val liquidGlassMiniPlayerEnabled by rememberPreference(LiquidGlassMiniPlayerEnabledKey, defaultValue = true)
+            val liquidGlassNavBarEnabled by rememberPreference(LiquidGlassNavBarEnabledKey, defaultValue = true)
+            val glassEffectConfig = remember(
+                liquidGlassGlobalEnabled, liquidGlassVibrancy, liquidGlassBlurRadius,
+                liquidGlassLensHeight, liquidGlassLensAmount, liquidGlassChromaticAberration,
+                liquidGlassDepthEffect, liquidGlassSurfaceTintColorInt,
+                liquidGlassSurfaceOpacity, liquidGlassTextColorInt, liquidGlassPlayerEnabled,
+                liquidGlassMiniPlayerEnabled, liquidGlassNavBarEnabled,
+            ) {
+                GlassEffectConfig(
+                    globalEnabled = liquidGlassGlobalEnabled,
+                    vibrancy = liquidGlassVibrancy,
+                    blurRadius = liquidGlassBlurRadius,
+                    lensHeight = liquidGlassLensHeight,
+                    lensAmount = liquidGlassLensAmount,
+                    chromaticAberration = liquidGlassChromaticAberration,
+                    depthEffect = liquidGlassDepthEffect,
+                    surfaceTintColor = if (liquidGlassSurfaceTintColorInt == 0) Color.Unspecified else Color(liquidGlassSurfaceTintColorInt),
+                    surfaceOpacity = liquidGlassSurfaceOpacity,
+                    textColor = if (liquidGlassTextColorInt == 0) Color.Unspecified else Color(liquidGlassTextColorInt),
+                    playerEnabled = liquidGlassPlayerEnabled,
+                    miniPlayerEnabled = liquidGlassMiniPlayerEnabled,
+                    navBarEnabled = liquidGlassNavBarEnabled,
+                )
+            }
+            // Real, content-sampling backdrop: everything drawn beneath this point in the
+            // composition is what glass surfaces (nav bar / mini player / player) actually
+            // blur. Replaces the earlier GlassNavigationBar's flat-rect fake backdrop.
+            val glassBaseBg = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+            val appBackdrop = rememberLayerBackdrop {
+                drawRect(glassBaseBg)
+                drawContent()
+            }
+
             val customThemeSeedPalette = remember(customThemeColorValue) {
                 if (customThemeColorValue.startsWith("#")) {
                     null
@@ -966,8 +1030,10 @@ class MainActivity : ComponentActivity() {
                             LocalBottomSheetPageState provides bottomSheetPageState,
                             LocalMenuState provides menuState,
                             LocalListenTogetherManager provides listenTogetherManager,
+                            LocalGlassEffectConfig provides glassEffectConfig,
+                            LocalAppBackdrop provides appBackdrop,
                         ) {
-                            Row {
+                            Row(modifier = Modifier.layerBackdrop(appBackdrop)) {
                                 AnimatedVisibility(useRail && shouldShowNavigationBar) {
                                     NavigationRail(
                                         containerColor = if(pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer,

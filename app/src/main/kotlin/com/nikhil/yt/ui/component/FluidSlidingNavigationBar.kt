@@ -24,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.luminance
 import com.nikhil.yt.ui.screens.Screens
 
 @Composable
@@ -37,16 +40,36 @@ fun FluidSlidingNavigationBar(
 ) {
     val selectedIndex = items.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
 
+    val glassConfig = LocalGlassEffectConfig.current
+    val useGlass = glassConfig.isEnabledFor(GlassComponent.NAV_BAR) && isGlassSupported()
 
-    val barColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+    val barColor = if (useGlass) Color.Transparent else if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+    val adaptiveTextColor = if (glassConfig.textColor.isSpecified) {
+        glassConfig.textColor
+    } else if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+        Color.Black
+    } else {
+        Color.White
+    }
+    val selectedContentColor = if (useGlass) adaptiveTextColor else MaterialTheme.colorScheme.onSecondaryContainer
+    val unselectedContentColor = if (useGlass) adaptiveTextColor.copy(alpha = 0.65f) else MaterialTheme.colorScheme.onSurfaceVariant
 
-    BoxWithConstraints(
-        modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
+    val glassShape = RoundedCornerShape(28.dp)
+    val barModifier = if (useGlass) {
+        modifier
+            .clip(glassShape)
+            .fillMaxWidth()
+            .height(80.dp)
+            .liquidGlass(config = glassConfig, shape = glassShape)
+    } else {
+        modifier
+            .clip(glassShape)
             .fillMaxWidth()
             .height(80.dp)
             .background(barColor)
-    ) {
+    }
+
+    BoxWithConstraints(modifier = barModifier) {
         val tabWidth = maxWidth / items.size
 
         val pillWidth = 48.dp
@@ -66,7 +89,7 @@ fun FluidSlidingNavigationBar(
                 .width(pillWidth)
                 .height(pillHeight)
                 .background(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = if (useGlass) selectedContentColor.copy(alpha = 0.22f) else MaterialTheme.colorScheme.secondaryContainer,
                     shape = CircleShape
                 )
         )
@@ -94,7 +117,7 @@ fun FluidSlidingNavigationBar(
                         Icon(
                             painter = painterResource(id = if (isSelected) item.iconIdActive else item.iconIdInactive),
                             contentDescription = stringResource(id = item.titleId),
-                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isSelected) selectedContentColor else unselectedContentColor,
                             modifier = Modifier.size(24.dp)
                         )
                         val badgeCount = badgeCounts[item.route] ?: 0
@@ -112,7 +135,7 @@ fun FluidSlidingNavigationBar(
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isSelected) selectedContentColor else unselectedContentColor
                     )
                 }
             }

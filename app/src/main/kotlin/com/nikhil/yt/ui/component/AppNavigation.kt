@@ -19,6 +19,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -135,12 +136,15 @@ fun AppNavigationBar(
     onSearchLongClick: (() -> Unit)? = null
 ) {
     val glassConfig = LocalGlassEffectConfig.current
-    val containerColor = if (glassEnabled && glassConfig.globalEnabled && glassConfig.navBarEnabled) Color.Transparent else if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
-    val contentColor = if (glassEnabled && glassConfig.globalEnabled && glassConfig.navBarEnabled) glassConfig.textColor else if (pureBlack) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    val useGlass = glassEnabled && glassConfig.isEnabledFor(GlassComponent.NAV_BAR) && isGlassSupported()
+    val containerColor = if (useGlass) Color.Transparent else if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+    val contentColor = if (useGlass) {
+        if (glassConfig.textColor.isSpecified) glassConfig.textColor else if (pureBlack) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    } else if (pureBlack) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     val haptics = LocalHapticFeedback.current
     val viewConfiguration = LocalViewConfiguration.current
     
-    val navModifier = if (glassEnabled && glassConfig.globalEnabled && glassConfig.navBarEnabled) {
+    val navModifier = if (useGlass) {
         modifier.liquidGlass(config = glassConfig)
     } else {
         modifier

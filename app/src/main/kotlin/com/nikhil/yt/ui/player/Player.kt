@@ -127,6 +127,11 @@ import okhttp3.OkHttpClient
 import com.nikhil.yt.models.MediaMetadata
 import com.nikhil.yt.ui.component.BottomSheet
 import com.nikhil.yt.ui.component.BottomSheetState
+import com.nikhil.yt.ui.component.GlassComponent
+import com.nikhil.yt.ui.component.LocalGlassEffectConfig
+import com.nikhil.yt.ui.component.PLAYER_BLUR_MULTIPLIER
+import com.nikhil.yt.ui.component.isGlassSupported
+import com.nikhil.yt.ui.component.liquidGlass
 import com.nikhil.yt.ui.component.LocalBottomSheetPageState
 import com.nikhil.yt.ui.component.LocalMenuState
 import com.nikhil.yt.ui.component.rememberBottomSheetState
@@ -955,6 +960,23 @@ fun BottomSheetPlayer(
                 playerCustomContrast = playerCustomContrast,
                 playerCustomBrightness = playerCustomBrightness
             )
+
+            // Additive frosted-glass pane over the existing PlayerBackground (art/gradient/
+            // blur), not a replacement for it. edgeEffects are off here (see liquidGlass doc):
+            // on a surface this large the lens rim reads as a stray band of light rather than
+            // a glass edge, so this only carries blur + vibrancy + the surface tint.
+            val glassConfig = LocalGlassEffectConfig.current
+            if (glassConfig.isEnabledFor(GlassComponent.PLAYER) && isGlassSupported()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .liquidGlass(
+                            config = glassConfig,
+                            applyEdgeEffects = false,
+                            blurRadiusDp = glassConfig.blurRadius * PLAYER_BLUR_MULTIPLIER,
+                        )
+                )
+            }
         }
 
         val onSliderValueChange: (Long) -> Unit = { sliderPosition = it }

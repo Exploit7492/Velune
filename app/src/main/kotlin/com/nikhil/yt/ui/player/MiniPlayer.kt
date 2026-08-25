@@ -9,6 +9,7 @@
 package com.nikhil.yt.ui.player
 
 import com.nikhil.yt.ui.component.VeluneLoader
+import com.nikhil.yt.ui.component.liquidGlass
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -140,19 +141,29 @@ private fun NewMiniPlayer(
         pureBlack = pureBlack,
         useLegacyBackground = false
     ) { offsetX ->
+        val glassConfig = com.nikhil.yt.ui.component.LocalGlassEffectConfig.current
+        val useGlass = glassConfig.isEnabledFor(com.nikhil.yt.ui.component.GlassComponent.MINI_PLAYER) &&
+            com.nikhil.yt.ui.component.isGlassSupported()
+        val miniPlayerShape = RoundedCornerShape(32.dp)
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp)
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .clip(RoundedCornerShape(32.dp))
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainer
-                )
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(32.dp)
+                .clip(miniPlayerShape)
+                .then(
+                    if (useGlass) {
+                        Modifier.liquidGlass(config = glassConfig, shape = miniPlayerShape)
+                    } else {
+                        Modifier
+                            .background(color = MaterialTheme.colorScheme.surfaceContainer)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                shape = miniPlayerShape
+                            )
+                    }
                 )
         ) {
             FloatingMiniPlayerContent(
