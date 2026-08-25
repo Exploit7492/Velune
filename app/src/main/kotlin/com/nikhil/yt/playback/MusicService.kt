@@ -1536,7 +1536,15 @@ class MusicService :
         }
         ensureScopesActive()
         suppressAutoPlayback = false
-        currentQueue = queue
+        // Wrap every queue with campaign injection.
+        // Campaigns are fetched lazily inside getInitialStatus() on the IO
+        // dispatcher — no blocking here, and empty result = pass-through.
+        val campaignRepo = com.nikhil.yt.campaign.CampaignRepository()
+        val wrappedQueue = com.nikhil.yt.playback.queues.CampaignInjectedQueue(
+            baseQueue = queue,
+            campaignProvider = { campaignRepo.fetchActiveCampaignMediaItems() }
+        )
+        currentQueue = wrappedQueue
         queueTitle = null
         val permanentShuffle = dataStore.get(PermanentShuffleKey, false)
         if (!permanentShuffle) {
@@ -3534,7 +3542,14 @@ class MusicService :
             val mediaItems =
                 currentQueue.nextPage().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
             if (player.playbackState != STATE_IDLE) {
-                player.addMediaItems(mediaItems.drop(1))
+                // CampaignInjectedQueue handles its own duplicate detection;
+                // dropping the first item here would break the 5th-position pattern.
+                val itemsToAdd = if (currentQueue is com.nikhil.yt.playback.queues.CampaignInjectedQueue) {
+                    mediaItems
+                } else {
+                    mediaItems.drop(1)
+                }
+                player.addMediaItems(itemsToAdd)
             } else {
                 scope.launch { discordRpc?.stopActivity() }
             }

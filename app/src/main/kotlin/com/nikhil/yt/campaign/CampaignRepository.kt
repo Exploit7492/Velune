@@ -1,5 +1,9 @@
 package com.nikhil.yt.campaign
 
+import androidx.media3.common.MediaItem
+import com.nikhil.yt.extensions.toMediaItem
+import com.nikhil.yt.innertube.YouTube
+import com.nikhil.yt.models.toMediaMetadata
 import com.nikhil.yt.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -165,6 +169,31 @@ class CampaignRepository {
             )
         }
         return result
+    }
+
+
+    /**
+     * Fetches active campaigns and resolves each to a playable [MediaItem].
+     * Used by [CampaignInjectedQueue] to inject campaign songs into the
+     * playback queue every 5th position.
+     *
+     * Returns empty list if Supabase isn't configured, no campaigns are live,
+     * or on any failure — queue injection gracefully degrades to pass-through.
+     */
+    suspend fun fetchActiveCampaignMediaItems(): List<MediaItem> = withContext(Dispatchers.IO) {
+        val campaigns = fetchActiveCampaigns(limit = 10)
+        if (campaigns.isEmpty()) return@withContext emptyList()
+
+        campaigns.mapNotNull { campaign ->
+            try {
+                val result = YouTube.queue(listOf(campaign.songId)).getOrNull()
+                val metadata = result?.firstOrNull()?.toMediaMetadata()
+                metadata?.toMediaItem()
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to resolve campaign ${campaign.id} to MediaItem")
+                null
+            }
+        }
     }
 
     companion object {
