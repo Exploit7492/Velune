@@ -830,7 +830,15 @@ fun HomePageSectionTitle(
 ) {
     NavigationTitle(
         title = section.title,
-        label = section.label,
+        // Deliberately not passing section.label here: it's YouTube Music's
+        // own server-side "strapline" text for whatever this home-feed
+        // section happens to be (e.g. "Recently updated"), not anything
+        // this app authors — it renders right above the section's cards,
+        // and the user explicitly doesn't want that kind of passthrough
+        // text shown at all, regardless of what YouTube decides to serve.
+        // This is the only call site in the app that ever wires
+        // section.label through; every other NavigationTitle usage passes
+        // a fixed, locally-authored label instead.
         thumbnail = section.thumbnail?.let { thumbnailUrl ->
             {
                 val shape = if (section.endpoint?.isArtistEndpoint == true) CircleShape 
