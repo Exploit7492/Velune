@@ -144,8 +144,8 @@ class CampaignRepository {
      * Legacy increment wrapper — redirects to the new RPC.
      * Kept for backward compatibility with existing call sites.
      */
-    suspend fun recordPlay(campaignId: String) {
-        recordCampaignStream(campaignId = campaignId)
+    suspend fun recordPlay(campaignId: String, userId: String? = null, countryCode: String? = null) {
+        recordCampaignStream(campaignId = campaignId, userId = userId, countryCode = countryCode)
     }
 
     private fun parseTrendingRows(body: String): List<CampaignRow> {
@@ -163,7 +163,7 @@ class CampaignRepository {
 
             CampaignRow(
                 id = campaignId,
-                sourceUrl = sourceUrl.ifBlank { "https://youtube.com/watch?v=${'$'}{row.optString("resolved_song_id", "")}" },
+                sourceUrl = sourceUrl.ifBlank { "https://youtube.com/watch?v=${row.optString("resolved_song_id", "")}" },
                 resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() },
                 trackId = row.optString("track_id", "").takeIf { it.isNotBlank() },
                 artistId = row.optString("artist_id", "").takeIf { it.isNotBlank() },

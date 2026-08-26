@@ -140,6 +140,8 @@ import com.nikhil.yt.constants.SkipSilenceKey
 import com.nikhil.yt.constants.SmartTrimmerKey
 import com.nikhil.yt.constants.StopMusicOnTaskClearKey
 import com.nikhil.yt.constants.TogetherClientIdKey
+import com.nikhil.yt.campaign.CampaignPlaybackTracker
+import com.nikhil.yt.campaign.CampaignRepository
 import com.nikhil.yt.constants.CampaignDeviceIdKey
 import com.nikhil.yt.constants.YtmSyncKey
 import com.nikhil.yt.db.MusicDatabase
@@ -3627,7 +3629,7 @@ class MusicService :
                     campaignId = campaignId,
                     userId = deviceId,
                     listenDurationSeconds = (player.currentPosition / 1000).toInt(),
-                    isFullListen = player.currentPosition >= (player.duration * 0.8).coerceAtLeast(1)
+                    isFullListen = player.currentPosition >= (player.duration * 0.8).coerceAtLeast(1.0)
                 )
             }
         }
