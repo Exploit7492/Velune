@@ -33,6 +33,61 @@
 
 ---
 
+## Unified hand-off command format — MANDATORY, every session, all three repos
+
+**Kept identical across all three repos' handover files — this file's
+copy, Mavins-web's `handover.md`, and B-Pay-backend's own
+`handover.md` should all read the same here. If you edit this section,
+copy the same edit into the other two in the same session** (same rule
+this project already applies to the "Full cross-repo status" box
+above).
+
+Whenever a session finishes work — in this repo alone, or this one
+plus another — the final message must end with **one single,
+copy-pasteable, `&&`-chained command line** covering every repo
+touched this session, nothing else. Never separate blocks per repo,
+never prose interleaved between repos, never a bare `git am` without
+its `git push` right after it:
+
+```
+cd ~/<repo-1-local-dir> && git am ~/storage/downloads/<repo-1-slug>-<description>.patch && git push origin main && cd ~/<repo-2-local-dir> && git am ~/storage/downloads/<repo-2-slug>-<description>.patch && git push origin main
+```
+
+Extend with more `&& cd ~/<repo> && git am ... && git push ...`
+segments for however many repos were actually touched. A single-repo
+session still uses this exact shape — just a one-segment chain, not a
+different/shorter format.
+
+**Fixed rules:**
+1. Patch filenames: always `<repo-slug>-<short-description>.patch`,
+   lowercase-hyphenated. Fixed slugs: `mavins-web`, `b-pay-backend`,
+   `velune`.
+2. `cd` targets use each repo's **real local folder name/casing**,
+   which is NOT always the slug or the GitHub name:
+   - Mavins-web → `cd ~/mavins-web` (lowercase — GitHub repo is
+     capitalized `Zapier-codes/Mavins-web`, the local clone is not)
+   - B-Pay-backend → `cd ~/B-PAY-backend` (matches GitHub casing)
+   - Velune → `cd ~/Velune` (matches GitHub casing) — this repo pushes
+     directly to `main`, no fork/PR step, confirmed by a successful
+     `git am` + `git push origin main` run in this project.
+3. Every repo segment gets its own `git push origin main` right after
+   its own `git am` — never batch every `git am` first and push once
+   at the end.
+4. All three currently push the same way (`git push origin main`) —
+   B-Pay-backend's still auto-joins its open upstream PR on push, no
+   extra command; Mavins-web and Velune push straight to `main` with
+   no PR step at all. If any repo's push mechanics ever change, update
+   this section (in all three files) and that repo's cross-repo status
+   note together.
+5. Nothing between or after the chain — explanatory prose goes before
+   this command block, never interleaved with or appended after it.
+
+See B-Pay-backend's own `handover.md` → "Unified hand-off command
+format" for the full original write-up with complete rationale for
+each rule — this is the same content, kept in sync.
+
+---
+
 Separate from `HANDOVER.md` (which is scoped to the EQ/DSP work) —
 this covers the promoted-content banner feature, a completely different
 part of the app (Home screen, Supabase, playback UI), started and mostly
