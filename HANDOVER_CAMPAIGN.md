@@ -1,5 +1,38 @@
 # Velune Campaign Card Handover (v1)
 
+> **▶ START HERE — read this box only, then go to §8 below for the
+> real next work. Skip the rest unless you get stuck.**
+>
+> **Next task in THIS repo/file: no numbered queue here** (different
+> convention from the other two repos in this project — established
+> intentionally, don't force one on). Work any item in **"8. Not done
+> / open"** below; the real current blocker is **no live Supabase
+> credentials wired in**, so nothing built here is testable end-to-end
+> until that's supplied.
+>
+> **Full cross-repo status, as of this note:**
+> - **Velune** (this repo, this file) — next: see §8 below
+> - **Mavins-web** — next: **Task 28** (`Zapier-codes/Mavins-web`,
+>   local folder `mavins-web` lowercase)
+> - **B-Pay-backend** — next: **none currently unblocked** (Korapay-
+>   only focus active; `Zapier-codes/B-Pay-backend`, fork of
+>   `Phoenix-Boss/B-PAY-backend`)
+>
+> **A session does not need to ask permission before cloning another
+> repo or switching context between the three** — if the true next
+> task lives elsewhere, just clone it and go.
+>
+> **This repo also has an unrelated `HANDOVER.md`** (EQ/DSP subsystem,
+> same Android app, nothing to do with the Mavins payments/campaign
+> project) — don't confuse the two files' scopes.
+>
+> **Every session must update this box before ending** — whatever you
+> just finished, update the pointers above (and the matching box in
+> whichever other repo's file needs it) so the next session, in any of
+> the three repos, orients in one glance.
+
+---
+
 Separate from `HANDOVER.md` (which is scoped to the EQ/DSP work) —
 this covers the promoted-content banner feature, a completely different
 part of the app (Home screen, Supabase, playback UI), started and mostly

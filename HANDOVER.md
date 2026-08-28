@@ -1,5 +1,10 @@
 # Velune EQ/DSP Handover (v20)
 
+> **Looking for the Mavins payments/campaign work (the 3-repo project
+> with Mavins-web and B-Pay-backend)? That's a different file —**
+> **`HANDOVER_CAMPAIGN.md`**, not this one. This file is scoped
+> entirely to an unrelated EQ/DSP subsystem in the same Android app.
+
 You're picking up work on **Velune**, an Android music app (fork, package
 `com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
 written by the previous Claude session so you don't have to reconstruct
