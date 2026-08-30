@@ -3,6 +3,16 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note, same session (2026-08-30, later than the note below
+> it) — §9's leading hypothesis RULED OUT: `get_trending_campaigns`/
+> `record_campaign_stream` confirmed live in the database.** Also:
+> **live Supabase credentials wired into `local.properties`** this
+> session (`SUPABASE_URL`/`SUPABASE_ANON_KEY`, same project Mavins-web
+> uses) — closes part of §8's blocker below. **Next: §9's own step 2**
+> (check the specific published campaign's `current_stage`/
+> `total_streams` — exact query in §9). App still not built/run — no
+> Android SDK in this sandbox.
+>
 > **Newest note (2026-08-30) — corrects two stale parts of this file
 > (§7 and `campaign_schema.sql`'s own description), and documents a
 > cross-repo diagnosis for "an admin-published campaign isn't showing
@@ -21,12 +31,12 @@
 >
 > **Next task in THIS repo/file: no numbered queue here** (different
 > convention from the other two repos in this project — established
-> intentionally, don't force one on). Work any item in **"8. Not done
-> / open"** below, or resolve §9's own open diagnosis; the long-standing
-> blocker for anything requiring a live device/database check is
-> **no live Supabase credentials wired into this sandbox**, so nothing
-> built or diagnosed here is independently testable end-to-end without
-> the product owner's involvement.
+> intentionally, don't force one on). Work §9's own step 2 (query
+> ready, see above), or any other item in **"8. Not done / open"**
+> below. Live Supabase credentials are now wired in (see above) —
+> the remaining standing blocker for anything requiring an actual
+> on-device build/run is **no Android SDK in this sandbox**, not
+> credentials anymore.
 >
 > **Full cross-repo status, as of this note:**
 > - **Velune** (this repo, this file) — next: §9's own diagnosis (needs
@@ -363,11 +373,19 @@ because it's hard.
   (`d3151cd`/`4ea693a`). If you're reading this from a fresh clone, the
   campaign feature and this file are already there; ignore any earlier
   version of this bullet that said otherwise.
-- **No real Supabase project wired in.** The user hadn't provided a URL/
-  anon key as of this session — `local.properties`/CI secrets are unset,
-  so `BuildConfig.SUPABASE_URL`/`SUPABASE_ANON_KEY` build empty and
-  nothing will show on Home until real credentials are supplied (see §5)
-  and at least one campaign row exists and is inside its date window.
+- **Real Supabase project wired in (2026-08-30)** — `SUPABASE_URL`/
+  `SUPABASE_ANON_KEY` were added to `local.properties` this session,
+  same project Mavins-web uses (`atojskxrxfsbpeefigtm`). Reported done
+  by the person running the command, not independently verified from
+  this sandbox — `local.properties` is correctly gitignored (per §5's
+  own reasoning) and lives only on the device that ran it, so there's
+  nothing in this repo's own git history to check it against. If
+  `BuildConfig.SUPABASE_URL`/`SUPABASE_ANON_KEY` still build empty on a
+  real build, re-check that file's contents directly rather than
+  assuming this note alone guarantees it. At least one campaign row
+  still needs to exist and be inside its date window for anything to
+  show on Home (see §5 and §9's own open diagnosis for what that
+  actually requires right now).
 - **Not tested on-device**, same caveat as every UI/integration patch in
   this project's history — reviewed by hand very carefully (every
   extension function, every class field, every composable signature used
@@ -449,26 +467,32 @@ construction, header/auth handling, and response parsing
 Mavins-web's `supabase_schema.sql` defines. No bug found in this
 repo's own code.
 
-**The most likely actual cause: no confirmation exists anywhere in
-Mavins-web's `handover.md` that `get_trending_campaigns`/
-`record_campaign_stream` were ever actually run against the live
-Supabase database**, as opposed to only being written into
-`supabase_schema.sql`. That repo has an established convention for
-this exact distinction (e.g. an unrelated leaderboard fix there is
-explicitly logged as "confirmed applied to production via Supabase SQL
-Editor" — no equivalent line exists for either of these two RPCs). If
-they were only ever written to the file and never run live, this
-app's `fetchActiveCampaigns()` would call a Postgres function that
-doesn't exist; PostgREST returns an error, and this repo's own code
-already catches that silently into an empty list (see
-`CampaignRepository.kt`'s `catch`/`!response.isSuccessful` branches) —
-by design, for a graceful empty Home section, but it means this
-specific failure mode produces zero visible error anywhere. This
-sandbox has no live Supabase credentials (confirmed, same standing
-blocker §8 already names) so this could not be verified directly this
-session — it needs a database check from someone with real access, or
-a direct answer from whoever last touched `supabase_schema.sql` in
-Mavins-web about whether it was actually run.
+**The most likely actual cause: RULED OUT (2026-08-30) — the RPCs
+ARE live.** The product owner ran a direct check against the database
+(not a re-derivation from app behavior):
+```sql
+select proname, pg_get_function_identity_arguments(oid) as args
+from pg_proc
+where proname in ('get_trending_campaigns', 'record_campaign_stream');
+```
+Both came back present with the expected signatures
+(`get_trending_campaigns(p_limit integer, p_country_code text, p_genre
+text)`, `record_campaign_stream(p_campaign_id uuid, p_user_id uuid,
+p_listen_duration_seconds integer, p_country_code text,
+p_is_full_listen boolean)`). **This app is not calling a function that
+doesn't exist — that specific failure mode is ruled out. Move to the
+next check below, don't re-run this one.**
+
+**Live Supabase credentials for this app's own build were also wired
+in this session** — `local.properties` now has real
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` values (same project Mavins-web
+uses, confirmed shared per this section's own earlier finding) —
+closing part of §8's "No real Supabase project wired in" blocker
+below. The app itself was **not built or run this session** — no
+Android SDK in this sandbox, same limitation as every other on-device
+task in this file's history (see §8). Building/installing on a real
+device to see the actual UI is a still-separate, not-yet-taken step,
+independent of whichever database finding comes next.
 
 **Two more real, secondary factors, confirmed but not the primary
 suspect:**
@@ -489,17 +513,27 @@ suspect:**
 
 **What would resolve this, in order** (same list as Mavins-web's own
 Task 57, repeated here for a reader who only has this file open):
-1. Confirm with the product owner whether `get_trending_campaigns`/
-   `record_campaign_stream` have ever been run live — if not, running
-   them (a pure database action, no code change in either repo) is
-   very likely the actual fix.
-2. If they're already live, check the specific published campaign's
-   own `current_stage`/`total_streams` — if still well under 10,000
-   and at `planting`, that's §1 above's filter working as designed,
-   and the conversation becomes a product decision, not a bug report.
+1. **DONE (2026-08-30) — RPCs confirmed live, see above. Ruled out.**
+2. **NEXT — check the specific published campaign's own
+   `current_stage`/`total_streams` directly:**
+   ```sql
+   select id, title, current_stage, total_streams, is_active, is_paused, created_at
+   from track_campaigns
+   order by created_at desc
+   limit 10;
+   ```
+   If it's still at `planting` with well under 10,000 total streams,
+   that's §1 above's filter working as designed — the conversation
+   becomes a product decision (should a brand-new campaign show
+   immediately), not a bug report. If it's already past that threshold
+   and still not showing, that contradicts both hypotheses checked so
+   far and needs a fresh look at `get_trending_campaigns`'s full
+   `WHERE` clause — there may be a third condition not yet surfaced in
+   this diagnosis.
 3. Lower priority: reconcile the seed engine's stated vs. actual cron
    cadence.
 
-Nothing above was executed this session in either repo — no SQL was
-run against any database, no cron config changed, no application code
-edited in Velune or Mavins-web.
+Beyond the two read-only confirmation queries above, nothing was
+executed this session in either repo — no SQL that changes data was
+run, no cron config changed, no application code edited in Velune or
+Mavins-web.
