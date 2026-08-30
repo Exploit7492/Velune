@@ -3,20 +3,43 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-08-30) — corrects two stale parts of this file
+> (§7 and `campaign_schema.sql`'s own description), and documents a
+> cross-repo diagnosis for "an admin-published campaign isn't showing
+> on Velune."** Neither issue was code-fixed this session —
+> documentation only, per explicit instruction. See "§9 — 2026-08-30
+> correction + cross-repo diagnosis" near the end of this file for the
+> full write-up. Short version: §7 below and `campaign_schema.sql` at
+> this repo's root both describe an old, since-removed design (an
+> in-app admin screen, a standalone `campaigns` table) — the actual
+> current code (`CampaignRepository.kt`) reads live from Mavins-web's
+> real `track_campaigns` table via two RPCs instead, and that
+> migration was never reflected back into this file until now. The
+> "campaign not showing" question itself very likely isn't a bug in
+> this repo at all — see §9 for the full disambiguation, tracked in
+> full (matching content) as Task 57 in Mavins-web's own `handover.md`.
+>
 > **Next task in THIS repo/file: no numbered queue here** (different
 > convention from the other two repos in this project — established
 > intentionally, don't force one on). Work any item in **"8. Not done
-> / open"** below; the real current blocker is **no live Supabase
-> credentials wired in**, so nothing built here is testable end-to-end
-> until that's supplied.
+> / open"** below, or resolve §9's own open diagnosis; the long-standing
+> blocker for anything requiring a live device/database check is
+> **no live Supabase credentials wired into this sandbox**, so nothing
+> built or diagnosed here is independently testable end-to-end without
+> the product owner's involvement.
 >
 > **Full cross-repo status, as of this note:**
-> - **Velune** (this repo, this file) — next: see §8 below
-> - **Mavins-web** — next: **Task 28** (`Zapier-codes/Mavins-web`,
->   local folder `mavins-web` lowercase)
+> - **Velune** (this repo, this file) — next: §9's own diagnosis (needs
+>   a product-owner answer, see there), or any item in §8 below
+> - **Mavins-web** — next: see that repo's own `handover.md` START HERE
+>   box directly (this file's own copy of "next task" for that repo
+>   goes stale fast — Mavins-web's file is now at Task 57, not Task 28
+>   as an older version of this box said; don't trust a hand-copied
+>   pointer here over that repo's own live file)
 > - **B-Pay-backend** — next: **none currently unblocked** (Korapay-
 >   only focus active; `Zapier-codes/B-Pay-backend`, fork of
->   `Phoenix-Boss/B-PAY-backend`)
+>   `Phoenix-Boss/B-PAY-backend`) — not independently re-verified this
+>   session, carried forward from the previous note
 >
 > **A session does not need to ask permission before cloning another
 > repo or switching context between the three** — if the true next
@@ -370,3 +393,113 @@ because it's hard.
   resolved (would need a broader anon grant or a server-side trigger —
   not attempted here, matches this feature's "anon gets minimal
   privileges" posture deliberately).
+
+## 9. 2026-08-30 correction + cross-repo diagnosis: "admin-published campaign not showing"
+
+**Trigger:** the product owner reported an admin-published campaign in
+Mavins-web wasn't appearing on Velune's Home screen. This section
+documents what was found — **nothing below was code-fixed this
+session, documentation only, per explicit instruction.** The matching
+write-up, same content, lives in Mavins-web's own `handover.md` as
+Task 57 — read whichever file you found first, they're kept in sync.
+
+### Correction to §7 and `campaign_schema.sql` above — both describe a superseded design
+
+§7 ("Admin flow: create/edit/pause/delete from the app") and the
+`campaign_schema.sql` file at this repo's root both describe this
+feature's **v1/v2 design**: a Velune-only `campaigns` table, managed
+via an in-app admin screen (`CampaignAdminScreen.kt`/
+`CampaignAdminRepository.kt`). That design is no longer what's running:
+
+- `134cb37` ("remove Manage Campaigns entirely") deleted
+  `CampaignAdminScreen.kt`/`CampaignAdminRepository.kt` outright,
+  removed the Settings entry point, and removed the nav route — this
+  app no longer has any in-app campaign management UI. That commit's
+  own message states the reasoning plainly: "Campaign management
+  belongs in a separate app entirely; this app should only display the
+  placed campaign, read from Supabase."
+- A later sequence of commits (`fa7d377`, `6dcd1b4`, `444de3f`,
+  `28db525`) migrated `CampaignRepository.kt` off the standalone
+  `campaigns` table entirely. **It now reads from Mavins-web's own
+  `track_campaigns` table**, via two RPCs — `get_trending_campaigns`
+  (listing) and `record_campaign_stream` (play recording, replacing
+  the old `increment_campaign_play`) — whose response fields match
+  `track_campaigns`'s real schema directly (`total_streams`,
+  `trending_score`, `geographic_tier`, `current_stage`, with the exact
+  same stage-name strings — `planting`/`germination`/`root_system`/
+  `branching`/`full_bloom` — Mavins-web's own seed engine uses).
+  Confirmed: both RPCs are fully defined in Mavins-web's
+  `supabase_schema.sql`, explicitly commented as being for this app
+  ("Velune Home screen + Mavins discovery" / "Velune calls this on
+  every play").
+
+Neither change was ever reflected back into this file until now. If
+you're reading §7 or `campaign_schema.sql` above expecting them to
+describe the current code, they don't — this section is the correction.
+`campaign_schema.sql` itself has been left as-is (not deleted) since
+it's still accurate *history* of the v1/v2 design, same reasoning this
+file already applies elsewhere to superseded content — just don't read
+it as the current schema `CampaignRepository.kt` actually talks to.
+
+### The actual diagnosis: very likely not a bug in this repo at all
+
+Read `CampaignRepository.kt` end to end this session — its query
+construction, header/auth handling, and response parsing
+(`parseTrendingRows`) all correctly match the RPC contract
+Mavins-web's `supabase_schema.sql` defines. No bug found in this
+repo's own code.
+
+**The most likely actual cause: no confirmation exists anywhere in
+Mavins-web's `handover.md` that `get_trending_campaigns`/
+`record_campaign_stream` were ever actually run against the live
+Supabase database**, as opposed to only being written into
+`supabase_schema.sql`. That repo has an established convention for
+this exact distinction (e.g. an unrelated leaderboard fix there is
+explicitly logged as "confirmed applied to production via Supabase SQL
+Editor" — no equivalent line exists for either of these two RPCs). If
+they were only ever written to the file and never run live, this
+app's `fetchActiveCampaigns()` would call a Postgres function that
+doesn't exist; PostgREST returns an error, and this repo's own code
+already catches that silently into an empty list (see
+`CampaignRepository.kt`'s `catch`/`!response.isSuccessful` branches) —
+by design, for a graceful empty Home section, but it means this
+specific failure mode produces zero visible error anywhere. This
+sandbox has no live Supabase credentials (confirmed, same standing
+blocker §8 already names) so this could not be verified directly this
+session — it needs a database check from someone with real access, or
+a direct answer from whoever last touched `supabase_schema.sql` in
+Mavins-web about whether it was actually run.
+
+**Two more real, secondary factors, confirmed but not the primary
+suspect:**
+1. `get_trending_campaigns`'s own filter
+   (`current_stage NOT IN ('planting', 'completed')`) means a
+   brand-new campaign is deliberately excluded until it reaches
+   ≥10,000 total streams (the `germination` threshold, per Mavins-
+   web's own `record_campaign_stream`). A genuinely live campaign that
+   simply hasn't crossed that threshold yet won't show — reads as
+   intentional "trending feed" design, not a bug, but worth confirming
+   against what the product owner actually expects (show immediately
+   vs. show once it has traction).
+2. Mavins-web's seed engine (what grows `total_streams` toward that
+   threshold) has a header comment claiming it runs every 15 minutes;
+   its actual deployed cron only fires once a day (`vercel.json`). Real
+   discrepancy, confirmed by reading both files in that repo directly —
+   a slow-down, not an outage.
+
+**What would resolve this, in order** (same list as Mavins-web's own
+Task 57, repeated here for a reader who only has this file open):
+1. Confirm with the product owner whether `get_trending_campaigns`/
+   `record_campaign_stream` have ever been run live — if not, running
+   them (a pure database action, no code change in either repo) is
+   very likely the actual fix.
+2. If they're already live, check the specific published campaign's
+   own `current_stage`/`total_streams` — if still well under 10,000
+   and at `planting`, that's §1 above's filter working as designed,
+   and the conversation becomes a product decision, not a bug report.
+3. Lower priority: reconcile the seed engine's stated vs. actual cron
+   cadence.
+
+Nothing above was executed this session in either repo — no SQL was
+run against any database, no cron config changed, no application code
+edited in Velune or Mavins-web.
