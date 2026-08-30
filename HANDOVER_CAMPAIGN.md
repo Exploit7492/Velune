@@ -3,6 +3,26 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note, same session (2026-08-30, latest of all) — §9 CLOSED:
+> root cause confirmed by the corrected query, fix written in
+> Mavins-web as `supabase_migration_020_trending_campaigns_show_
+> planting.sql`.** Query result (product owner ran it directly): the
+> reported campaign is sitting at `current_stage = 'planting'`,
+> `total_streams = 0`, `is_active = true` — exactly the state
+> `get_trending_campaigns`'s old `WHERE` clause excluded. The fix lives
+> in Mavins-web (that's where the RPC is defined) — nothing in this
+> repo's own code needed to change, matching this diagnosis's own
+> earlier finding that `CampaignRepository.kt` was already correct.
+> Migration changes the clause from `tc.current_stage NOT IN
+> ('planting', 'completed')` to `tc.current_stage != 'completed'` —
+> 'planting' campaigns now show, 'completed' ones still don't. **Not
+> yet applied to the live DB** — same hand-off as every prior
+> migration, no live-DB network path from either sandbox. Full
+> write-up in §9's own step 2/3 below. Once applied, the next real
+> check is building/running this app on an actual device to confirm
+> the campaign renders — still blocked on no Android SDK in this
+> sandbox.
+>
 > **Newest note, same session (2026-08-30, latest of all) — §9's
 > step-2 query had a bug (corrected, still needs to be run), and the
 > design question it was meant to check is now ANSWERED — changing
@@ -51,13 +71,13 @@
 > credentials anymore.
 >
 > **Full cross-repo status, as of this note:**
-> - **Velune** (this repo, this file) — next: §9's own diagnosis (needs
->   a product-owner answer, see there), or any item in §8 below
+> - **Velune** (this repo, this file) — next: §9 is closed (fix
+>   written, needs the migration applied to the live DB, then an
+>   on-device build to confirm), or any item in §8 below
 > - **Mavins-web** — next: see that repo's own `handover.md` START HERE
 >   box directly (this file's own copy of "next task" for that repo
->   goes stale fast — Mavins-web's file is now at Task 57, not Task 28
->   as an older version of this box said; don't trust a hand-copied
->   pointer here over that repo's own live file)
+>   goes stale fast — don't trust a hand-copied pointer here over that
+>   repo's own live file)
 > - **B-Pay-backend** — next: **none currently unblocked** (Korapay-
 >   only focus active; `Zapier-codes/B-Pay-backend`, fork of
 >   `Phoenix-Boss/B-PAY-backend`) — not independently re-verified this
@@ -424,7 +444,7 @@ because it's hard.
   not attempted here, matches this feature's "anon gets minimal
   privileges" posture deliberately).
 
-## 9. 2026-08-30 correction + cross-repo diagnosis: "admin-published campaign not showing"
+## 9. 2026-08-30 correction + cross-repo diagnosis: "admin-published campaign not showing" — CLOSED, fix written in Mavins-web, not yet applied to live DB
 
 **Trigger:** the product owner reported an admin-published campaign in
 Mavins-web wasn't appearing on Velune's Home screen. This section
@@ -525,45 +545,47 @@ would resolve this" step 3 below:**
 **What would resolve this, in order** (same list as Mavins-web's own
 Task 57, repeated here for a reader who only has this file open):
 1. **DONE (2026-08-30) — RPCs confirmed live, see above. Ruled out.**
-2. **Query had a bug — corrected below, still needs to actually be
-   run.** The first attempt failed: `ERROR: 42703: column "title" does
-   not exist`. Confirmed against Mavins-web's own `supabase_schema.sql`
-   — `title` lives on `public.tracks`, not `track_campaigns`, joined
-   via the latter's nullable `track_id`. Corrected:
-   ```sql
-   select tc.id, t.title, tc.current_stage, tc.total_streams,
-          tc.is_active, tc.is_paused, tc.target_genres, tc.created_at
-   from track_campaigns tc
-   left join tracks t on t.id = tc.track_id
-   order by tc.created_at desc
-   limit 10;
-   ```
-   (`left join`, not inner — a campaign resolved only via
-   `resolved_song_id` has a null `track_id` and would otherwise vanish
-   from the result rather than showing with a null title.)
-3. **The "should a brand-new campaign show immediately" question is
-   now ANSWERED, and it changes this diagnosis's own conclusion — no
-   longer just a secondary factor.** Product owner, verbatim: yes, new
-   campaigns should show immediately; multiple active campaigns display
-   in a shuffled home-page slideshow; campaigns are also queued by
-   genre (matches `target_genres`, already a parameter on
-   `get_trending_campaigns`, so that part of the intended architecture
-   already exists). **This directly contradicts that function's own
-   live `WHERE` clause** — every new campaign starts at
-   `current_stage = 'planting'` (that column's own default), which the
-   clause explicitly excludes. **This is no longer "working as
-   designed, worth confirming" — the design has been confirmed to be
-   the opposite of what's implemented.** If step 2's query (once
-   actually run) shows the reported campaign sitting at `'planting'`,
-   that's sufficient to call this diagnosis's root cause found, not
-   just suspected. **Still not fixed — documentation only, per this
-   section's own instruction** — the indicated fix (removing/altering
-   `'planting'` from that exclusion list) is a live-DB function edit,
-   left for a session/action explicitly scoped to make it.
+2. **DONE (2026-08-30) — corrected query run, result confirms the
+   reported campaign is sitting exactly where step 3 predicted.**
+   Result:
+   | id                                   | title | current_stage | total_streams | is_active | is_paused | target_genres   | created_at                    |
+   | ------------------------------------- | ----- | -------------- | -------------- | --------- | --------- | ---------------- | ------------------------------ |
+   | ff616798-ee70-4488-a37f-a61abd743b92 | null  | planting       | 0              | true      | false     | ["Afrobeats"]     | 2026-08-29 12:21:10.726697+00 |
+
+   `current_stage = 'planting'`, `total_streams = 0`, `is_active =
+   true` — a real, live, active campaign, sitting exactly at the stage
+   `get_trending_campaigns`'s `WHERE` clause excluded. Combined with
+   step 1 (RPCs confirmed live) and step 3's answered design question,
+   this is the confirmed root cause, not a suspected one.
+3. **CONFIRMED root cause (2026-08-30) — fixed in Mavins-web this
+   session, migration written, not yet applied to the live DB.** The
+   "should a brand-new campaign show immediately" question is
+   answered: yes, multiple active campaigns display in a shuffled
+   home-page slideshow, and campaigns are queued by genre too (matches
+   `target_genres`, already a parameter on `get_trending_campaigns`).
+   Step 2's result above confirms the reported campaign hit exactly
+   this. **Fix:** Mavins-web's
+   `supabase_migration_020_trending_campaigns_show_planting.sql` —
+   `get_trending_campaigns`'s `WHERE` clause changes from
+   `tc.current_stage NOT IN ('planting', 'completed')` to
+   `tc.current_stage != 'completed'`. Nothing in **this** repo needed
+   to change — `CampaignRepository.kt` was already confirmed correct
+   earlier in this section, the bug was entirely on the database side.
+   The `trending_score` formula is deliberately untouched by that
+   migration — a 'planting' campaign is now included but still scores
+   low (same `CASE ... ELSE 10` weighting as before), so it may sort
+   near the bottom of a strictly-ordered result. Whether this app's
+   Home screen renders strictly by `trending_score` or shuffles the
+   returned set (the product owner's own word) wasn't diagnosed as
+   broken, so it wasn't changed — worth checking once this app is
+   actually built and run against the applied migration. **Not yet
+   applied to the live DB** — same hand-off as every prior migration,
+   neither sandbox has a live-DB network path.
 4. Lower priority: reconcile the seed engine's stated vs. actual cron
    cadence.
 
-Beyond the read-only confirmation queries above, nothing was executed
-this session in either repo — no SQL that changes data was run, no
-cron config changed, no application code edited in Velune or
-Mavins-web.
+Beyond the two read-only confirmation queries, the only write this
+session was a schema/function migration file in Mavins-web
+(`supabase_migration_020_trending_campaigns_show_planting.sql`, see
+step 3) — not a live-DB change. No cron config changed, no application
+code edited in either repo.
