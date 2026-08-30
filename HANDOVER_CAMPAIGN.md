@@ -3,15 +3,27 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note, same session (2026-08-30, latest of all) — §9's
+> step-2 query had a bug (corrected, still needs to be run), and the
+> design question it was meant to check is now ANSWERED — changing
+> this diagnosis's own conclusion.** `title` doesn't exist on
+> `track_campaigns` (it's on the joined `tracks` table) — corrected
+> query is in §9. Separately, product owner confirmed directly: new
+> campaigns should show immediately, multiple active ones display in
+> a shuffled home-page slideshow, and campaigns are queued by genre
+> too. **This contradicts `get_trending_campaigns`'s own live filter**
+> (`current_stage NOT IN ('planting', 'completed')` — new campaigns
+> start at `'planting'`). No longer "working as designed, worth
+> confirming" — confirmed to be the opposite of the intended design.
+> Still not fixed — documentation only. Full reasoning in §9.
+>
 > **Newest note, same session (2026-08-30, later than the note below
 > it) — §9's leading hypothesis RULED OUT: `get_trending_campaigns`/
 > `record_campaign_stream` confirmed live in the database.** Also:
 > **live Supabase credentials wired into `local.properties`** this
 > session (`SUPABASE_URL`/`SUPABASE_ANON_KEY`, same project Mavins-web
-> uses) — closes part of §8's blocker below. **Next: §9's own step 2**
-> (check the specific published campaign's `current_stage`/
-> `total_streams` — exact query in §9). App still not built/run — no
-> Android SDK in this sandbox.
+> uses) — closes part of §8's blocker below. App still not built/run —
+> no Android SDK in this sandbox.
 >
 > **Newest note (2026-08-30) — corrects two stale parts of this file
 > (§7 and `campaign_schema.sql`'s own description), and documents a
@@ -494,17 +506,16 @@ task in this file's history (see §8). Building/installing on a real
 device to see the actual UI is a still-separate, not-yet-taken step,
 independent of whichever database finding comes next.
 
-**Two more real, secondary factors, confirmed but not the primary
-suspect:**
+**Two more real, secondary factors when this was first written — the
+first is now confirmed to be the actual likely root cause, see "What
+would resolve this" step 3 below:**
 1. `get_trending_campaigns`'s own filter
    (`current_stage NOT IN ('planting', 'completed')`) means a
    brand-new campaign is deliberately excluded until it reaches
    ≥10,000 total streams (the `germination` threshold, per Mavins-
-   web's own `record_campaign_stream`). A genuinely live campaign that
-   simply hasn't crossed that threshold yet won't show — reads as
-   intentional "trending feed" design, not a bug, but worth confirming
-   against what the product owner actually expects (show immediately
-   vs. show once it has traction).
+   web's own `record_campaign_stream`). **Originally flagged here as
+   "reads like intentional design, worth confirming" — now confirmed
+   to be the OPPOSITE of the intended design, see step 3 below.**
 2. Mavins-web's seed engine (what grows `total_streams` toward that
    threshold) has a header comment claiming it runs every 15 minutes;
    its actual deployed cron only fires once a day (`vercel.json`). Real
@@ -514,26 +525,45 @@ suspect:**
 **What would resolve this, in order** (same list as Mavins-web's own
 Task 57, repeated here for a reader who only has this file open):
 1. **DONE (2026-08-30) — RPCs confirmed live, see above. Ruled out.**
-2. **NEXT — check the specific published campaign's own
-   `current_stage`/`total_streams` directly:**
+2. **Query had a bug — corrected below, still needs to actually be
+   run.** The first attempt failed: `ERROR: 42703: column "title" does
+   not exist`. Confirmed against Mavins-web's own `supabase_schema.sql`
+   — `title` lives on `public.tracks`, not `track_campaigns`, joined
+   via the latter's nullable `track_id`. Corrected:
    ```sql
-   select id, title, current_stage, total_streams, is_active, is_paused, created_at
-   from track_campaigns
-   order by created_at desc
+   select tc.id, t.title, tc.current_stage, tc.total_streams,
+          tc.is_active, tc.is_paused, tc.target_genres, tc.created_at
+   from track_campaigns tc
+   left join tracks t on t.id = tc.track_id
+   order by tc.created_at desc
    limit 10;
    ```
-   If it's still at `planting` with well under 10,000 total streams,
-   that's §1 above's filter working as designed — the conversation
-   becomes a product decision (should a brand-new campaign show
-   immediately), not a bug report. If it's already past that threshold
-   and still not showing, that contradicts both hypotheses checked so
-   far and needs a fresh look at `get_trending_campaigns`'s full
-   `WHERE` clause — there may be a third condition not yet surfaced in
-   this diagnosis.
-3. Lower priority: reconcile the seed engine's stated vs. actual cron
+   (`left join`, not inner — a campaign resolved only via
+   `resolved_song_id` has a null `track_id` and would otherwise vanish
+   from the result rather than showing with a null title.)
+3. **The "should a brand-new campaign show immediately" question is
+   now ANSWERED, and it changes this diagnosis's own conclusion — no
+   longer just a secondary factor.** Product owner, verbatim: yes, new
+   campaigns should show immediately; multiple active campaigns display
+   in a shuffled home-page slideshow; campaigns are also queued by
+   genre (matches `target_genres`, already a parameter on
+   `get_trending_campaigns`, so that part of the intended architecture
+   already exists). **This directly contradicts that function's own
+   live `WHERE` clause** — every new campaign starts at
+   `current_stage = 'planting'` (that column's own default), which the
+   clause explicitly excludes. **This is no longer "working as
+   designed, worth confirming" — the design has been confirmed to be
+   the opposite of what's implemented.** If step 2's query (once
+   actually run) shows the reported campaign sitting at `'planting'`,
+   that's sufficient to call this diagnosis's root cause found, not
+   just suspected. **Still not fixed — documentation only, per this
+   section's own instruction** — the indicated fix (removing/altering
+   `'planting'` from that exclusion list) is a live-DB function edit,
+   left for a session/action explicitly scoped to make it.
+4. Lower priority: reconcile the seed engine's stated vs. actual cron
    cadence.
 
-Beyond the two read-only confirmation queries above, nothing was
-executed this session in either repo — no SQL that changes data was
-run, no cron config changed, no application code edited in Velune or
+Beyond the read-only confirmation queries above, nothing was executed
+this session in either repo — no SQL that changes data was run, no
+cron config changed, no application code edited in Velune or
 Mavins-web.
