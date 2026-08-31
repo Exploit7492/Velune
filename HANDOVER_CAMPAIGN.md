@@ -3,6 +3,13 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-08-30, latest of all) — §10 added: Task 59 Part 2
+> (queue-slot campaign injection wiring) traced end-to-end in this
+> repo's own code, not implemented.** Sync note only — canonical
+> write-up is in Mavins-web's `handover.md`, Task 59's own "Round 5"
+> entry (full file/line call chain + build plan). Read §10 below first,
+> then that entry, before starting Part 2 here.
+>
 > **Newest note, same session (2026-08-30, latest of all) — §9 CLOSED:
 > root cause confirmed by the corrected query, fix written in
 > Mavins-web as `supabase_migration_020_trending_campaigns_show_
@@ -589,3 +596,46 @@ session was a schema/function migration file in Mavins-web
 (`supabase_migration_020_trending_campaigns_show_planting.sql`, see
 step 3) — not a live-DB change. No cron config changed, no application
 code edited in either repo.
+
+## 10. 2026-08-30 — Task 59 Part 2 (campaign queue-slot RPC wiring) traced end-to-end in this repo's own code, NOT implemented — canonical write-up lives in Mavins-web
+
+**Sync note only — full detail lives in Mavins-web's `handover.md`,
+Task 59's own "Round 5" entry.** Kept concise here rather than
+duplicated in full, per this project's own cross-repo convention (see
+§9 above for the same pattern) — copy drift between two full copies of
+the same finding is worse than one canonical copy plus a pointer.
+
+**What was found, reading this repo's own code directly:** wiring
+genre-aware campaign injection through to Mavins-web's new
+`get_next_campaign_for_queue_slot` RPC (migration 023, that repo)
+touches 8 files in **this** repo — `MoodAndGenresScreen.kt` →
+`NavigationBuilder.kt` → `YouTubeBrowseViewModel`/`YouTubeBrowseScreen.kt`
+→ `PlayerConnection.kt` → `MusicService.kt` →
+`CampaignInjectedQueue.kt` → `CampaignRepository.kt` — and surfaces a
+real architecture mismatch, not just missing plumbing:
+`CampaignInjectedQueue.kt` currently pre-fetches a batch of campaigns
+once per queue and rotates them locally (`campaignOrder =
+...indices.shuffled()`, `getInitialStatus()`), but the new RPC is
+designed for one atomic pick-and-mark call **per slot** — naively
+calling it in a batch upfront would mark campaigns as "just served"
+before they're actually played, corrupting the platform-wide fairness
+rotation for other listeners' queues being built concurrently, not
+just missing the intended behavior. Also flagged: `MoodAndGenresScreen`
+mixes true genre tiles with mood tiles (e.g. "Chill," "Feel Good") that
+aren't genres at all — the only per-tile label available
+(`it.title`) hasn't been confirmed to match `track_campaigns.target_genres`'s
+stored values. This is a real open question, but confirmed **not** a
+safety risk either way (a mismatched string just yields zero eligible
+campaigns via the RPC's own filter — the same fail-closed outcome as
+passing no genre, never an incorrect cross-genre match) — only a
+possible under-delivery of campaign impressions until resolved.
+
+**Not implemented — same reason every Velune Kotlin task in this
+project has stayed documentation-only so far:** no Android SDK or
+Google Maven access exists in either sandbox this project has used, so
+there's no way to compile-verify a change this size before handing it
+over. Mavins-web's Task 59 "Round 5" entry has the full file/line
+citations for every hop in the chain and a two-part build plan (2a:
+`CampaignRepository.kt` + `CampaignInjectedQueue.kt` refactor, safe to
+reason about in isolation; 2b: the wider 6-file nav/UI threading pass)
+— read that entry in full before starting Part 2 in this repo.
