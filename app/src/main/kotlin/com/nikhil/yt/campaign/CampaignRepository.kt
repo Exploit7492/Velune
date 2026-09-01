@@ -75,6 +75,101 @@ class CampaignRepository {
     }
 
     /**
+     * Fetch ONE campaign for a single queue-slot injection point, via
+     * the genre-locked, fair-rotation `get_next_campaign_for_queue_slot`
+     * RPC (migration 023, Task 59 Part 1/2a — see handover.md, Mavins-
+     * web repo).
+     *
+     * Deliberately called once PER injection point by
+     * [com.nikhil.yt.playback.queues.CampaignInjectedQueue] — never
+     * pre-fetched as a batch and locally rotated. That per-call
+     * discipline is what gives this function's own RPC its real,
+     * cross-listener fairness meaning: the RPC does an atomic
+     * "least-recently-served eligible campaign, marked served, in one
+     * transaction" pick on every single call — pre-fetching several at
+     * once up front would mark campaigns as served before they've
+     * actually reached a played slot, corrupting that bookkeeping for
+     * every other listener's concurrent queue.
+     *
+     * JSON POST body, not query-string params — deliberately NOT the
+     * same pattern [fetchActiveCampaigns] above uses
+     * (`"&p_genre=$it"`, string-interpolated directly into a URL
+     * without encoding). That existing pattern has a real, live bug:
+     * for any genre containing a URL-special character — "R&B" is one
+     * of this app's own actual genres — it produces
+     * `...&p_genre=R&B`, where the embedded `&` gets parsed as a
+     * second, malformed query parameter, silently corrupting the
+     * request and breaking genre filtering specifically for that
+     * genre. Not fixed here — [fetchActiveCampaigns] is outside this
+     * part's own file scope (Task 59 Part 2a is `CampaignRepository.kt`
+     * + `CampaignInjectedQueue.kt`, and even within this file, that
+     * existing function isn't part of what this part touches) —
+     * flagged in the handover instead, so it isn't silently
+     * rediscovered later. This new function just doesn't repeat the
+     * same mistake, using the same safe JSON-body pattern
+     * [recordCampaignStream] below already established.
+     *
+     * @return a playable [MediaItem] for the selected campaign, or
+     *   `null` if no eligible campaign exists for [genre] right now
+     *   (a normal, expected outcome — a thin genre, or one where every
+     *   eligible campaign was already served very recently — not an
+     *   error) or if resolution failed for any reason.
+     */
+    suspend fun fetchNextCampaignForQueueSlot(genre: String): MediaItem? = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext null
+        try {
+            val payload = JSONObject().apply {
+                put("p_genre", genre)
+            }
+            val request = Request.Builder()
+                .url("$url/rest/v1/rpc/get_next_campaign_for_queue_slot")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .header("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${'$'}{response.code}")
+                    return@use null
+                }
+                val body = response.body?.string().orEmpty()
+                val array = try {
+                    JSONArray(body)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot: malformed response")
+                    return@use null
+                }
+                // Empty array = no eligible campaign for this genre right
+                // now (the RPC's own fail-closed/no-match behavior, per
+                // migration 023) -- not an error, just "skip this slot."
+                if (array.length() == 0) return@use null
+                val row = array.optJSONObject(0) ?: return@use null
+
+                val sourceUrl = row.optString("source_url", "")
+                val resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() }
+                // Same resolution order CampaignUrlResolver already
+                // establishes for the trending-list path: a stored
+                // resolved id wins if present, falls back to extracting
+                // one from the raw source URL otherwise.
+                val videoId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+                if (videoId == null) {
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract a video id")
+                    return@use null
+                }
+
+                val result = YouTube.queue(listOf(videoId)).getOrNull()
+                val metadata = result?.firstOrNull()?.toMediaMetadata()
+                metadata?.toMediaItem()
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed for genre=$genre")
+            null
+        }
+    }
+
+    /**
      * Fetch active campaigns as raw MediaItems for queue injection.
      * Used by CampaignInjectedQueue to get playable campaign songs.
      */

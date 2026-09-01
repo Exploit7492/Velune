@@ -1548,12 +1548,24 @@ class MusicService :
         ensureScopesActive()
         suppressAutoPlayback = false
         // Wrap every queue with campaign injection.
-        // Campaigns are fetched lazily inside getInitialStatus() on the IO
-        // dispatcher — no blocking here, and empty result = pass-through.
-        val campaignRepo = com.nikhil.yt.campaign.CampaignRepository()
+        // Task 59 Part 2a — campaignSlotProvider is called once PER
+        // injection slot now, not once per queue (see
+        // CampaignInjectedQueue's own doc comment for why) -- and this
+        // one existing call site passes `{ null }`, meaning "no
+        // injection," deliberately: Part 2a's own scope is the
+        // repository + queue refactor only, not threading a real genre
+        // through yet (that's Part 2b, still not started as of this
+        // part). `{ null }` here is what keeps this call site's actual
+        // behavior identical to before this part -- zero campaign
+        // injection on any queue, exactly as it already effectively was
+        // pre-genre-locking (Task 59 Round 3) -- while still being the
+        // real, non-default value a call site CAN pass once Part 2b
+        // exists. Re-introducing a genre-aware CampaignRepository call
+        // here (or wherever Part 2b decides is the right call site) is
+        // that part's own job, not this one's.
         val wrappedQueue = com.nikhil.yt.playback.queues.CampaignInjectedQueue(
             baseQueue = queue,
-            campaignProvider = { campaignRepo.fetchActiveCampaignMediaItems() }
+            campaignSlotProvider = { null }
         )
         currentQueue = wrappedQueue
         queueTitle = null

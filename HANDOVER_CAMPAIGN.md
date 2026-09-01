@@ -683,3 +683,15 @@ citations for every hop in the chain and a two-part build plan (2a:
 `CampaignRepository.kt` + `CampaignInjectedQueue.kt` refactor, safe to
 reason about in isolation; 2b: the wider 6-file nav/UI threading pass)
 — read that entry in full before starting Part 2 in this repo.
+
+## 11. 2026-08-31 — Part 2a built in this repo: `CampaignRepository.kt` + `CampaignInjectedQueue.kt`, canonical write-up in Mavins-web
+
+**Sync note only — same pattern §10 above already used.** Full detail
+(the per-slot refactor, the index-tracking bug found and fixed with 4
+verified simulation cases, and two more real pre-existing bugs found
+and flagged but NOT fixed — one in `MusicService.kt`'s initial-batch
+population, one in `CampaignRepository.kt`'s existing
+`fetchActiveCampaigns()`) lives in Mavins-web's `handover.md`, Task 59
+"Round 7." Read that entry before starting Part 2b or touching either
+flagged bug in this repo. **Not compile-verified here either** — same
+structural limitation as everything else in this section.
