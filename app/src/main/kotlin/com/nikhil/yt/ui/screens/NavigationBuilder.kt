@@ -296,7 +296,17 @@ fun NavGraphBuilder.navigationBuilder(
         TopPlaylistScreen(navController, scrollBehavior)
     }
     composable(
-        route = "youtube_browse/{browseId}?params={params}",
+        // Task 59 Part 2b-b, first sub-part (handover.md): `genreTile`
+        // is a NEW, nullable query arg -- only MoodAndGenresScreen.kt
+        // supplies it (see that file's own onClick comment). The other
+        // two callers of this shared route (ExploreScreen.kt,
+        // HomeScreenComponents.kt) are deliberately unchanged; Jetpack
+        // Navigation's own default-null handling for an omitted
+        // nullable String arg is exactly the fail-closed behavior
+        // Round 3 already decided for every non-genre-tile queue
+        // origin -- no code needed at either of those two call sites
+        // to enforce it, it falls out of leaving them alone.
+        route = "youtube_browse/{browseId}?params={params}&genreTile={genreTile}",
         arguments =
         listOf(
             navArgument("browseId") {
@@ -304,6 +314,10 @@ fun NavGraphBuilder.navigationBuilder(
                 nullable = true
             },
             navArgument("params") {
+                type = NavType.StringType
+                nullable = true
+            },
+            navArgument("genreTile") {
                 type = NavType.StringType
                 nullable = true
             },

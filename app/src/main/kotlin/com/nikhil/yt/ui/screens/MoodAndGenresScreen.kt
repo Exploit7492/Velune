@@ -9,6 +9,7 @@
 package com.nikhil.yt.ui.screens
 
 import android.content.res.Configuration.ORIENTATION_LANDSCAPE
+import java.net.URLEncoder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -88,7 +89,25 @@ fun MoodAndGenresScreen(
                                 MoodAndGenresButton(
                                     title = it.title,
                                     onClick = {
-                                        navController.navigate("youtube_browse/${it.endpoint.browseId}?params=${it.endpoint.params}")
+                                        // Task 59 Part 2b-b, first sub-part (handover.md):
+                                        // this is the ONE genuine origin point of a real
+                                        // genre/mood signal in this app's whole navigation
+                                        // graph -- ExploreScreen.kt and
+                                        // HomeScreenComponents.kt navigate to this exact
+                                        // same shared route with no equivalent title to
+                                        // send, and deliberately stay untouched (see
+                                        // NavigationBuilder.kt's own comment on this route)
+                                        // -- their resulting queues correctly carry NO
+                                        // genre signal at all, matching Round 3's already-
+                                        // decided fail-closed rule for every non-genre-tile
+                                        // queue origin. URL-encoded for the same reason
+                                        // Task 59 Part 2b-a's CampaignRepository fix was --
+                                        // a real genre title containing '&' (e.g. "R&B")
+                                        // would otherwise corrupt the query string.
+                                        val encodedTitle = URLEncoder.encode(it.title, "UTF-8")
+                                        navController.navigate(
+                                            "youtube_browse/${it.endpoint.browseId}?params=${it.endpoint.params}&genreTile=$encodedTitle"
+                                        )
                                     },
                                     modifier =
                                     Modifier

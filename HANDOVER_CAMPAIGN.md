@@ -759,3 +759,25 @@ task-splitting rule. That remains open — see Mavins-web's own
 structural limitation every prior Velune code change in this project
 has flagged. Verified via a brace/paren balance check on both changed
 files and the payload-simulation described above.
+
+## 12. Task 59 Part 2b-b, Round 11 (2026-09-01) — genre-tile title now reaches the ViewModel, canonical write-up in Mavins-web
+
+**Kept concise here rather than duplicated — Mavins-web's own
+`handover.md`, Task 59's own "Round 11" entry, has the full write-up.**
+Three files changed this round: `MoodAndGenresScreen.kt` (sends the
+tapped tile's title as a new, URL-encoded `genreTile` query arg),
+`NavigationBuilder.kt` (new nullable `genreTile` nav argument on the
+shared `youtube_browse` route — confirmed via grep that route has
+exactly 3 callers, only this one has a genre signal to send, so the
+other two need zero changes), `YouTubeBrowseViewModel.kt` (reads and
+`URLDecoder`-decodes the new value into a new `genreTileTitle: String?`
+field, not consumed by anything yet). Verified via brace/paren balance
+check on all three files plus a throwaway Python simulation of the
+encode/decode round trip for 4 real titles (including one with `&`) —
+not compile-verified, no Android SDK in this sandbox.
+
+**Still open, unchanged from §11:** actually consuming
+`genreTileTitle` (a real `campaignSlotProvider` calling Part A's
+`fetchGenreTileMapping()`, threaded into `PlayerConnection.kt`/
+`MusicService.kt`), the pre-existing log-escaping bug, and every other
+item §11 already flagged.
