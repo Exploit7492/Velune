@@ -184,9 +184,16 @@ fun YouTubeBrowseScreen(
                                                     if (song.id == mediaMetadata?.id) {
                                                         playerConnection.player.togglePlayPause()
                                                     } else {
+                                                        // Task 59 Part 2b-b -- pass the genre-tile
+                                                        // title through (null for every other
+                                                        // browse result, e.g. an artist/album/
+                                                        // playlist browse landed on via search or
+                                                        // elsewhere) so MusicService's campaign-
+                                                        // injection wrapping site can genre-lock.
                                                         playerConnection.playQueue(
                                                             YouTubeQueue.radio(
-                                                                song.toMediaMetadata()
+                                                                song.toMediaMetadata(),
+                                                                genre = viewModel.genreTileTitle,
                                                             )
                                                         )
                                                     }

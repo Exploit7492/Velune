@@ -19,6 +19,12 @@ import kotlinx.coroutines.withContext
 class YouTubeQueue(
     private var endpoint: WatchEndpoint,
     override val preloadItem: MediaMetadata? = null,
+    // Task 59 Part 2b-b -- set only by the genre-tile-originated call
+    // site in YouTubeBrowseScreen.kt (via radio()'s own new parameter
+    // below); every other existing caller of this class/factory is
+    // unaffected, defaults to null, same fail-closed behavior as
+    // before this part.
+    override val genre: String? = null,
 ) : Queue {
     private var continuation: String? = null
 
@@ -49,6 +55,7 @@ class YouTubeQueue(
     }
 
     companion object {
-        fun radio(song: MediaMetadata) = YouTubeQueue(WatchEndpoint(song.id), song)
+        fun radio(song: MediaMetadata, genre: String? = null) =
+            YouTubeQueue(WatchEndpoint(song.id), song, genre = genre)
     }
 }

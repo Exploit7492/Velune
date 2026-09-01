@@ -781,3 +781,30 @@ not compile-verified, no Android SDK in this sandbox.
 `fetchGenreTileMapping()`, threaded into `PlayerConnection.kt`/
 `MusicService.kt`), the pre-existing log-escaping bug, and every other
 item §11 already flagged.
+
+## §12 — genre reaches a real `Queue` object (2026-09-01)
+
+**Sync note only — canonical write-up in Mavins-web's `handover.md`,
+Task 59's own "Round 12" section, same pattern §10/§11 above already
+used.** Full detail there; summary here: `Queue.kt` gets a new
+`genre: String? get() = null` default property (Round 5's original
+architecture recommendation, built here for the first time);
+`YouTubeQueue`'s constructor + `radio()` factory both grow a matching
+optional `genre` param (confirmed via grep: all 13 existing call sites
+across the app pass exactly one positional arg, unaffected, correctly
+defaulting to `null`); `YouTubeBrowseScreen.kt`'s one already-traced
+flat-song-list call site now passes `viewModel.genreTileTitle`
+through. **Deliberately still only that one call site** — the grid/
+album/playlist play-path flagged untraced back in §9/Mavins-web's own
+Round 2 is still not covered. Verified via brace/paren balance check
+on all three changed files, no Android SDK in this sandbox, same
+standing limitation.
+
+**Still open, narrower now:** `MusicService.kt`'s actual
+`campaignSlotProvider` construction (read `queue.genre`, cached
+`fetchGenreTileMapping()` lookup, `ingestGenreTile()` on a cache miss,
+`fetchNextCampaignForQueueSlot()` for a confirmed mapping) is now the
+single remaining piece of this whole chain — plus the untraced
+grid/album/playlist path, the pre-existing log-escaping bug, and
+`MusicService.kt`'s own separate initial-batch bug, all still
+outstanding from §11.
