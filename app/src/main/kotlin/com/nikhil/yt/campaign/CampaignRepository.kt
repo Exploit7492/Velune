@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import java.net.URLEncoder
 import java.util.UUID
 
 class CampaignRepository {
@@ -49,8 +50,8 @@ class CampaignRepository {
                 .url(
                     "$url/rest/v1/rpc/get_trending_campaigns" +
                         "?p_limit=$limit" +
-                        (countryCode?.let { "&p_country_code=$it" } ?: "") +
-                        (genre?.let { "&p_genre=$it" } ?: "")
+                        (countryCode?.let { "&p_country_code=${URLEncoder.encode(it, "UTF-8")}" } ?: "") +
+                        (genre?.let { "&p_genre=${URLEncoder.encode(it, "UTF-8")}" } ?: "")
                 )
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $anonKey")
@@ -91,23 +92,16 @@ class CampaignRepository {
      * actually reached a played slot, corrupting that bookkeeping for
      * every other listener's concurrent queue.
      *
-     * JSON POST body, not query-string params — deliberately NOT the
-     * same pattern [fetchActiveCampaigns] above uses
-     * (`"&p_genre=$it"`, string-interpolated directly into a URL
-     * without encoding). That existing pattern has a real, live bug:
-     * for any genre containing a URL-special character — "R&B" is one
-     * of this app's own actual genres — it produces
-     * `...&p_genre=R&B`, where the embedded `&` gets parsed as a
-     * second, malformed query parameter, silently corrupting the
-     * request and breaking genre filtering specifically for that
-     * genre. Not fixed here — [fetchActiveCampaigns] is outside this
-     * part's own file scope (Task 59 Part 2a is `CampaignRepository.kt`
-     * + `CampaignInjectedQueue.kt`, and even within this file, that
-     * existing function isn't part of what this part touches) —
-     * flagged in the handover instead, so it isn't silently
-     * rediscovered later. This new function just doesn't repeat the
-     * same mistake, using the same safe JSON-body pattern
-     * [recordCampaignStream] below already established.
+     * JSON POST body, not query-string params — the same safe pattern
+     * [recordCampaignStream] below already established, and now also
+     * what [fetchActiveCampaigns] above uses after this session's own
+     * fix (that function previously string-interpolated `genre`/
+     * `countryCode` directly into a URL without encoding — a real, live
+     * bug for any value containing a URL-special character, "R&B"
+     * being one of this app's own actual genres; fixed this session via
+     * `URLEncoder.encode`, matching this codebase's own established
+     * convention in `MainActivity.kt`/`DiscordOAuthRepository.kt`).
+     * This function was written after that fix and never had the bug.
      *
      * @return a playable [MediaItem] for the selected campaign, or
      *   `null` if no eligible campaign exists for [genre] right now
@@ -166,6 +160,91 @@ class CampaignRepository {
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed for genre=$genre")
             null
+        }
+    }
+
+    /**
+     * Fetch the reviewed portion of `campaign_genre_tile_mapping`
+     * (migration 024, Task 59 Part 2b-a — Mavins-web repo) as a
+     * `tile_title -> mapped_genre_id` map, `mapped_genre_id` itself
+     * possibly `null` for a tile an admin has confirmed is genuinely a
+     * mood/non-genre (a deliberate, reviewed decision — see the
+     * migration's own `is_reviewed` column comment for why that's a
+     * different state from "not yet reviewed," and why this function
+     * only ever reads `is_reviewed = true` rows: an unreviewed row's
+     * `suggested_genre_id` is a machine guess, never live targeting
+     * data, per Round 6's own core invariant — this function doesn't
+     * even fetch that column).
+     *
+     * Direct Supabase REST read (`GET .../rest/v1/campaign_genre_tile_mapping`),
+     * not a call through Mavins-web's own API — this table's RLS
+     * explicitly grants public `SELECT` for exactly this purpose (the
+     * migration's own comment: "Velune's own client-side cache...
+     * reads this table directly"). Uses only [BuildConfig.SUPABASE_URL]
+     * / [BuildConfig.SUPABASE_ANON_KEY], already configured for every
+     * other call in this file — deliberately does NOT need a new
+     * Mavins-web API host added to this app's build config, unlike
+     * [ingestGenreTile] would (not built this session — see Task 59
+     * Part 2b-b's own handover.md note for why that's a separate,
+     * later piece of work with a real open question of its own: what
+     * host Velune should call for a Next.js route that isn't Supabase
+     * itself).
+     *
+     * Callers are expected to fetch this periodically and cache the
+     * result client-side (the migration comment's own intended
+     * pattern) rather than call it fresh on every single genre-tile
+     * tap — not implemented here, since Part 2b-b (not this part) is
+     * what actually calls this from a real tap, and can hold its own
+     * opinion about caching/refresh cadence once it exists.
+     *
+     * @return an empty map on any failure (network, malformed
+     *   response, missing config) — callers should treat that
+     *   identically to "no confirmed mapping for this tile," the same
+     *   fail-closed default this whole feature is built around, not as
+     *   a distinguishable error state.
+     */
+    suspend fun fetchGenreTileMapping(): Map<String, String?> = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext emptyMap()
+        try {
+            val request = Request.Builder()
+                .url("$url/rest/v1/campaign_genre_tile_mapping?is_reviewed=eq.true&select=tile_title,mapped_genre_id")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchGenreTileMapping: HTTP ${'$'}{response.code}")
+                    return@use emptyMap()
+                }
+                val body = response.body?.string().orEmpty()
+                val array = try {
+                    JSONArray(body)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "fetchGenreTileMapping: malformed response")
+                    return@use emptyMap()
+                }
+                (0 until array.length()).mapNotNull { i ->
+                    val row = array.optJSONObject(i) ?: return@mapNotNull null
+                    val tileTitle = row.optString("tile_title", "").takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
+                    // org.json has no isNull-aware optString overload that
+                    // distinguishes "key absent" from "key present, JSON
+                    // null" the way we need here (a confirmed non-genre
+                    // tile's mapped_genre_id is a real, meaningful JSON
+                    // null, not a missing field) — check explicitly.
+                    val mappedGenreId = if (row.isNull("mapped_genre_id")) {
+                        null
+                    } else {
+                        row.optString("mapped_genre_id", "").takeIf { it.isNotBlank() }
+                    }
+                    tileTitle to mappedGenreId
+                }.toMap()
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchGenreTileMapping failed")
+            emptyMap()
         }
     }
 
