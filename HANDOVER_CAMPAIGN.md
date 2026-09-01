@@ -158,6 +158,50 @@ See B-Pay-backend's own `handover.md` → "Unified hand-off command
 format" for the full original write-up with complete rationale for
 each rule — this is the same content, kept in sync.
 
+## Build-focus + mandatory task-splitting — MANDATORY, every session, all three repos
+
+**Added to all three repos' handover files this session (2026-08-30),
+kept identical the same way the section above it is — if you edit
+this section, copy the same edit into the other two in the same
+session.**
+
+**Direct product-owner instruction, two parts:**
+
+1. **All sessions should focus on building the code now, fully** — the
+   discovery/diagnosis-heavy phase this project spent a lot of recent
+   sessions in (schema queries, cross-repo diagnoses, architecture
+   proposals) should give way to actually implementing what's already
+   been decided. A task that's still genuinely blocked on a real open
+   product question stays blocked — don't force an answer that isn't
+   there — but a task sitting on a *resolved* decision with nothing
+   left but to write the code is exactly what a session should pick
+   next, in preference to opening a new discovery thread.
+2. **Every session must split whatever task it picks into parts, and
+   build only one of those parts** — never the whole task in one go,
+   regardless of how small the task looks at a glance. This formalizes,
+   as a standing rule rather than an occasional judgment call, the
+   pattern this project has already used successfully several times
+   (Mavins-web's Task 33 Part 2's a/b/c/d split, Task 46's a/b/c/d/e
+   split, Task 48-b/48-c/48-d's own lettered sub-splits) — each part
+   stays independently reviewable, independently revertible, and
+   independently patchable, and the natural stopping point after one
+   part keeps a single session's diff small enough to actually verify
+   properly rather than ballooning into something no one part of which
+   got real scrutiny.
+
+**How to split, in practice:** before writing any code, write out the
+task's natural parts (even if the task text doesn't already list them —
+most won't yet, since this is a new standing rule) as their own labeled
+sub-entries in this file, the same way Mavins-web's Task 46 entry lists
+46a/46b/46c/46d/46e. Pick the first genuinely unblocked part, build
+only that one, and leave the rest explicitly marked not-started for
+the next session — don't silently keep going into part two because it
+"was right there." If a task turns out to have exactly one indivisible
+unit of work (rare, but possible for something truly small), that's
+fine — say so explicitly in the write-up ("not split further, this is
+a single atomic change") rather than leaving it looking like a part
+was skipped.
+
 ---
 
 Separate from `HANDOVER.md` (which is scoped to the EQ/DSP work) —
