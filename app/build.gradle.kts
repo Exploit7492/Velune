@@ -107,6 +107,30 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
+        // Mavins-web API host (Task 59 Part 2b-b, first job) — used by
+        // ingestGenreTile() (CampaignRepository.kt) to POST unknown
+        // genre-tile titles to the admin-review pipeline
+        // (/api/campaigns/genre-tile-mapping/ingest, migration 024,
+        // Mavins-web repo). Not a secret (public endpoint, no auth
+        // beyond what that route itself validates) — the only reason
+        // this lives in build config rather than being a source-level
+        // constant is so CI/local builds can still override it via
+        // local.properties/env, the same flexibility every other host
+        // value in this file already gets, even though the common case
+        // has one correct value. Confirmed directly by the product
+        // owner this session: Mavins-web has no custom domain, deploys
+        // to Vercel under its package.json project name ("mavins"),
+        // with no name collision — https://mavins.vercel.app is the
+        // real, confirmed production URL, not a guess (Part A of this
+        // same task explicitly declined to hardcode a value here for
+        // exactly that reason — no confirmation existed yet at the
+        // time Part A was built).
+        val mavinsApiUrl =
+            localProperties.getProperty("MAVINS_API_URL")
+                ?: System.getenv("MAVINS_API_URL")
+                ?: "https://mavins.vercel.app"
+        buildConfigField("String", "MAVINS_API_URL", "\"$mavinsApiUrl\"")
+
         // Pawns SDK (app/src/main/java/com/nikhil/yt/PawnsManager.kt) —
         // this used to be a live key hardcoded directly in source as
         // MASTER_API_KEY, committed to this public repo's git history.

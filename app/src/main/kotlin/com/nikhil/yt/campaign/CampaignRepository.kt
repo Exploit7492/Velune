@@ -249,6 +249,58 @@ class CampaignRepository {
     }
 
     /**
+     * Ingest an unknown genre-tile title into the Mavins-web
+     * admin-review pipeline (`POST /api/campaigns/genre-tile-mapping/
+     * ingest`, that repo's own route — see its header comment for the
+     * full upsert-semantics contract this call relies on: a new title
+     * inserts unreviewed with a suggested match, a repeat title just
+     * bumps `seen_count`, an already-reviewed row is never touched).
+     * Fire-and-forget by design, matching [recordCampaignStream]'s own
+     * shape below — no return value, no error surfaced to the caller
+     * or the user; this is telemetry that happens to seed a table, not
+     * a request anything blocks on. Callers (Task 59 Part 2b-b,
+     * the UI/nav chain, not yet built) are expected to call this only
+     * for a tile title [fetchGenreTileMapping]'s own cached read doesn't
+     * already have an entry for — this function itself doesn't check
+     * that, since it has no access to that cache.
+     *
+     * Uses [BuildConfig.MAVINS_API_URL], not [BuildConfig.SUPABASE_URL]
+     * — this hits Mavins-web's own Next.js route directly (which itself
+     * writes to Supabase via its service-role admin client), not
+     * Supabase's REST API the way every other function in this file
+     * does. Different host, deliberately no `apikey`/`Authorization`
+     * headers — that route is explicitly public with no auth (see its
+     * own header comment for why), unlike every Supabase call above.
+     */
+    suspend fun ingestGenreTile(tileTitle: String) = withContext(Dispatchers.IO) {
+        val host = BuildConfig.MAVINS_API_URL.trimEnd('/')
+        if (host.isBlank()) {
+            Timber.tag(TAG).w("ingestGenreTile: MAVINS_API_URL not configured")
+            return@withContext
+        }
+        try {
+            val payload = JSONObject().apply {
+                put("tileTitle", tileTitle)
+            }
+            val request = Request.Builder()
+                .url("$host/api/campaigns/genre-tile-mapping/ingest")
+                .header("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("ingestGenreTile: HTTP ${response.code}")
+                } else {
+                    Timber.tag(TAG).d("ingestGenreTile: ingested '$tileTitle'")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "ingestGenreTile failed for '$tileTitle'")
+        }
+    }
+
+    /**
      * Fetch active campaigns as raw MediaItems for queue injection.
      * Used by CampaignInjectedQueue to get playable campaign songs.
      */
