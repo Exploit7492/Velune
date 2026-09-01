@@ -3,6 +3,18 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-09-01, latest of all) — Task 59 Part 2b-b's
+> first job done: `MAVINS_API_URL` confirmed + `ingestGenreTile()`
+> built.** See §11 below for the full write-up, commit `4652493`. Also
+> flags (does NOT fix) a real, pre-existing bug found across all six
+> HTTP-status log lines in `CampaignRepository.kt` — worth its own
+> small later part. **Next: the 6-file UI/nav genre-threading chain**
+> (`MoodAndGenresScreen` → `NavigationBuilder` →
+> `YouTubeBrowseViewModel`/`Screen` → `PlayerConnection.kt` →
+> `MusicService`) — deliberately not started this session, per this
+> project's own one-part-per-session rule. See Mavins-web's own
+> `handover.md`, Task 59, for that session's actual next step.
+>
 > **Newest note (2026-08-30, latest of all) — §10 added: Task 59 Part 2
 > (queue-slot campaign injection wiring) traced end-to-end in this
 > repo's own code, not implemented.** Sync note only — canonical
@@ -695,3 +707,55 @@ population, one in `CampaignRepository.kt`'s existing
 "Round 7." Read that entry before starting Part 2b or touching either
 flagged bug in this repo. **Not compile-verified here either** — same
 structural limitation as everything else in this section.
+
+## 11. Task 59 Part 2b-b, first job done (2026-09-01) — `MAVINS_API_URL` + `ingestGenreTile()`
+
+**MAVINS_API_URL confirmed directly by the product owner this session:
+`https://mavins.vercel.app`** — no custom domain, matches Mavins-web's
+own `package.json` project name (`"mavins"`), no name collision. Part A
+(§10 below / `e82466d`) explicitly declined to guess this value; this
+session had a real confirmation to build on instead.
+
+Built, this session, commit `4652493`:
+1. `app/build.gradle.kts` — `MAVINS_API_URL` BuildConfig field, same
+   `localProperties → env → default` fallback pattern every other host
+   value in this file already uses.
+2. `CampaignRepository.kt` — `ingestGenreTile(tileTitle)`, a
+   fire-and-forget POST to Mavins-web's own already-live
+   `/api/campaigns/genre-tile-mapping/ingest` route. Verified the
+   request shape against that route's own body-parsing/validation
+   logic directly (read the route file, then a throwaway Python
+   simulation of the exact JSON payload against it), not just assumed
+   from memory of what such a route probably expects.
+
+**Found, NOT fixed — a real, pre-existing bug across this entire
+file, worth a dedicated later pass:** every HTTP-status warning log
+line in `CampaignRepository.kt` (six instances — `fetchActiveCampaigns`,
+`fetchNextCampaignForQueueSlot`, `fetchGenreTileMapping`,
+`ingestGenreTile` before this session's own fix,
+`recordCampaignStream`, and one `songId` log) writes
+`${'$'}{response.code}` (or `${'$'}{campaign.songId}`) — Kotlin's
+literal-dollar-sign escape, which only means something inside a KDoc
+comment. Inside a real string literal (which all six of these are),
+it produces the literal text `${response.code}` in the log instead of
+the actual value. Caught this only because copying this file's own
+established style for consistency would have carried the exact same
+bug into this session's one new log line too — fixed that one line,
+left the five pre-existing instances alone (out of this part's own
+scope; a drive-by fix across five unrelated call sites isn't this
+part's job) and flagged here instead. Purely cosmetic (broken debug
+logging, not app-breaking) but worth a dedicated single-part cleanup
+later — a good, small, well-scoped "next part" for a future session
+with nothing else on file at the moment.
+
+**Deliberately not touched this session** — the 6-file UI/nav
+genre-threading chain (`MoodAndGenresScreen` → `NavigationBuilder` →
+`YouTubeBrowseViewModel`/`Screen` → `PlayerConnection.kt` →
+`MusicService`), per this project's own mandatory one-part-per-session
+task-splitting rule. That remains open — see Mavins-web's own
+`handover.md`, Task 59, for the next session's actual next step there.
+
+**Not compile-verified — no Android SDK/Gradle in this sandbox**, same
+structural limitation every prior Velune code change in this project
+has flagged. Verified via a brace/paren balance check on both changed
+files and the payload-simulation described above.
