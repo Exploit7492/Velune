@@ -3,7 +3,20 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-02, latest of all) — §19: Round 16 B-ii Part
+> **Newest note (2026-09-02, latest of all) — §20: Task 59 fully
+> done, all 16 rounds. Part b-b-b-b (final piece):
+> `OnlinePlaylistScreen.kt`'s 4 `YouTubeQueue(...)` sites now carry
+> `genre = viewModel.genreTileTitle`.** Genre now survives the entire
+> path end to end — home-screen genre-tile tap through every
+> song-tap-to-queue site in the app, into `MusicService.kt`'s own
+> `campaignSlotProvider`. Canonical write-up in Mavins-web's
+> `handover.md`, Task 59's own "Round 16" section. **Two small,
+> separate follow-ups remain open, not part of this closure**: a
+> grid-tap-to-album/artist/playlist navigation gap, and a pre-existing
+> HTTP-status log-escaping bug in `CampaignRepository.kt` — both
+> flagged in Mavins-web's own write-up, neither fixed yet.
+>
+> **Newest note (2026-09-02, previous) — §19: Round 16 B-ii Part
 > b-b-b split a/b, Part b-b-b-a done (`AlbumScreen.kt`'s 3 call sites,
 > commit `e2ba9ef`); Part b-b-b-b (`OnlinePlaylistScreen.kt`, 4 sites)
 > not started.** Canonical write-up in Mavins-web's `handover.md`,

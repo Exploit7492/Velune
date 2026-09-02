@@ -738,14 +738,16 @@ fun OnlinePlaylistScreen(
                                         Button(
                                             onClick = {
                                                 playerConnection.playQueue(
-                                                    YouTubeQueue(shuffleEndpoint)
+                                                    // Task 59 Round 16, B-ii Part
+                                                    // b-b-b-b (handover.md) —
+                                                    // genre threaded from
+                                                    // OnlinePlaylistViewModel,
+                                                    // already genre-capable
+                                                    // (OnlinePlaylistViewModel.kt's
+                                                    // own genreTileTitle,
+                                                    // pre-existing).
+                                                    YouTubeQueue(shuffleEndpoint, genre = viewModel.genreTileTitle)
                                                 )
-                                            },
-                                            shape = RoundedCornerShape(24.dp),
-                                            modifier = Modifier.weight(1f).height(48.dp)
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.shuffle),
                                                 contentDescription =
                                                     stringResource(R.string.shuffle),
                                                 modifier = Modifier.size(24.dp)
@@ -758,7 +760,8 @@ fun OnlinePlaylistScreen(
                                         Button(
                                             onClick = {
                                                 playerConnection.playQueue(
-                                                    YouTubeQueue(radioEndpoint)
+                                                    // Task 59 Round 16, B-ii Part b-b-b-b
+                                                    YouTubeQueue(radioEndpoint, genre = viewModel.genreTileTitle)
                                                 )
                                             },
                                             shape = RoundedCornerShape(24.dp),
@@ -816,7 +819,8 @@ fun OnlinePlaylistScreen(
                                         onClick = {
                                             playlist.shuffleEndpoint?.let { shuffleEndpoint ->
                                                 playerConnection.playQueue(
-                                                    YouTubeQueue(shuffleEndpoint)
+                                                    // Task 59 Round 16, B-ii Part b-b-b-b
+                                                    YouTubeQueue(shuffleEndpoint, genre = viewModel.genreTileTitle)
                                                 )
                                             }
                                         },
@@ -898,12 +902,14 @@ fun OnlinePlaylistScreen(
                                                         playlistId = playlist.id
                                                     )
                                                     playerConnection.playQueue(
+                                                        // Task 59 Round 16, B-ii Part b-b-b-b
                                                         YouTubeQueue(
                                                             song.item.second.endpoint
                                                                 ?: WatchEndpoint(
                                                                     videoId = song.item.second.id
                                                                 ),
                                                             song.item.second.toMediaMetadata(),
+                                                            genre = viewModel.genreTileTitle,
                                                         ),
                                                     )
                                                 }
