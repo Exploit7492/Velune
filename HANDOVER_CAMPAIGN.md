@@ -849,3 +849,24 @@ resolved genre id. Single call site, everything it needs now built.
 Plus the untraced grid/album/playlist path, the pre-existing
 log-escaping bug, and `MusicService.kt`'s own separate initial-batch
 bug, all still outstanding from §11/§12.
+
+## 14. Task 59 Part 2b-b, Round 14 (2026-09-01) — `MusicService.kt` wiring done, canonical write-up in Mavins-web
+
+**Kept concise here — Mavins-web's `handover.md`, Task 59's own
+"Round 14" entry, has the full write-up.** §13's own "still open" item
+is now closed: `playQueue()`'s `campaignSlotProvider = { null }`
+placeholder is a real lambda — `queue.genre` → `GenreTileMappingCache.resolveGenreId()`
+→ `CampaignRepository().fetchNextCampaignForQueueSlot()`, everything
+already built across §11-§13. `null` genre short-circuits immediately
+(same fail-closed default `CampaignInjectedQueue` already had, now
+explicit); an unresolved id still injects nothing for that slot.
+
+Verified via a 5-scenario Python simulation of the branching logic —
+all 5 passed. Not compile-verified, no Android SDK in this sandbox.
+
+**Task 59's core genre-locked queue-injection mechanic is now fully
+wired end to end, tap to injection.** Still open, unchanged from §13:
+the grid/album/playlist play-path gap, `MusicService.kt`'s own
+separate initial-batch bug, the pre-existing log-escaping bug, and
+confirming the mapping table is actually seeded with real tile
+titles.

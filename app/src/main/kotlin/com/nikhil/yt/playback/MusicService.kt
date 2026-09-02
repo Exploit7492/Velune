@@ -1550,22 +1550,39 @@ class MusicService :
         // Wrap every queue with campaign injection.
         // Task 59 Part 2a — campaignSlotProvider is called once PER
         // injection slot now, not once per queue (see
-        // CampaignInjectedQueue's own doc comment for why) -- and this
-        // one existing call site passes `{ null }`, meaning "no
-        // injection," deliberately: Part 2a's own scope is the
-        // repository + queue refactor only, not threading a real genre
-        // through yet (that's Part 2b, still not started as of this
-        // part). `{ null }` here is what keeps this call site's actual
-        // behavior identical to before this part -- zero campaign
-        // injection on any queue, exactly as it already effectively was
-        // pre-genre-locking (Task 59 Round 3) -- while still being the
-        // real, non-default value a call site CAN pass once Part 2b
-        // exists. Re-introducing a genre-aware CampaignRepository call
-        // here (or wherever Part 2b decides is the right call site) is
-        // that part's own job, not this one's.
+        // CampaignInjectedQueue's own doc comment for why).
+        //
+        // Task 59 Part 2b-b Round 14 (handover.md) — this is the real
+        // wiring Round 13 left as the single remaining sub-part, with
+        // everything it needs already built across Rounds 11-13:
+        // queue.genre (Round 12, Queue.kt) is null for every queue
+        // type except a genre-tile-originated YouTubeQueue; returning
+        // null immediately here for that case is the same fail-closed
+        // default CampaignInjectedQueue's own constructor already
+        // falls back to, just made explicit at this call site rather
+        // than left implicit. When a real genre string IS present,
+        // GenreTileMappingCache.resolveGenreId() (Round 13) does the
+        // tile-title -> genre-id lookup (with its own periodic-refresh
+        // caching and lookup-miss ingest, not repeated here), and only
+        // a successfully resolved id reaches
+        // fetchNextCampaignForQueueSlot() -- an unresolved/unknown
+        // tile (still being reviewed, or genuinely not a genre)
+        // correctly injects nothing for this slot, not a guess.
+        val queueGenre = queue.genre
         val wrappedQueue = com.nikhil.yt.playback.queues.CampaignInjectedQueue(
             baseQueue = queue,
-            campaignSlotProvider = { null }
+            campaignSlotProvider = {
+                if (queueGenre == null) {
+                    null
+                } else {
+                    val genreId = com.nikhil.yt.campaign.GenreTileMappingCache.resolveGenreId(queueGenre)
+                    if (genreId == null) {
+                        null
+                    } else {
+                        com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(genreId)
+                    }
+                }
+            }
         )
         currentQueue = wrappedQueue
         queueTitle = null
