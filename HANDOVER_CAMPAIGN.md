@@ -896,3 +896,40 @@ Net result: one write per real play, not two; zero silent failures;
 real device-id and country attribution on every write. **Not
 compile-verified** — same structural limitation as every prior
 Velune task in this project.
+
+## 16. 2026-09-02 — Task 59 Part 3b split into 3b-a/3b-b; 3b-a built (carousel state/timer/lifecycle engine)
+
+**Sync note only — canonical write-up in Mavins-web's `handover.md`,
+Task 59's own Round 4 entry (Part 3b's own subsection).** Per the
+mandatory build-focus/task-splitting rule, split Part 3b (the banner's
+UI rebuild — single card, 30s auto-advance, reshuffle on
+background-then-resume) into 3b-a (this session: the state/timer/
+lifecycle engine, decoupled from rendering) and 3b-b (not started: the
+actual `CampaignCardSection.kt` rebuild consuming it, replacing the
+current `LazyRow`).
+
+New `campaign/CampaignCarouselState.kt` — `rememberCampaignCarouselState(campaigns)`
+composable, exposing `current: CampaignCard?` only (never the
+underlying list or its size, so a 3b-b consumer can't accidentally
+leak the true live-campaign count even by mistake). Owns a
+30-second auto-advance `LaunchedEffect` loop and a
+`LifecycleEventObserver` (same `DisposableEffect`/
+`LocalLifecycleOwner` pattern already used in `LibraryScreen.kt`,
+mirrored exactly) that reshuffles specifically on `ON_RESUME`
+following a real prior `ON_STOP` — NOT on the initial `ON_RESUME`
+Compose fires when the screen first appears, which is not "returning
+from background."
+
+**Verified with a throwaway Python simulation of the state machine**
+(written, run, discarded, not committed — same convention every prior
+Velune part in this task has used, no Android SDK in this sandbox): 15
+scenarios — initial state, tick-advance-and-wrap, the
+no-reshuffle-on-initial-resume distinction (the one real bug this
+simulation was written specifically to catch before it became Kotlin),
+stop-then-resume triggering exactly one reshuffle with index reset,
+double-stop defensiveness, empty-list and single-item edge cases, and
+a documented assumption for mid-session data refresh (swaps the
+source list without forcing a reshuffle). All 15 passed. Brace/paren
+balance also checked on the real file (20/20, 43/43) as a basic
+structural sanity check. **Not compile-verified** — same structural
+limitation as every prior Velune task in this project.
