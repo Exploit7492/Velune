@@ -3,6 +3,12 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-09-01, latest of all) — §13: cache-lifecycle half
+> of the remaining chain built (`GenreTileMappingCache.kt`);
+> `MusicService.kt`'s own wiring still open, single call site next.**
+> Canonical write-up in Mavins-web's `handover.md`, Task 59's own
+> "Round 13" — see §13 below for the sync-note summary.
+>
 > **Newest note (2026-09-01, latest of all) — Task 59 Part 2b-b's
 > first job done: `MAVINS_API_URL` confirmed + `ingestGenreTile()`
 > built.** See §11 below for the full write-up, commit `4652493`. Also
@@ -808,3 +814,38 @@ single remaining piece of this whole chain — plus the untraced
 grid/album/playlist path, the pre-existing log-escaping bug, and
 `MusicService.kt`'s own separate initial-batch bug, all still
 outstanding from §11.
+
+## §13 — cache-lifecycle half built; `MusicService.kt` wiring still open (2026-09-01)
+
+**Sync note only — canonical write-up in Mavins-web's `handover.md`,
+Task 59's own "Round 13" section, same pattern §10/§11/§12 above
+already used.** Full detail there; summary here: new
+`GenreTileMappingCache.kt` (`com.nikhil.yt.campaign` package) — a
+singleton cache wrapping `CampaignRepository.fetchGenreTileMapping()`
+with periodic (15-minute) refresh, exposing one entry point,
+`resolveGenreId(tileTitle)`, implementing the three-way behavior
+already specified in §12's own "still open" note: a real mapping
+resolves to that genre id; an explicitly-reviewed non-genre tile
+resolves to `null` with no ingest call; an unknown/unreviewed tile
+fires `ingestGenreTile()` and resolves to `null` for that call.
+
+**A real correctness bug caught and fixed before it shipped:**
+staleness is judged by a separate `lastFetchedAtMs` timestamp, NOT by
+whether the cached map is empty — the live `campaign_genre_tile_mapping`
+table is expected to start (and may remain, for a while) genuinely
+empty, and judging staleness by emptiness would have meant that exact
+expected state causes a full refetch on every single call, forever,
+defeating the cache entirely for the real launch condition it's meant
+to handle.
+
+Verified via a 12-scenario Python simulation (all passed) — no Android
+SDK in this sandbox, same standing limitation as every prior round.
+
+**Still open, narrower now:** `MusicService.kt`'s actual
+`campaignSlotProvider` construction — replace `{ null }` with a lambda
+reading `queue.genre`, calling `GenreTileMappingCache.resolveGenreId()`,
+then `CampaignRepository().fetchNextCampaignForQueueSlot()` for a
+resolved genre id. Single call site, everything it needs now built.
+Plus the untraced grid/album/playlist path, the pre-existing
+log-escaping bug, and `MusicService.kt`'s own separate initial-batch
+bug, all still outstanding from §11/§12.
