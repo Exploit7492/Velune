@@ -179,22 +179,39 @@ fun NavGraphBuilder.navigationBuilder(
         OnlineSearchResult(navController)
     }
     composable(
-        route = "album/{albumId}",
+        // Task 59 (grid/album/playlist play-path gap, Round 2's own
+        // flag, still open until now) -- optional genreTile query
+        // param added, mirroring Round 11's exact pattern for
+        // youtube_browse's own route. Every existing caller of this
+        // route (there are several beyond YouTubeBrowseScreen.kt's own
+        // grid tap -- library navigation, search results, etc.) keeps
+        // working unchanged since the param is nullable with no
+        // default segment required.
+        route = "album/{albumId}?genreTile={genreTile}",
         arguments =
         listOf(
             navArgument("albumId") {
                 type = NavType.StringType
+            },
+            navArgument("genreTile") {
+                type = NavType.StringType
+                nullable = true
             },
         ),
     ) {
         AlbumScreen(navController, scrollBehavior)
     }
     composable(
-        route = "artist/{artistId}",
+        // Task 59 -- same treatment as album/{albumId} above.
+        route = "artist/{artistId}?genreTile={genreTile}",
         arguments =
         listOf(
             navArgument("artistId") {
                 type = NavType.StringType
+            },
+            navArgument("genreTile") {
+                type = NavType.StringType
+                nullable = true
             },
         ),
     ) {
@@ -241,11 +258,16 @@ fun NavGraphBuilder.navigationBuilder(
         ArtistItemsScreen(navController, scrollBehavior)
     }
     composable(
-        route = "online_playlist/{playlistId}",
+        // Task 59 -- same treatment as album/{albumId} above.
+        route = "online_playlist/{playlistId}?genreTile={genreTile}",
         arguments =
         listOf(
             navArgument("playlistId") {
                 type = NavType.StringType
+            },
+            navArgument("genreTile") {
+                type = NavType.StringType
+                nullable = true
             },
         ),
     ) {

@@ -224,9 +224,40 @@ fun YouTubeBrowseScreen(
                                             .combinedClickable(
                                                 onClick = {
                                                     when (item) {
-                                                        is AlbumItem -> navController.navigate("album/${item.id}")
-                                                        is ArtistItem -> navController.navigate("artist/${item.id}")
-                                                        is PlaylistItem -> navController.navigate("online_playlist/${item.id}")
+                                                        // Task 59 (grid/album/playlist play-path
+                                                        // gap, Round 2's own flag) -- Part A:
+                                                        // navigation-layer threading only. The
+                                                        // genre-tile title (already URL-decoded on
+                                                        // this viewModel, see its own doc comment)
+                                                        // gets re-encoded here for this next nav
+                                                        // hop, same convention Round 9 established
+                                                        // for exactly this class of value (a tile
+                                                        // title can contain '&'/'?' -- confirmed
+                                                        // real, not theoretical, e.g. "R&B").
+                                                        // Consuming this on the receiving end
+                                                        // (AlbumScreen.kt/ArtistScreen.kt/
+                                                        // OnlinePlaylistScreen.kt's own song-tap
+                                                        // queue construction) is deliberately NOT
+                                                        // done here -- that's this same gap's own
+                                                        // Part B, still open.
+                                                        is AlbumItem -> navController.navigate(
+                                                            "album/${item.id}" +
+                                                                (viewModel.genreTileTitle?.let {
+                                                                    "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                } ?: "")
+                                                        )
+                                                        is ArtistItem -> navController.navigate(
+                                                            "artist/${item.id}" +
+                                                                (viewModel.genreTileTitle?.let {
+                                                                    "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                } ?: "")
+                                                        )
+                                                        is PlaylistItem -> navController.navigate(
+                                                            "online_playlist/${item.id}" +
+                                                                (viewModel.genreTileTitle?.let {
+                                                                    "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                } ?: "")
+                                                        )
                                                         else -> item
                                                     }
                                                 },
