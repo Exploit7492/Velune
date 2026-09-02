@@ -933,3 +933,23 @@ source list without forcing a reshuffle). All 15 passed. Brace/paren
 balance also checked on the real file (20/20, 43/43) as a basic
 structural sanity check. **Not compile-verified** — same structural
 limitation as every prior Velune task in this project.
+
+## 17. Task 59 Round 16, Part B-i (2026-09-02) — genreTile reaches AlbumViewModel/ArtistViewModel/OnlinePlaylistViewModel, canonical write-up in Mavins-web
+
+**Kept concise here — Mavins-web's `handover.md`, Task 59's own
+"Round 16" entry, has the full write-up.** Round 15's Part B
+(consumption in `AlbumScreen`/`ArtistScreen`/`OnlinePlaylistScreen`)
+sub-split into i/ii, mirroring Round 11 → 12's own shape one level up
+the chain. This is B-i only: all three ViewModels (traced first, not
+assumed identical — all already use the same `SavedStateHandle`
+pattern) gained the identical `genreTileTitle: String?` field, same
+`URLDecoder` convention as every prior round. Confirmed via grep that
+`NavigationBuilder.kt`'s three routes already declare the matching
+`navArgument` from Round 15 Part A.
+
+Verified via brace balance check on all three files. Not
+compile-verified — no Android SDK in this sandbox.
+
+**B-ii — not started:** thread `genreTileTitle` into each screen's own
+song-tap-to-queue-construction call site(s) — not yet traced which
+exact call sites those are.
