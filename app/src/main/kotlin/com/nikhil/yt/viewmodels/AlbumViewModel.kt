@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import javax.inject.Inject
 
 sealed interface AlbumUiState {
@@ -51,6 +52,21 @@ constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val albumId = savedStateHandle.get<String>("albumId")!!
+
+    /**
+     * Task 59 Round 15, Part B-i (handover.md): the genre-tile title
+     * this album was reached from, if the browse originated from a
+     * genre-tile mixed-grid tap (Round 15 Part A). `null` for every
+     * other entry point (Library, search, menus, etc. — ~50 other
+     * call sites confirmed unaffected in Part A). Same decode pattern
+     * `YouTubeBrowseViewModel.kt` already established. Not yet
+     * consumed by this file's own queue-construction call site — that
+     * threading is Part B-ii, not this part.
+     */
+    val genreTileTitle: String? = savedStateHandle.get<String>("genreTile")?.let {
+        URLDecoder.decode(it, "UTF-8")
+    }
+
     val playlistId = MutableStateFlow("")
     val albumWithSongs =
         database

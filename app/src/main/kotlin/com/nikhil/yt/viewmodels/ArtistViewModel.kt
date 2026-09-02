@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import javax.inject.Inject
 import android.content.Context
 import com.nikhil.yt.constants.HideExplicitKey
@@ -45,6 +46,20 @@ class ArtistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val artistId = savedStateHandle.get<String>("artistId")!!
+
+    /**
+     * Task 59 Round 15, Part B-i (handover.md): the genre-tile title
+     * this artist was reached from, if the browse originated from a
+     * genre-tile mixed-grid tap (Round 15 Part A). `null` for every
+     * other entry point. Same decode pattern `YouTubeBrowseViewModel.kt`
+     * already established. Not yet consumed by this file's own
+     * queue-construction call site — that threading is Part B-ii, not
+     * this part.
+     */
+    val genreTileTitle: String? = savedStateHandle.get<String>("genreTile")?.let {
+        URLDecoder.decode(it, "UTF-8")
+    }
+
     var artistPage by mutableStateOf<ArtistPage?>(null)
     val libraryArtist = database.artist(artistId)
         .stateIn(viewModelScope, SharingStarted.Lazily, null)

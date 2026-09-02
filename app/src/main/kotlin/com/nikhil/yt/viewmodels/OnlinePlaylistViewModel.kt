@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import java.net.URLDecoder
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,6 +41,20 @@ class OnlinePlaylistViewModel @Inject constructor(
     database: MusicDatabase
 ) : ViewModel() {
     private val playlistId = savedStateHandle.get<String>("playlistId")!!
+
+    /**
+     * Task 59 Round 15, Part B-i (handover.md): the genre-tile title
+     * this playlist was reached from, if the browse originated from a
+     * genre-tile mixed-grid tap (Round 15 Part A). `null` for every
+     * other entry point. Same decode pattern `YouTubeBrowseViewModel.kt`
+     * already established. Deliberately public (unlike `playlistId`
+     * above) — `OnlinePlaylistScreen.kt` will need to read this
+     * directly once Part B-ii threads it into queue construction; not
+     * consumed by this file itself yet.
+     */
+    val genreTileTitle: String? = savedStateHandle.get<String>("genreTile")?.let {
+        URLDecoder.decode(it, "UTF-8")
+    }
 
     val playlist = MutableStateFlow<PlaylistItem?>(null)
     val playlistSongs = MutableStateFlow<List<SongItem>>(emptyList())
