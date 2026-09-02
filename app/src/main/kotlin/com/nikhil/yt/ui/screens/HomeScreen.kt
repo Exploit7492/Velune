@@ -131,6 +131,20 @@ fun HomeScreen(
     val campaignRepository = remember { CampaignRepository() }
     val playerBottomSheetState = com.nikhil.yt.LocalPlayerBottomSheetState.current
     val onCampaignClick: (com.nikhil.yt.campaign.CampaignCard) -> Unit = { campaign ->
+        // Task 60 (handover.md) — this used to also fire an immediate
+        // `campaignRepository.recordPlay(...)` here, right after
+        // starting playback, with a hardcoded `userId = "anonymous"`.
+        // Removed: that call was one of two immediate, duplicate writes
+        // firing from the same tap (the other lived in
+        // `CampaignCardSection.kt`'s own `onClick`, also removed), AND
+        // it failed outright every single time regardless — `"anonymous"`
+        // cannot cast to the RPC's `p_user_id uuid` column, so the
+        // request was silently rejected server-side and swallowed into
+        // a log line nobody saw. The one correct, surviving call now
+        // lives in `MusicService.kt`, firing once playback actually
+        // transitions to the tapped song, with a real per-device id and
+        // this same `java.util.Locale.getDefault().country` country-code
+        // computation carried over to there instead of discarded here.
         scope.launch {
             YouTube.queue(listOf(campaign.songId)).onSuccess { list ->
                 val mediaMetadata = list.firstOrNull()?.toMediaMetadata()
@@ -138,15 +152,6 @@ fun HomeScreen(
                     com.nikhil.yt.campaign.CampaignPlaybackTracker.setActive(campaign)
                     playerConnection.playQueue(YouTubeQueue.radio(mediaMetadata))
                     playerBottomSheetState?.expandSoft()
-                    // Record the stream (fire-and-forget)
-                    launch {
-                        val countryCode = java.util.Locale.getDefault().country
-                        campaignRepository.recordPlay(
-                            campaignId = campaign.id,
-                            userId = "anonymous", // TODO: replace with real auth user ID
-                            countryCode = countryCode,
-                        )
-                    }
                 }
             }
         }

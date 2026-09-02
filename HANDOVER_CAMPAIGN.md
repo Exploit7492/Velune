@@ -870,3 +870,29 @@ the grid/album/playlist play-path gap, `MusicService.kt`'s own
 separate initial-batch bug, the pre-existing log-escaping bug, and
 confirming the mapping table is actually seeded with real tile
 titles.
+
+## 15. 2026-09-02 — Task 60 Part A: double-recording bug fixed in this repo
+
+**Sync note only — canonical write-up in Mavins-web's `handover.md`,
+Task 60's own "Split into Part A / Part B" + "Part A — done" entries.**
+Every genuine campaign play was being written to the database twice
+(`CampaignCardSection.kt`'s and `HomeScreen.kt`'s own immediate
+`recordPlay()` calls, both firing from the same tap, on top of
+`MusicService.kt`'s own correct, playback-transition-gated call), plus
+a third call site (`HomeScreen.kt`'s, via the hardcoded
+`userId = "anonymous"`) failed outright on every single attempt — a
+Postgres type mismatch (`"anonymous"` can't cast to the RPC's
+`p_user_id uuid` column) silently swallowed into a log line.
+
+Fixed: removed both duplicate/broken call sites
+(`CampaignCardSection.kt`, `HomeScreen.kt`), added the missing
+`countryCode` argument to the one surviving correct call
+(`MusicService.kt`). `recordPlay()` itself (the now fully-orphaned
+wrapper both removed sites used) was left in place rather than
+deleted — flagged as a cleanup candidate, its doc comment corrected to
+stop claiming callers it no longer has.
+
+Net result: one write per real play, not two; zero silent failures;
+real device-id and country attribution on every write. **Not
+compile-verified** — same structural limitation as every prior
+Velune task in this project.

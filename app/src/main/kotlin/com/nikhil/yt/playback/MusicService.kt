@@ -3654,10 +3654,24 @@ class MusicService :
         if (currentSongId == trackedSongId) {
             scope.launch(SilentHandler) {
                 val deviceId = getOrCreateCampaignDeviceId()
+                // Task 60 (handover.md) — countryCode added. Previously
+                // omitted here entirely (this call defaulted it to
+                // Postgres's own "unknown" fallback for every real play)
+                // — the two OTHER call sites that used to compute this
+                // (both removed, see CampaignCardSection.kt and
+                // HomeScreen.kt) were duplicate/broken writes for the
+                // same tap, not a second, independent source of country
+                // data; this is the one surviving, correct call, so this
+                // is now the only place country gets computed at all.
+                // Same java.util.Locale.getDefault().country approach
+                // HomeScreen.kt's removed block already used — carried
+                // over, not reinvented.
+                val countryCode = java.util.Locale.getDefault().country
                 CampaignRepository().recordCampaignStream(
                     campaignId = campaignId,
                     userId = deviceId,
                     listenDurationSeconds = (player.currentPosition / 1000).toInt(),
+                    countryCode = countryCode,
                     isFullListen = player.currentPosition >= (player.duration * 0.8).coerceAtLeast(1.0)
                 )
             }

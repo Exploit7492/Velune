@@ -368,7 +368,20 @@ class CampaignRepository {
 
     /**
      * Legacy increment wrapper — redirects to the new RPC.
-     * Kept for backward compatibility with existing call sites.
+     *
+     * Task 60 (handover.md) — no longer has any call sites as of this
+     * fix (confirmed via grep: both of its former callers,
+     * `CampaignCardSection.kt` and `HomeScreen.kt`, were removed —
+     * they were firing duplicate/broken writes for the same tap that
+     * `MusicService.kt`'s own direct `recordCampaignStream()` call
+     * already covers correctly). Left in place rather than deleted —
+     * removing a whole function felt like a bigger, less reversible
+     * call than this fix's own narrow scope needed, same reasoning
+     * Task 59 Part 2a used for a similar now-orphaned function in this
+     * same file. Flagging here as a real cleanup candidate for a
+     * future pass, not silently leaving the doc comment's old
+     * "kept for backward compatibility with existing call sites"
+     * claim standing now that it's no longer true.
      */
     suspend fun recordPlay(campaignId: String, userId: String? = null, countryCode: String? = null) {
         recordCampaignStream(campaignId = campaignId, userId = userId, countryCode = countryCode)

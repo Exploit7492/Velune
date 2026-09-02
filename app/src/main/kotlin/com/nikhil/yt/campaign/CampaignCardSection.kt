@@ -32,7 +32,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +44,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nikhil.yt.R
-import kotlinx.coroutines.launch
 
 /**
  * Below this real play count, the card shows a "New" pill instead of the
@@ -78,9 +76,18 @@ private fun formatPlayCount(count: Long): String = when {
  * isn't something worth occupying space to announce.
  *
  * ## Play Recording
- * Every tap on a campaign card records a play via [CampaignRepository.recordPlay]
- * before starting playback. This is a fire-and-forget call — the user
- * experience is never blocked by the network round-trip.
+ * Task 60 (handover.md) — this composable no longer records a play on
+ * tap. It used to (via `CampaignRepository.recordPlay`, fire-and-
+ * forget, right here), but that call was one of two immediate,
+ * duplicate writes firing from the same physical tap (the other was
+ * `HomeScreen.kt`'s own `onCampaignClick` handler, passed in as
+ * [onCampaignClick] below) — every real play was being recorded
+ * twice, plus a third, separate call site failed outright every time
+ * (a Postgres type mismatch, silently swallowed). The one correct,
+ * surviving call now lives in `MusicService.kt`, firing once playback
+ * actually transitions to the tapped song — not at tap-time, before
+ * anyone knows whether playback even starts. See Task 60's own
+ * write-up for the full three-call-site trace this fix is based on.
  */
 @Composable
 fun CampaignCardSection(
@@ -89,7 +96,6 @@ fun CampaignCardSection(
     modifier: Modifier = Modifier,
 ) {
     var campaigns by remember { mutableStateOf<List<CampaignCard>>(emptyList()) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         campaigns = repository.fetchActiveCampaigns()
@@ -105,10 +111,6 @@ fun CampaignCardSection(
                 CampaignBanner(
                     campaign = campaign,
                     onClick = {
-                        // Record the play fire-and-forget before starting playback
-                        scope.launch {
-                            repository.recordPlay(campaign.id)
-                        }
                         onCampaignClick(campaign)
                     },
                 )
