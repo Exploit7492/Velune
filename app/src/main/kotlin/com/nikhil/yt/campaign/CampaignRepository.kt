@@ -76,7 +76,151 @@ class CampaignRepository {
     }
 
     /**
-     * Fetch ONE campaign for a single queue-slot injection point, via
+     * Fetch ALL currently-live campaigns for the home banner, via
+     * `get_live_campaigns_for_banner()` (migration 025, Task 59 Part 3
+     * — see handover.md, Mavins-web repo). **Not** the same function
+     * [fetchActiveCampaigns] above calls — that one
+     * (`get_trending_campaigns`) is a scored/limited/single-winner
+     * function still used by the queue-slot mechanic (Part 1/2's own
+     * concern, deliberately untouched by Part 3); this one returns the
+     * complete, unranked set of live campaigns, no `LIMIT`, no score
+     * ordering, matching this surface's own "no competition, all is
+     * accommodated for" spec.
+     *
+     * **Deliberately does NOT call [CampaignUrlResolver.resolve] (no
+     * live YouTube metadata round-trip per row)** — that resolver
+     * exists because [fetchActiveCampaigns]'s own RPC never returns
+     * display metadata at all, only ids. `get_live_campaigns_for_banner`
+     * is different: it already joins and returns `artist_name`/
+     * `track_title`/`cover_url` directly from the DB (see the
+     * migration's own `SELECT`), specifically so this surface — which
+     * must show *every* live campaign, not a capped top-N — doesn't
+     * need one YouTube API call per row just to render a title and
+     * thumbnail. [CampaignCard.songId] is still computed here (needed
+     * for actual playback once a card is tapped), just not resolved
+     * eagerly against YouTube for every row up front. This matches
+     * [CampaignCard]'s own field doc comments, which already describe
+     * `title`/`artist`/`thumbnailUrl` as "resolved from YouTube **or
+     * fallback to** track_title/artist_name/cover_url" — this function
+     * is what actually uses that fallback path; nothing used it before
+     * this session.
+     *
+     * `totalStreams`/`trendingScore`/`playCount` are always `0` here —
+     * not omitted by accident: the underlying RPC doesn't return them
+     * at all (by design, per that migration's own comment — this
+     * surface must never expose a competitive/ranking signal). Part 3b
+     * (Velune UI rebuild, not started) must not render these fields
+     * for a banner card, matching the already-resolved "never reveal
+     * the live count or any per-card competitive number" rule.
+     * `ctaLabel` is left at its data-class default ("Play") rather
+     * than the stage-based Discover/Trending/Hot/Viral/Charting
+     * ladder [parseTrendingRows] below computes — Part 3's own spec
+     * explicitly flagged that ladder as dead, ranking-adjacent data
+     * that should never reach a UI, and this is the one place that
+     * decision is actually enforced at the data layer, not left to the
+     * UI layer to remember not to render it.
+     *
+     * `certified` reuses the exact same stage-based check
+     * [parseTrendingRows] already uses (`branching`/`full_bloom` →
+     * true) — Part 3's own spec explicitly said to keep this signal
+     * (a real moderation/trust marker, not a competitive one) when
+     * rebuilding the banner, not remove it along with the
+     * ranking-adjacent fields above.
+     *
+     * @return every currently-live, unpaused, non-completed campaign,
+     *   in the RPC's own stable-but-meaningless id order (row order is
+     *   NOT a ranking signal — see the migration's own comment; the
+     *   Part 3b UI owns shuffle/rotation order entirely). Empty list on
+     *   any failure — same fail-soft posture as every other fetch in
+     *   this file, never a thrown exception reaching the caller.
+     */
+    suspend fun fetchLiveCampaignsForBanner(): List<CampaignCard> = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext emptyList()
+        try {
+            val request = Request.Builder()
+                .url("$url/rest/v1/rpc/get_live_campaigns_for_banner")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .header("Content-Type", "application/json")
+                .post("{}".toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchLiveCampaignsForBanner: HTTP ${response.code}")
+                    return@use emptyList()
+                }
+                val body = response.body?.string().orEmpty()
+                parseLiveBannerRows(body)
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchLiveCampaignsForBanner failed")
+            emptyList()
+        }
+    }
+
+    private fun parseLiveBannerRows(body: String): List<CampaignCard> {
+        val array = try {
+            JSONArray(body)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Malformed live-banner response")
+            return emptyList()
+        }
+        return (0 until array.length()).mapNotNull { i ->
+            val row = array.optJSONObject(i) ?: return@mapNotNull null
+            val campaignId = row.optString("campaign_id", "")
+            if (campaignId.isBlank()) return@mapNotNull null
+
+            val sourceUrl = row.optString("source_url", "")
+            val resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() }
+            // Same resolution order fetchNextCampaignForQueueSlot already
+            // establishes: a stored resolved id wins if present, falls
+            // back to extracting one from the raw source URL otherwise.
+            // A null here (both fields empty/unparseable) means this row
+            // can't be played if tapped -- excluded via mapNotNull below,
+            // same "silently drop, don't crash the whole list over one
+            // bad row" posture as parseTrendingRows.
+            val songId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+            if (songId == null) {
+                Timber.tag(TAG).w("parseLiveBannerRows: could not extract a video id for campaign $campaignId")
+                return@mapNotNull null
+            }
+
+            val currentStage = row.optString("current_stage", "planting")
+            val trackTitle = row.optString("track_title", "").takeIf { it.isNotBlank() }
+            val artistName = row.optString("artist_name", "").takeIf { it.isNotBlank() }
+            val coverUrl = row.optString("cover_url", "")
+
+            CampaignCard(
+                id = campaignId,
+                songId = songId,
+                trackId = row.optString("track_id", "").takeIf { it.isNotBlank() } ?: "",
+                artistId = row.optString("artist_id", "").takeIf { it.isNotBlank() } ?: "",
+                // Fallback path CampaignCard's own field docs already
+                // anticipated ("resolved from YouTube or fallback to
+                // track_title/artist_name/cover_url") -- this is the
+                // first call site to actually use it, per this
+                // function's own header comment on why no live YouTube
+                // resolution happens here.
+                title = trackTitle ?: "Untitled",
+                artist = artistName ?: "Unknown Artist",
+                thumbnailUrl = coverUrl,
+                totalStreams = 0L,
+                trendingScore = 0.0,
+                geographicTier = "local",
+                currentStage = currentStage,
+                certified = when (currentStage) {
+                    "branching", "full_bloom" -> true
+                    else -> false
+                },
+                isLive = true, // the RPC's own WHERE clause guarantees this
+                playCount = 0L,
+                ctaLabel = "Play",
+            )
+        }
+    }
+
+
      * the genre-locked, fair-rotation `get_next_campaign_for_queue_slot`
      * RPC (migration 023, Task 59 Part 1/2a — see handover.md, Mavins-
      * web repo).
