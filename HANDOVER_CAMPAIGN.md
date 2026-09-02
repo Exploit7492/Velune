@@ -3,12 +3,13 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-02, latest of all) — §18: Round 16 B-ii Part
-> b-b split a/b, Part b-b-a done (`ArtistScreen.kt`'s 6 call sites,
-> commit `51df723`); Part b-b-b (`AlbumScreen.kt` + `OnlinePlaylistScreen.kt`,
-> 7 sites) not started.** Canonical write-up in Mavins-web's
-> `handover.md`, Task 59's own "Round 16" — see §18 below for the
-> sync-note summary. **Next: Part b-b-b.**
+> **Newest note (2026-09-02, latest of all) — §19: Round 16 B-ii Part
+> b-b-b split a/b, Part b-b-b-a done (`AlbumScreen.kt`'s 3 call sites,
+> commit `e2ba9ef`); Part b-b-b-b (`OnlinePlaylistScreen.kt`, 4 sites)
+> not started.** Canonical write-up in Mavins-web's `handover.md`,
+> Task 59's own "Round 16" — see §19 below for the sync-note summary.
+> **Next: Part b-b-b-b — the last remaining piece of this entire
+> genre-threading chain.**
 >
 > **Newest note (2026-09-01, latest of all) — §13: cache-lifecycle half
 > of the remaining chain built (`GenreTileMappingCache.kt`);
@@ -974,5 +975,22 @@ started.** Full write-up (each exact call site, before/after) in
 Mavins-web's own `handover.md`, Task 59's "Round 16" section.
 
 Verified via brace/paren balance check (189/189 `{}`, 413/413 `()`).
+Not compile-verified — no Android SDK/Gradle in this sandbox, same
+standing limitation every round of this chain has flagged.
+
+## 19. Task 59 Round 16, B-ii Part b-b-b split a/b (2026-09-02) — Part b-b-b-a done, canonical write-up in Mavins-web
+
+Part b-b-b (`AlbumScreen.kt` 3 sites + `OnlinePlaylistScreen.kt` 4
+sites) split a/b by file, same convention as Part b-b's own split one
+level up, since it hadn't been split yet. **Part b-b-b-a =
+`AlbumScreen.kt` alone (3 sites), done this round, commit `e2ba9ef`.**
+Verified against the real current code directly — confirmed
+`LocalAlbumRadio`'s actual constructor order and `AlbumViewModel`'s
+`genreTileTitle` field by reading both files, not assumed. **Part
+b-b-b-b = `OnlinePlaylistScreen.kt` (4 sites) — not started.** Full
+write-up in Mavins-web's own `handover.md`, Task 59's "Round 16"
+section.
+
+Verified via brace/paren balance check (163/163 `{}`, 394/394 `()`).
 Not compile-verified — no Android SDK/Gradle in this sandbox, same
 standing limitation every round of this chain has flagged.
