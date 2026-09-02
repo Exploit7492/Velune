@@ -3,6 +3,13 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-09-02, latest of all) — §18: Round 16 B-ii Part
+> b-b split a/b, Part b-b-a done (`ArtistScreen.kt`'s 6 call sites,
+> commit `51df723`); Part b-b-b (`AlbumScreen.kt` + `OnlinePlaylistScreen.kt`,
+> 7 sites) not started.** Canonical write-up in Mavins-web's
+> `handover.md`, Task 59's own "Round 16" — see §18 below for the
+> sync-note summary. **Next: Part b-b-b.**
+>
 > **Newest note (2026-09-01, latest of all) — §13: cache-lifecycle half
 > of the remaining chain built (`GenreTileMappingCache.kt`);
 > `MusicService.kt`'s own wiring still open, single call site next.**
@@ -953,3 +960,19 @@ compile-verified — no Android SDK in this sandbox.
 **B-ii — not started:** thread `genreTileTitle` into each screen's own
 song-tap-to-queue-construction call site(s) — not yet traced which
 exact call sites those are.
+
+## 18. Task 59 Round 16, B-ii Part b-b split a/b (2026-09-02) — Part b-b-a done, canonical write-up in Mavins-web
+
+Part b-b (13 call-site edits across `AlbumScreen.kt`/`ArtistScreen.kt`/
+`OnlinePlaylistScreen.kt`, per Round 16's own trace) split a/b by file,
+per explicit instruction, since it hadn't been split yet. **Part
+b-b-a = `ArtistScreen.kt` alone (6 sites), done this round, commit
+`51df723`.** All 6 verified against the real current code directly
+before editing, not assumed from the trace note. **Part b-b-b =
+`AlbumScreen.kt` (3) + `OnlinePlaylistScreen.kt` (4) = 7 sites — not
+started.** Full write-up (each exact call site, before/after) in
+Mavins-web's own `handover.md`, Task 59's "Round 16" section.
+
+Verified via brace/paren balance check (189/189 `{}`, 413/413 `()`).
+Not compile-verified — no Android SDK/Gradle in this sandbox, same
+standing limitation every round of this chain has flagged.
