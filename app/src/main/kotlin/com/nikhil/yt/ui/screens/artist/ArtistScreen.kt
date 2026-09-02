@@ -662,14 +662,20 @@ fun ArtistScreen(
                                 onClick = {
                                     if (!showLocal) {
                                         artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
-                                            playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+                                            playerConnection.playQueue(
+                                                YouTubeQueue(
+                                                    shuffleEndpoint,
+                                                    genre = viewModel.genreTileTitle,
+                                                ),
+                                            )
                                         }
                                     } else if (librarySongs.isNotEmpty()) {
                                         val shuffledSongs = librarySongs.shuffled()
                                         playerConnection.playQueue(
                                             ListQueue(
                                                 title = libraryArtist?.artist?.name ?: "Unknown Artist",
-                                                items = shuffledSongs.map { it.toMediaItem() }
+                                                items = shuffledSongs.map { it.toMediaItem() },
+                                                genre = viewModel.genreTileTitle,
                                             )
                                         )
                                     }
@@ -698,7 +704,12 @@ fun ArtistScreen(
                             artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
                                 OutlinedButton(
                                     onClick = {
-                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+                                        playerConnection.playQueue(
+                                            YouTubeQueue(
+                                                radioEndpoint,
+                                                genre = viewModel.genreTileTitle,
+                                            ),
+                                        )
                                     },
                                     shape = RoundedCornerShape(24.dp),
                                     modifier = Modifier
@@ -779,7 +790,8 @@ fun ArtistScreen(
                                                     ListQueue(
                                                         title = libraryArtist?.artist?.name ?: "Unknown Artist",
                                                         items = librarySongs.map { it.toMediaItem() },
-                                                        startIndex = index
+                                                        startIndex = index,
+                                                        genre = viewModel.genreTileTitle,
                                                     )
                                                 )
                                             }
@@ -935,7 +947,8 @@ fun ArtistScreen(
                                                     playerConnection.playQueue(
                                                         YouTubeQueue(
                                                             WatchEndpoint(videoId = song.id),
-                                                            song.toMediaMetadata()
+                                                            song.toMediaMetadata(),
+                                                            genre = viewModel.genreTileTitle,
                                                         ),
                                                     )
                                                 }
@@ -991,7 +1004,8 @@ fun ArtistScreen(
                                                                 playerConnection.playQueue(
                                                                     YouTubeQueue(
                                                                         WatchEndpoint(videoId = item.id),
-                                                                        item.toMediaMetadata()
+                                                                        item.toMediaMetadata(),
+                                                                        genre = viewModel.genreTileTitle,
                                                                     ),
                                                                 )
 
