@@ -20,6 +20,13 @@ import kotlinx.coroutines.withContext
 class LocalAlbumRadio(
     private val albumWithSongs: AlbumWithSongs,
     private val startIndex: Int = 0,
+    // Task 59 Round 16, Part B-ii -- same treatment Round 12 gave
+    // YouTubeQueue, now also applied here. Set only by a genre-tile-
+    // originated song tap in AlbumScreen.kt; every other existing
+    // caller of this class is unaffected, defaults to null, same
+    // fail-closed behavior the Queue interface's own default already
+    // provides.
+    override val genre: String? = null,
 ) : Queue {
     override val preloadItem: MediaMetadata? = null
 
