@@ -13,16 +13,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -46,48 +42,44 @@ import coil3.compose.AsyncImage
 import com.nikhil.yt.R
 
 /**
- * Below this real play count, the card shows a "New" pill instead of the
- * number — a small real count (1, 4, 7...) reads as empty/unsuccessful
- * rather than honest, the same reason SoundCloud/Bandcamp hide raw counts
- * early on. This changes what's *displayed*, never what's *stored* — the
- * real count keeps accumulating underneath either way, see
- * CampaignRepository.
- */
-private const val COUNT_DISPLAY_THRESHOLD = 10L
-
-private fun formatPlayCount(count: Long): String = when {
-    count >= 1_000_000 -> "%.1fM".format(count / 1_000_000.0)
-    count >= 1_000 -> "%.1fK".format(count / 1_000.0)
-    else -> count.toString()
-}
-
-/**
- * The home screen's promoted-content banner — one real, currently-live
- * campaign at a time, horizontally swipeable if more than one is active.
- * Deliberately compact (a rectangle banner, not a tall feature card): this
- * sits at the very top of Home, above Trending/Popular, so it needs to
- * read at a glance and get out of the way, not compete with the rest of
- * the page for space.
+ * The home screen's promoted-content banner — Task 59 Part 3b-b
+ * (handover.md): a single-card carousel, one real, currently-live
+ * campaign visible at a time, auto-advancing every 30 seconds and
+ * reshuffling specifically on app-background-then-resume (never on
+ * every recomposition, never on initial load) — see
+ * [rememberCampaignCarouselState]'s own header comment for the full
+ * state-machine rules this composable is built on. Replaces the prior
+ * `LazyRow`-of-every-live-campaign design entirely (Round 3's own
+ * "replace, not augment" decision, applied here to both the data
+ * source and the rendering code) — this was never meant to be a
+ * "browse all active campaigns" surface, it's a single rotating
+ * spotlight, deliberately compact (a rectangle banner, not a tall
+ * feature card): this sits at the very top of Home, above
+ * Trending/Popular, so it needs to read at a glance and get out of
+ * the way, not compete with the rest of the page for space.
  *
- * Renders nothing at all if there are no live campaigns (table empty, or
- * everything in it has ended/not started/been paused) or Supabase hasn't
- * been configured yet — see [CampaignRepository]'s empty-list behavior in
- * both cases. No placeholder/skeleton card either: an empty promo slot
- * isn't something worth occupying space to announce.
+ * Feeds from [CampaignRepository.fetchLiveCampaignsForBanner] (Task
+ * 59 Part 3a), not [CampaignRepository.fetchActiveCampaigns] — the
+ * former returns every currently-live campaign with zero ranking
+ * (this surface's whole point), display metadata already resolved
+ * server-side, and deliberately zeroed `playCount`/`trendingScore` at
+ * the data layer (Part 3a's own doc comment) — enforcing "never reveal
+ * the live count" one layer below this composable, not just by this
+ * file choosing not to render it.
+ *
+ * Renders nothing at all if there are no live campaigns (table empty,
+ * or everything in it has ended/not started/been paused) or Supabase
+ * hasn't been configured yet — [rememberCampaignCarouselState]'s
+ * `current` is simply `null` in both cases. No placeholder/skeleton
+ * card either: an empty promo slot isn't something worth occupying
+ * space to announce.
  *
  * ## Play Recording
- * Task 60 (handover.md) — this composable no longer records a play on
- * tap. It used to (via `CampaignRepository.recordPlay`, fire-and-
- * forget, right here), but that call was one of two immediate,
- * duplicate writes firing from the same physical tap (the other was
- * `HomeScreen.kt`'s own `onCampaignClick` handler, passed in as
- * [onCampaignClick] below) — every real play was being recorded
- * twice, plus a third, separate call site failed outright every time
- * (a Postgres type mismatch, silently swallowed). The one correct,
- * surviving call now lives in `MusicService.kt`, firing once playback
- * actually transitions to the tapped song — not at tap-time, before
- * anyone knows whether playback even starts. See Task 60's own
- * write-up for the full three-call-site trace this fix is based on.
+ * Task 60 (handover.md) — this composable does not record a play on
+ * tap, and never should again (see that task's own write-up for the
+ * double-recording bug this was the fix for) — the one correct,
+ * surviving call lives in `MusicService.kt`, firing once playback
+ * actually transitions to the tapped song, not at tap-time.
  */
 @Composable
 fun CampaignCardSection(
@@ -98,23 +90,19 @@ fun CampaignCardSection(
     var campaigns by remember { mutableStateOf<List<CampaignCard>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        campaigns = repository.fetchActiveCampaigns()
+        campaigns = repository.fetchLiveCampaignsForBanner()
     }
 
-    AnimatedVisibility(visible = campaigns.isNotEmpty()) {
-        LazyRow(
-            modifier = modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(campaigns, key = { it.id }) { campaign ->
-                CampaignBanner(
-                    campaign = campaign,
-                    onClick = {
-                        onCampaignClick(campaign)
-                    },
-                )
-            }
+    val carouselState = rememberCampaignCarouselState(campaigns)
+    val campaign = carouselState.current
+
+    AnimatedVisibility(visible = campaign != null) {
+        if (campaign != null) {
+            CampaignBanner(
+                campaign = campaign,
+                onClick = { onCampaignClick(campaign) },
+                modifier = modifier.padding(horizontal = 12.dp),
+            )
         }
     }
 }
@@ -126,7 +114,6 @@ private fun CampaignBanner(
     modifier: Modifier = Modifier,
 ) {
     val isDark = isSystemInDarkTheme()
-    val accent = Color(0xFFD4AF37) // warm gold — matches the badge art's own palette
     val liveRed = Color(0xFFE53935)
 
     Row(
@@ -196,29 +183,6 @@ private fun CampaignBanner(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
-            if (campaign.playCount >= COUNT_DISPLAY_THRESHOLD) {
-                Text(
-                    text = "${formatPlayCount(campaign.playCount)} plays",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent,
-                    fontWeight = FontWeight.Medium,
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(accent.copy(alpha = 0.18f))
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
-                ) {
-                    Text(
-                        text = "New",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
         }
     }
 }
