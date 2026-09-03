@@ -1097,3 +1097,19 @@ Verified via brace/paren balance check on the modified file (195/195,
 424/424 — balanced). Not compile-verified — no Android SDK in this
 sandbox, same standing limitation as every prior Velune part in this
 project.
+
+## 23. 2026-09-03 — grid-tap-to-album/artist/playlist navigation gap, split i/ii, Part B-i: `AlbumScreen.kt`
+
+**Kept concise here — Mavins-web's `handover.md`, Task 64's own entry,
+has the full write-up.** Part B (`AlbumScreen.kt`/
+`OnlinePlaylistScreen.kt`'s own equivalent grid branches, if either has
+one) split into i/ii — this is B-i only. Checked directly rather than
+assumed: `AlbumScreen.kt`'s own grid is the "Other Versions" `LazyRow`
+of `YouTubeGridItem`s; tapping one now forwards `?genreTile=...` the
+same way `ArtistScreen.kt`'s grid already does (Part A). Confirmed
+`AlbumViewModel` actually has `genreTileTitle` before writing anything.
+
+Verified via brace/paren balance check on the modified file (165/165,
+400/400 — balanced). Not compile-verified — no Android SDK in this
+sandbox, same standing limitation as every prior Velune part in this
+project. Part B-ii (`OnlinePlaylistScreen.kt`) not started.
