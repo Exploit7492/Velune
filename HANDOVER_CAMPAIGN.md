@@ -3,7 +3,23 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-02, latest of all) — §20: Task 59 fully
+> **Newest note (2026-09-03, latest of all) — §22: grid-tap-to-
+> album/artist/playlist navigation gap, split a/b, Part A done
+> (`ArtistScreen.kt`'s own grid — 3 branches:
+> `AlbumItem`/`ArtistItem`/`PlaylistItem`).** Now forwards
+> `?genreTile=...` on the second nav hop, matching
+> `YouTubeBrowseScreen.kt`'s equivalent (Round 15 Part A). Part B
+> (`AlbumScreen.kt`/`OnlinePlaylistScreen.kt`'s own equivalent grid
+> branches, if they have one) — not started. **Explicitly out of
+> scope, not Part B or any future part of this thread**: the much
+> larger set of `navController.navigate("album/…")`/`"artist/…"`/
+> `"online_playlist/…"` call sites found elsewhere in this app (search
+> screens, library, context menus, `MainActivity.kt`) — none of those
+> are reached via a genre-tile-tap-originated browse, so forwarding
+> genre there was never this gap's premise. Canonical write-up in
+> Mavins-web's `handover.md`.
+>
+> **Newest note (2026-09-02, previous) — §20: Task 59 fully
 > done, all 16 rounds. Part b-b-b-b (final piece):
 > `OnlinePlaylistScreen.kt`'s 4 `YouTubeQueue(...)` sites now carry
 > `genre = viewModel.genreTileTitle`.** Genre now survives the entire
@@ -1045,3 +1061,39 @@ rows that reference it.
 Verified via brace/paren balance check (0/0, balanced). Not
 compile-verified. **Part b-b (both b-b-i and b-b-ii) is now fully
 done.**
+
+## 22. 2026-09-03 — grid-tap-to-album/artist/playlist navigation gap, split a/b, Part A: `ArtistScreen.kt`
+
+**Kept concise here — Mavins-web's `handover.md` has the full
+write-up.** `ArtistScreen.kt`'s own grid section (the `when (item)`
+branch at what was line 1012 before this change) had 3 unguarded
+`navController.navigate(...)` calls — `is AlbumItem`, `is ArtistItem`,
+`is PlaylistItem` — none of them forwarding `genreTile`, unlike
+`YouTubeBrowseScreen.kt`'s equivalent grid tap (already fixed, Round
+15 Part A). Fixed the same way: `?genreTile=${URLEncoder.encode(...)}`
+appended when `viewModel.genreTileTitle` is non-null, same pattern,
+same reasoning (a tile title can contain `&`/`?`, e.g. "R&B").
+
+Confirmed all three destination routes (`album/{albumId}?genreTile=…`,
+`artist/{artistId}?genreTile=…`, `online_playlist/{playlistId}?genreTile=…`)
+already declare `genreTile` as a nav argument, and their ViewModels
+already read it — this fix only needed the *sending* side, no
+`NavigationBuilder.kt`/ViewModel changes.
+
+**Part B — `AlbumScreen.kt`/`OnlinePlaylistScreen.kt`'s own equivalent
+grid branches (if either has one) — not started.**
+
+**Explicitly out of scope, not Part B or any future part of this
+thread**: grepped the whole app for every `navController.navigate`
+call to these three destinations — found a much larger set in search
+screens, library, context menus (`SongMenu.kt`, `QueueMenu.kt`,
+`AlbumMenu.kt`, etc.), and `MainActivity.kt`. None of those are
+reached via a genre-tile-tap-originated browse — they're separate
+entry points where forwarding a genre tile was never this gap's
+premise. Not touching them under this task; flagging so a future
+session doesn't assume they were missed.
+
+Verified via brace/paren balance check on the modified file (195/195,
+424/424 — balanced). Not compile-verified — no Android SDK in this
+sandbox, same standing limitation as every prior Velune part in this
+project.

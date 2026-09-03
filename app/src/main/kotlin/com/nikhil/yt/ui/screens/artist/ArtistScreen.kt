@@ -1009,9 +1009,40 @@ fun ArtistScreen(
                                                                     ),
                                                                 )
 
-                                                            is AlbumItem -> navController.navigate("album/${item.id}")
-                                                            is ArtistItem -> navController.navigate("artist/${item.id}")
-                                                            is PlaylistItem -> navController.navigate("online_playlist/${item.id}")
+                                                            // Task 59 (grid/album/playlist play-path
+                                                            // gap, Round 16's own flagged follow-up,
+                                                            // not part of B-ii's own scope) -- same
+                                                            // &genreTile= forwarding
+                                                            // YouTubeBrowseScreen.kt's equivalent grid
+                                                            // tap already does (Round 15 Part A) --
+                                                            // without this, a genre-tile tap that
+                                                            // lands here (an artist page) then taps
+                                                            // into one of that artist's own
+                                                            // albums/related artists/playlists loses
+                                                            // genre context at this second nav hop.
+                                                            // Re-encoded here (already URL-decoded on
+                                                            // this viewModel) for the same reason
+                                                            // Round 9 established for this exact class
+                                                            // of value -- a tile title can contain
+                                                            // '&'/'?' (e.g. "R&B").
+                                                            is AlbumItem -> navController.navigate(
+                                                                "album/${item.id}" +
+                                                                    (viewModel.genreTileTitle?.let {
+                                                                        "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                    } ?: "")
+                                                            )
+                                                            is ArtistItem -> navController.navigate(
+                                                                "artist/${item.id}" +
+                                                                    (viewModel.genreTileTitle?.let {
+                                                                        "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                    } ?: "")
+                                                            )
+                                                            is PlaylistItem -> navController.navigate(
+                                                                "online_playlist/${item.id}" +
+                                                                    (viewModel.genreTileTitle?.let {
+                                                                        "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                                    } ?: "")
+                                                            )
                                                         }
                                                     },
                                                     onLongClick = {
