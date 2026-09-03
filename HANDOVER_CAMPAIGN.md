@@ -1007,3 +1007,21 @@ section.
 Verified via brace/paren balance check (163/163 `{}`, 394/394 `()`).
 Not compile-verified — no Android SDK/Gradle in this sandbox, same
 standing limitation every round of this chain has flagged.
+
+## 20. 2026-09-03 — Task 49 Part b-b-i: `ensureDeviceListener()` Kotlin wrapper, canonical write-up in Mavins-web
+
+**Sync note only — same pattern used throughout this section.**
+Unrelated task (Task 49, listener earnings — not Task 59): new
+`CampaignRepository.ensureDeviceListener(deviceId: String): String?`,
+wrapping migration 028's `ensure_device_listener` RPC (an idempotent
+upsert of a minimal `public.users` row for a device-ID-only listener,
+`role = 'listener'`). Split into b-b-i (this — the repository
+function) / b-b-ii (wiring the actual call site in `MusicService.kt`,
+not started) per explicit instruction. Full detail — including a real,
+flagged-not-assumed uncertainty about this RPC's scalar (`RETURNS
+UUID`) response shape, unlike every other RPC this file's Kotlin code
+parses — in Mavins-web's `handover.md`, Task 49's own "Part b-b"
+entry. Verified via brace/paren balance check (a first pass came back
+unbalanced, isolated to the diff's own added lines to find the exact
+line rather than scanning the whole file — a doc-comment parenthetical
+left unclosed, fixed before finalizing). Not compile-verified.

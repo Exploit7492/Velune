@@ -465,6 +465,75 @@ class CampaignRepository {
     }
 
     /**
+     * Task 49 Part b-b-i (handover.md, Mavins-web repo) — Kotlin
+     * wrapper for the `ensure_device_listener` RPC (migration 028).
+     * Idempotently upserts a minimal `public.users` row keyed on
+     * [deviceId] (`role = 'listener'`, a synthetic non-deliverable
+     * `.internal` email — see that migration's own header for why: a
+     * device-ID listener never logs in and has no real email, by
+     * design) so `listener_play_events.listener_id`'s foreign key
+     * (Task 49 Part a) has a real row to point at for the overwhelming
+     * common case — a real Velune listener, identified only by device
+     * ID, no login.
+     *
+     * **This function alone does not fix anything — it is only called
+     * from where Task 49 Part b-b-ii decides to call it (deferred,
+     * not built in this same part), which must be the real, persisted
+     * [deviceId] from `MusicService.kt`'s own
+     * `getOrCreateCampaignDeviceId()`, specifically and only that
+     * value — never a one-off fallback UUID
+     * ([recordCampaignStream]'s own `userId ?: UUID.randomUUID()...`
+     * default below is exactly the case that must NOT reach this
+     * function, per migration 028's own explicit warning against
+     * flooding `public.users` with a throwaway row per unmatched
+     * play).** Deliberately not called from within this file at all —
+     * that decision belongs to whichever call site in `MusicService.kt`
+     * actually knows which kind of ID it's holding, this file has no
+     * way to tell the two apart.
+     *
+     * @return the same [deviceId] echoed back (the RPC always returns
+     *   its own input UUID on success — confirmed against migration
+     *   028's own `RETURN p_device_id;` before relying on it, not
+     *   assumed), or `null` if the call failed for any reason. A
+     *   caller that gets `null` back should treat this the same as
+     *   any other best-effort network call in this file — log and
+     *   move on, never block playback on it.
+     */
+    suspend fun ensureDeviceListener(deviceId: String): String? = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext null
+        try {
+            val payload = JSONObject().apply {
+                put("p_device_id", deviceId)
+            }
+            val request = Request.Builder()
+                .url("$url/rest/v1/rpc/ensure_device_listener")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .header("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("ensureDeviceListener: HTTP ${'$'}{response.code}")
+                    return@use null
+                }
+                // Postgres RETURNS UUID via PostgREST comes back as a
+                // bare JSON string (not an array-of-objects the way
+                // RETURNS TABLE functions elsewhere in this file do) —
+                // e.g. "\"550e8400-...\"" -- strip the surrounding
+                // quotes rather than reaching for a JSON array parser
+                // that would fail on this shape.
+                val body = response.body?.string().orEmpty().trim().trim('"')
+                body.takeIf { it.isNotBlank() }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "ensureDeviceListener failed for deviceId=$deviceId")
+            null
+        }
+    }
+
+    /**
      * Record a campaign stream play via the record_campaign_stream RPC.
      * Called whenever a campaign song is played (full or partial listen).
      *
