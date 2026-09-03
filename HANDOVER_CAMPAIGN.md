@@ -1126,3 +1126,28 @@ same out-of-scope class of thing Parts A and B-i both already
 established isn't a grid. This screen never had a second navigation
 hop to lose genre context at — a genuine negative result, not a
 skipped check.
+
+## 22. 2026-09-04 — `MusicService.kt`'s initial-batch injection bug (Task 59 Round 7), fixed
+
+**Sync note only — canonical write-up in Mavins-web's `handover.md`,
+Task 59's own Round 7 entry.** Found while reconciling a parallel,
+unpushed local attempt at this same task against this repo's real
+current history: that attempt's own "second nav hop" fix
+(`AlbumScreen.kt`/`ArtistScreen.kt`) turned out to be a byte-for-byte
+duplicate of what "Task 64" already shipped here — discarded entirely,
+no value lost. But its `MusicService.kt` fix was for a genuinely
+different, still-unfixed bug (Round 7's own finding, not part of Task
+64's scope at all) that Task 64's own commits never touched.
+
+The fix: the block populating a queue's very first batch of songs was
+reading `queue.getInitialStatus()` — the original, unwrapped parameter
+— instead of `wrappedQueue`/`currentQueue` (the campaign-injected
+version, constructed a few lines above). Campaign injection was wired
+in but never actually consulted for a queue's first batch, only after
+`nextPage()`'s own, separately-correct path. Confirmed the one other
+`queue.getInitialStatus()` call site in this file is unrelated (an
+early-return branch that runs before any wrapped queue exists).
+
+Verified via brace/paren balance check on the edited file (1037/1037
+`{}`, 2352/2352 `()`). Not compile-verified — same standing limitation
+as every part of this task.

@@ -1602,7 +1602,25 @@ class MusicService :
         scope.launch(SilentHandler) {
             val initialStatus =
                 withContext(Dispatchers.IO) {
-                    queue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
+                    // Task 59 Round 7's own finding, fixed this session: this
+                    // used to read `queue.getInitialStatus()` — the original,
+                    // unwrapped parameter, not `wrappedQueue`/`currentQueue`
+                    // (set above, when campaign injection is wired in).
+                    // Campaign injection was constructed but never actually
+                    // consulted for a queue's very first batch of songs —
+                    // only nextPage()'s own, separately-correct code path
+                    // ever saw it. A queue shorter than one page (or
+                    // abandoned before paginating) would never show an
+                    // injected campaign at all, making the whole feature
+                    // look broken or absent for a lot of ordinary listening
+                    // sessions even though the mechanism itself was correct.
+                    // Confirmed the *other* `queue.getInitialStatus()` call
+                    // site in this file (search for it) is unrelated — a
+                    // separate early-return branch (a "Together" guest-
+                    // playback restriction) that runs and returns before
+                    // any wrapped queue is even constructed, so it correctly
+                    // keeps using the original `queue`.
+                    wrappedQueue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
                 }
             if (initialStatus.title != null) {
                 queueTitle = initialStatus.title
