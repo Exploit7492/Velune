@@ -220,7 +220,8 @@ class CampaignRepository {
         }
     }
 
-
+    /**
+     * Fetch ONE campaign for a single queue-slot injection point, via
      * the genre-locked, fair-rotation `get_next_campaign_for_queue_slot`
      * RPC (migration 023, Task 59 Part 1/2a — see handover.md, Mavins-
      * web repo).

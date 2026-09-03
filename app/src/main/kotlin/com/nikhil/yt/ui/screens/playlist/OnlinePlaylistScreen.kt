@@ -748,6 +748,12 @@ fun OnlinePlaylistScreen(
                                                     // pre-existing).
                                                     YouTubeQueue(shuffleEndpoint, genre = viewModel.genreTileTitle)
                                                 )
+                                            },
+                                            shape = RoundedCornerShape(24.dp),
+                                            modifier = Modifier.weight(1f).height(48.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.shuffle),
                                                 contentDescription =
                                                     stringResource(R.string.shuffle),
                                                 modifier = Modifier.size(24.dp)

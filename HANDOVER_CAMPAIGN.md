@@ -3,7 +3,25 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-03, latest of all) — §22: grid-tap-to-
+> **Newest note (2026-09-05, latest of all) — CI build failure fixed:
+> two real syntax breaks, reported directly via a pasted failed
+> GitHub Actions log, not found by any prior session's own
+> verification.** `CampaignRepository.kt`'s KDoc for
+> `fetchNextCampaignForQueueSlot` was missing its own opening `/**`
+> line (restored from the original commit, `3e1011e`) — caused
+> hundreds of cascading "Expecting member declaration" errors.
+> `OnlinePlaylistScreen.kt`'s Shuffle Button was corrupted by Task 59
+> Round 16's own genre-threading edit — restored the original
+> structure (`shape`/`modifier`/the `Icon` content lambda) from the
+> initial commit while keeping the actual genre-threading change.
+> Both bugs left braces/parens genuinely balanced, so the sandbox's
+> own standard balance-check convention would NOT have caught either
+> — worth remembering for future verification passes on this repo.
+> Full write-up in `HANDOVER_CAMPAIGN.md`, entry 23. Not
+> compile-verified — no Android SDK in this sandbox; recommend
+> re-running CI directly.
+>
+> **Newest note (2026-09-03, previous) — §22: grid-tap-to-
 > album/artist/playlist navigation gap, split a/b, Part A done
 > (`ArtistScreen.kt`'s own grid — 3 branches:
 > `AlbumItem`/`ArtistItem`/`PlaylistItem`).** Now forwards
@@ -1151,3 +1169,74 @@ early-return branch that runs before any wrapped queue exists).
 Verified via brace/paren balance check on the edited file (1037/1037
 `{}`, 2352/2352 `()`). Not compile-verified — same standing limitation
 as every part of this task.
+
+## 23. 2026-09-05 — CI build failure, two real syntax breaks fixed (not this task's own history — a live build failure reported directly by the product owner)
+
+**Product owner pasted a failed GitHub Actions build log directly** —
+`Task :app:compileArm64ReleaseKotlin FAILED`, hundreds of cascading
+"Expecting member declaration" errors starting at
+`CampaignRepository.kt:224`, plus a separate cluster of errors in
+`OnlinePlaylistScreen.kt` around line 738-755. Both traced to real,
+distinct syntax breaks — not flagged or found by any prior session's
+own verification (brace-balance checks catch *unbalanced* braces, not
+a comment block missing its own opening marker, which is exactly what
+happened here: still balanced, just wrong).
+
+**Bug 1 — `CampaignRepository.kt`, `fetchNextCampaignForQueueSlot`'s
+KDoc missing its own opening `/**` and first summary line.** Diffed
+against `3e1011e` (the commit that originally introduced this
+function) to get the exact original text rather than invent a
+replacement — some later edit to this file (inserting
+`parseLiveBannerRows` immediately above, per the surrounding context)
+had dropped `/** ` and `Fetch ONE campaign for a single queue-slot
+injection point, via` entirely, leaving the KDoc's *continuation*
+lines (`* the genre-locked, fair-rotation...`) as bare, uncommented
+code — which Kotlin's parser reads as a sequence of dereference/
+multiplication expressions, losing track of the class body from that
+point forward. Restored exactly the two missing lines from the
+original commit, nothing else.
+
+**Bug 2 — `OnlinePlaylistScreen.kt`'s Shuffle Button, corrupted by
+Task 59 Round 16's own genre-threading edit (§18-19 above).** Diffed
+against the initial commit (`7a822a1`) to recover the original,
+correct structure. That edit had dropped the `onClick` lambda's
+closing `},`, the `shape`/`modifier` params, the `) {` opening the
+required trailing content lambda, and the `Icon(` call itself —
+collapsing `contentDescription =`/`modifier =` into what the compiler
+tried (and failed) to parse as statements *inside* `onClick`'s own
+lambda body, hence "Unresolved reference 'contentDescription'" and
+"No value passed for parameter 'content'" (a real Material3 `Button`
+requires a trailing content lambda; this call no longer had one).
+Restored the full original structure — `shape = RoundedCornerShape(24.dp)`,
+`modifier = Modifier.weight(1f).height(48.dp)`, the `Icon(...)` block
+— while keeping the actual genre-threading change
+(`YouTubeQueue(shuffleEndpoint, genre = viewModel.genreTileTitle)`)
+that edit was meant to add. **Checked the other 3 call sites that same
+commit touched** (Radio Button, the Start-Mix `Button`, and the
+song-row `onClick`) — all three structurally intact; only the Shuffle
+Button was corrupted.
+
+**Also swept the entire `app/src/main/kotlin` tree for the same
+orphaned-comment-continuation pattern as Bug 1** (a line starting with
+`*` outside any open `/* ... */` block) — found only false positives
+(multi-line string-template debug text containing literal `***` and
+a `*spread` operator in `MusicDatabase.kt`, neither a real comment).
+
+**Verified — no Android SDK/Gradle in this sandbox, same standing
+limitation as every part of this task, but this was the one time it
+mattered most, since the sandbox's own balance checks would NOT have
+caught either bug (both left braces/parens genuinely balanced):**
+- `CampaignRepository.kt`: brace balance 0, paren balance 0, `/* `
+  count == `*/` count (10/10) — was already balanced before the fix
+  too, confirming brace-balance alone is insufficient for this exact
+  bug class, which is why the dedicated orphaned-comment-line scan
+  above was run as a second, different check.
+- `OnlinePlaylistScreen.kt`: brace balance 0, paren balance 0
+  (whole-file).
+- Diffed both fixes against their real original commits line-for-line
+  rather than freehand-reconstructing what "should" go there.
+
+**Not verified: an actual Gradle build.** The product owner's own
+pasted log is the only real compiler signal either of these bugs ever
+got — recommend re-running CI on this fix directly rather than trusting
+the sandbox-side checks above as sufficient on their own this time.
