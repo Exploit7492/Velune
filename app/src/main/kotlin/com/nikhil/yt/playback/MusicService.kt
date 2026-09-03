@@ -3654,6 +3654,23 @@ class MusicService :
         if (currentSongId == trackedSongId) {
             scope.launch(SilentHandler) {
                 val deviceId = getOrCreateCampaignDeviceId()
+                // Task 49 Part b-b-ii (handover.md): this is the ONE
+                // call site this whole part's own doc comment was
+                // written for — deviceId here is exactly the real,
+                // persisted getOrCreateCampaignDeviceId() value the
+                // guard demands, never a one-off fallback UUID.
+                // Fire-and-forget in spirit (best-effort, a null/failed
+                // result is logged and moved on from inside
+                // ensureDeviceListener() itself, not handled here) but
+                // still sequentially awaited before recordCampaignStream
+                // below, so the public.users row this ensures exists
+                // has actually landed before anything that might
+                // reference it via listener_play_events' FK (Task 49
+                // Part a) in a future part runs. Never blocks playback —
+                // both calls already live inside this same
+                // scope.launch(SilentHandler) block, off the player's
+                // own thread.
+                CampaignRepository().ensureDeviceListener(deviceId)
                 // Task 60 (handover.md) — countryCode added. Previously
                 // omitted here entirely (this call defaulted it to
                 // Postgres's own "unknown" fallback for every real play)
