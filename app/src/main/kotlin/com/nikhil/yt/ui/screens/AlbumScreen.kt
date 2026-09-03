@@ -788,7 +788,27 @@ fun AlbumScreen(
                                     coroutineScope = scope,
                                     modifier = Modifier
                                         .combinedClickable(
-                                            onClick = { navController.navigate("album/${item.id}") },
+                                            // Task 64 Part B-i -- same &genreTile=
+                                            // forwarding ArtistScreen.kt's own
+                                            // equivalent grid tap already does
+                                            // (Part A). Without this, a genre-tile
+                                            // tap that lands here (an album page)
+                                            // then taps into one of this album's own
+                                            // "Other Versions" loses genre context at
+                                            // this second nav hop. Re-encoded here
+                                            // (already URL-decoded on this
+                                            // viewModel) for the same reason Round 9
+                                            // established for this exact class of
+                                            // value -- a tile title can contain
+                                            // '&'/'?' (e.g. "R&B").
+                                            onClick = {
+                                                navController.navigate(
+                                                    "album/${item.id}" +
+                                                        (viewModel.genreTileTitle?.let {
+                                                            "?genreTile=${java.net.URLEncoder.encode(it, "UTF-8")}"
+                                                        } ?: "")
+                                                )
+                                            },
                                             onLongClick = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 menuState.show {
