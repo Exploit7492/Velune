@@ -1025,3 +1025,23 @@ entry. Verified via brace/paren balance check (a first pass came back
 unbalanced, isolated to the diff's own added lines to find the exact
 line rather than scanning the whole file — a doc-comment parenthetical
 left unclosed, fixed before finalizing). Not compile-verified.
+
+## 21. 2026-09-03 — Task 49 Part b-b-ii: `ensureDeviceListener()` wired into the real call site, canonical write-up in Mavins-web
+
+**Kept concise here — Mavins-web's `handover.md`, Task 49's own
+"Part b-b" entry, has the full write-up.** Wired
+`CampaignRepository().ensureDeviceListener(deviceId)` into
+`MusicService.kt`'s one real `getOrCreateCampaignDeviceId()` call
+site (confirmed via grep — exactly one), using the same `deviceId`
+local variable `recordCampaignStream` already uses. Called
+sequentially before `recordCampaignStream`, inside the same existing
+`scope.launch(SilentHandler)` block.
+
+Confirmed `recordCampaignStream` doesn't touch `listener_play_events`
+at all yet, so this call is purely proactive today — no ordering race
+exists, sequenced correctly for whenever a future part starts writing
+rows that reference it.
+
+Verified via brace/paren balance check (0/0, balanced). Not
+compile-verified. **Part b-b (both b-b-i and b-b-ii) is now fully
+done.**
