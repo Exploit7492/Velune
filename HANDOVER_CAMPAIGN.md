@@ -1279,3 +1279,18 @@ Verified via brace/paren balance on the modified file (100/100,
 357/357 — balanced). Not compile-verified — no Android SDK in this
 sandbox, same standing limitation as every prior Velune part in this
 project.
+
+## 27. 2026-09-04 — addendum: a 7th log-escape instance the closed task missed, now fixed
+
+**Kept concise here — Mavins-web's `handover.md` has the full
+write-up.** Task was already fully closed (§26, Part b-i/b-ii) before
+this addendum. While independently re-confirming closure, found one
+more instance of the same broken `${'$'}{...}` escape still present —
+a media-item-resolution error handler, not one of the original six
+HTTP-status lines this task was scoped around, and missed by both
+prior sessions. Fixed. Confirmed via grep: zero remaining instances of
+the broken pattern anywhere in this file now.
+
+Verified via brace/paren balance (99/99, 357/357 — balanced). Not
+compile-verified — no Android SDK in this sandbox, same standing
+limitation as every prior Velune part in this project.
