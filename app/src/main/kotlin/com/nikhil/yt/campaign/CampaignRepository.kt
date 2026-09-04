@@ -570,7 +570,7 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("recordCampaignStream: HTTP ${'$'}{response.code}")
+                    Timber.tag(TAG).w("recordCampaignStream: HTTP ${response.code}")
                 } else {
                     Timber.tag(TAG).d("Recorded stream for campaign $campaignId")
                 }
