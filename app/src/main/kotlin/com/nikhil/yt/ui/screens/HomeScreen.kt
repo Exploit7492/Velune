@@ -331,7 +331,32 @@ fun HomeScreen(
                 state = lazylistState,
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
-                
+
+                item {
+                    // First thing on Home, above everything else including
+                    // the category chips — a compact promoted-song banner.
+                    // Renders nothing if there's no active campaign or
+                    // Supabase isn't configured; see CampaignCardSection's
+                    // doc for why there's deliberately no placeholder/
+                    // skeleton state for an empty slot.
+                    //
+                    // Bug fixed here: this item{} block was previously
+                    // nested INSIDE the `if (showHomeCategoryChips)` block
+                    // below (a leftover from a rushed "move this section"
+                    // edit — see git history), meaning the campaign banner
+                    // silently disappeared whenever a user had category
+                    // chips turned off in settings (ShowHomeCategoryChipsKey,
+                    // defaults to true but is a real, user-facing toggle) —
+                    // even though this composable's own visibility is
+                    // supposed to depend only on live campaign data, per its
+                    // own doc comment above. Moved out to be a sibling item,
+                    // unconditional, matching that comment's own claim.
+                    CampaignCardSection(
+                        repository = campaignRepository,
+                        onCampaignClick = onCampaignClick,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                }
 
                 if (showHomeCategoryChips) {
                     item {
@@ -343,22 +368,6 @@ fun HomeScreen(
                             }
                         )
                     }
-
-item {
-                    // First thing on Home, above everything else including
-                    // the category chips — a compact promoted-song banner.
-                    // Renders nothing if there's no active campaign or
-                    // Supabase isn't configured; see CampaignCardSection's
-                    // doc for why there's deliberately no placeholder/
-                    // skeleton state for an empty slot.
-                    CampaignCardSection(
-                        repository = campaignRepository,
-                        onCampaignClick = onCampaignClick,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
-                }
-
-
                 }
 
                 quickPicks?.takeIf { it.isNotEmpty() }?.let { picks ->

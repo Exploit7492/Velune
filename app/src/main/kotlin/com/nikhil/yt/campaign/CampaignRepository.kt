@@ -137,8 +137,27 @@ class CampaignRepository {
     suspend fun fetchLiveCampaignsForBanner(): List<CampaignCard> = withContext(Dispatchers.IO) {
     val (url, anonKey) = config() ?: return@withContext emptyList()
     try {
+        // Bug fixed here: the previous select= list only requested
+        // id,source_url,artist_id,total_streams,current_stage --
+        // parseLiveBannerRows below has always read several more
+        // fields (resolved_song_id, track_title, artist_name,
+        // cover_url, track_id) that were never actually in that list.
+        // PostgREST omits any column not named in select= entirely
+        // (not present in the returned JSON at all, not present-but-
+        // null) -- every card was silently rendering "Untitled" by
+        // "Unknown Artist" with no cover image, regardless of the
+        // real track's actual data. resolved_song_id/track_id are
+        // real, flat columns on track_campaigns itself (confirmed via
+        // Mavins-web's own supabase_schema.sql, not assumed) -- added
+        // directly. track_title/cover_url and artist_name are not
+        // track_campaigns columns at all; they live on tracks and
+        // users respectively (also confirmed via schema, not
+        // guessed), so pulled in via PostgREST's own embedded-resource
+        // syntax off this table's two real, unambiguous FKs
+        // (track_id -> tracks.id, artist_id -> users.id) rather than
+        // inventing flat column names that were never going to exist.
         val request = Request.Builder()
-            .url("$url/rest/v1/track_campaigns?select=id,source_url,artist_id,total_streams,current_stage&is_active=eq.true&is_paused=eq.false&current_stage=neq.completed&current_stage=neq.cancelled")
+            .url("$url/rest/v1/track_campaigns?select=id,source_url,resolved_song_id,track_id,artist_id,total_streams,current_stage,tracks(title,cover_url),users(artist_name)&is_active=eq.true&is_paused=eq.false&current_stage=neq.completed&current_stage=neq.cancelled")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $anonKey")
             .header("Content-Type", "application/json")
@@ -187,9 +206,19 @@ class CampaignRepository {
             }
 
             val currentStage = row.optString("current_stage", "planting")
-            val trackTitle = row.optString("track_title", "").takeIf { it.isNotBlank() }
-            val artistName = row.optString("artist_name", "").takeIf { it.isNotBlank() }
-            val coverUrl = row.optString("cover_url", "")
+            // Nested embedded resources -- PostgREST returns these as
+            // JSON objects (or null if the FK itself is null), not
+            // flat fields. A campaign's own tracks/users row could in
+            // principle be missing (nullable FK, or the referenced row
+            // deleted) -- optJSONObject returns null in that case
+            // rather than throwing, same graceful-degradation posture
+            // this whole parser already uses elsewhere (mapNotNull
+            // over campaignId/songId, not a crash).
+            val tracksObj = row.optJSONObject("tracks")
+            val usersObj = row.optJSONObject("users")
+            val trackTitle = tracksObj?.optString("title", "")?.takeIf { it.isNotBlank() }
+            val artistName = usersObj?.optString("artist_name", "")?.takeIf { it.isNotBlank() }
+            val coverUrl = tracksObj?.optString("cover_url", "") ?: ""
 
             CampaignCard(
                 id = campaignId,
