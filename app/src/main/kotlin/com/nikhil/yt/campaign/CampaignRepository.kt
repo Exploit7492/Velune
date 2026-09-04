@@ -61,7 +61,7 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchActiveCampaigns: HTTP ${'$'}{response.code}")
+                    Timber.tag(TAG).w("fetchActiveCampaigns: HTTP ${response.code}")
                     return@use emptyList()
                 }
                 val body = response.body?.string().orEmpty()
@@ -270,7 +270,7 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${'$'}{response.code}")
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${response.code}")
                     return@use null
                 }
                 val body = response.body?.string().orEmpty()
@@ -360,7 +360,7 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchGenreTileMapping: HTTP ${'$'}{response.code}")
+                    Timber.tag(TAG).w("fetchGenreTileMapping: HTTP ${response.code}")
                     return@use emptyMap()
                 }
                 val body = response.body?.string().orEmpty()
