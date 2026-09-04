@@ -89,6 +89,28 @@ fun CampaignCardSection(
 ) {
     var campaigns by remember { mutableStateOf<List<CampaignCard>>(emptyList()) }
 
+    // HARDCODED FOR TESTING – remove after fix
+    LaunchedEffect(Unit) {
+        val testCampaign = CampaignCard(
+            id = "2b14f512-f5a6-40cd-9fcc-370bf0042e59",
+            songId = "1RKCUgX2nHY",
+            trackId = "",
+            artistId = "3b00de5b-6593-4f9f-bbbd-9c11647fc74b",
+            title = "Test Campaign",
+            artist = "Admin",
+            thumbnailUrl = "https://i.ytimg.com/vi/1RKCUgX2nHY/hqdefault.jpg",
+            totalStreams = 0,
+            trendingScore = 0.0,
+            geographicTier = "local",
+            currentStage = "planting",
+            certified = false,
+            isLive = true,
+            playCount = 0,
+            ctaLabel = "Play"
+        )
+        campaigns = listOf(testCampaign)
+    }
+
     LaunchedEffect(Unit) {
         campaigns = repository.fetchLiveCampaignsForBanner()
     }
