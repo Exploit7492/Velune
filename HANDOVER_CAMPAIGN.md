@@ -1261,3 +1261,21 @@ Verified via brace/paren balance on the modified file (102/102,
 357/357 — balanced). Not compile-verified — no Android SDK in this
 sandbox, same standing limitation as every prior Velune part in this
 project.
+
+## 26. 2026-09-04 — CampaignRepository.kt HTTP-status log-escape bug, Part b done (b-i + b-ii), task fully closed
+
+**Kept concise here — Mavins-web's `handover.md` has the full
+write-up (top "START HERE" box).** Part b's own two remaining lines,
+`ensureDeviceListener` (commit `fe732af`) and `recordCampaignStream`
+(commit `222d1a6`, this session), both fixed — same one-character
+`${'$'}{response.code}` → `${response.code}` correction as Part a's
+three lines (section 25 above). Grepped the whole file after this
+session's fix: zero remaining instances of the broken pattern
+anywhere. This closes the task entirely, five lines total across
+Parts a and b.
+
+Purely cosmetic — broken debug logging only, nothing functional.
+Verified via brace/paren balance on the modified file (100/100,
+357/357 — balanced). Not compile-verified — no Android SDK in this
+sandbox, same standing limitation as every prior Velune part in this
+project.
