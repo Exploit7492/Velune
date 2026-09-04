@@ -36,6 +36,9 @@ android {
     }
 
     defaultConfig {
+        buildConfigField("String", "SUPABASE_URL", "\"https://atojskxrxfsbpeefigtm.supabase.co\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0b2pza3hyeGZzYnBlZWZpZ3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMTkwOTYsImV4cCI6MjA5MTU5NTA5Nn0.vp68iI-RKxchZl67uxsdkbMneu_pFrCFC1H2SDNmgkY\"")
+
         val appName = (project.findProperty("appName") as? String).takeIf { !it.isNullOrBlank() } ?: System.getenv("APP_NAME").takeIf { !it.isNullOrBlank() } ?: "YT-Pro"
         resValue("string", "app_name", appName)
         val configAppName = project.findProperty("configAppName") as? String ?: System.getenv("CONFIG_APP_NAME") ?: appName
