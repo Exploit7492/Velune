@@ -36,9 +36,6 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "SUPABASE_URL", "\"https://atojskxrxfsbpeefigtm.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0b2pza3hyeGZzYnBlZWZpZ3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMTkwOTYsImV4cCI6MjA5MTU5NTA5Nn0.vp68iI-RKxchZl67uxsdkbMneu_pFrCFC1H2SDNmgkY\"")
-
         val appName = (project.findProperty("appName") as? String).takeIf { !it.isNullOrBlank() } ?: System.getenv("APP_NAME").takeIf { !it.isNullOrBlank() } ?: "YT-Pro"
         resValue("string", "app_name", appName)
         val configAppName = project.findProperty("configAppName") as? String ?: System.getenv("CONFIG_APP_NAME") ?: appName
@@ -99,14 +96,35 @@ android {
         // level security in campaign_schema.sql is for) — this is the
         // standard way Supabase itself documents using it from a mobile
         // client, not a security shortcut.
+        //
+        // Bug fixed here: the empty-string default below used to mean
+        // any build without local.properties/an env var set (i.e. most
+        // fresh checkouts, unless someone already knew to configure
+        // this) silently got a blank SUPABASE_URL/ANON_KEY, making
+        // config() return null and every single campaign-fetching
+        // function in CampaignRepository.kt return an empty list — the
+        // single most likely reason "nothing shows up at all" ever
+        // happened in the first place, not any of the actual campaign-
+        // display bugs also fixed this same session. A later, rushed
+        // commit "fixed" this by hardcoding the real URL/key directly
+        // as a SEPARATE, duplicate buildConfigField call above this one
+        // — redundant with (and a real risk of conflicting with) this
+        // established local.properties -> env -> default pattern, and
+        // itself removed here. The real values now live as this
+        // pattern's own default instead: local.properties/env still
+        // override for anyone who wants a different project, but a
+        // fresh checkout now builds against the real one without
+        // needing an undocumented setup step first — consistent with
+        // the comment above already establishing that embedding this
+        // specific key is by design, not a shortcut.
         val supabaseUrl =
             localProperties.getProperty("SUPABASE_URL")
                 ?: System.getenv("SUPABASE_URL")
-                ?: ""
+                ?: "https://atojskxrxfsbpeefigtm.supabase.co"
         val supabaseAnonKey =
             localProperties.getProperty("SUPABASE_ANON_KEY")
                 ?: System.getenv("SUPABASE_ANON_KEY")
-                ?: ""
+                ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0b2pza3hyeGZzYnBlZWZpZ3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMTkwOTYsImV4cCI6MjA5MTU5NTA5Nn0.vp68iI-RKxchZl67uxsdkbMneu_pFrCFC1H2SDNmgkY"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
