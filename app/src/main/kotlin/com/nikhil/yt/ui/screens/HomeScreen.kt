@@ -331,7 +331,20 @@ fun HomeScreen(
                 state = lazylistState,
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
-                item {
+                
+
+                if (showHomeCategoryChips) {
+                    item {
+                        ChipsRow(
+                            chips = homePage?.chips.orEmpty().map { it to it.title },
+                            currentValue = selectedChip,
+                            onValueUpdate = {
+                                viewModel.toggleChip(it)
+                            }
+                        )
+                    }
+
+item {
                     // First thing on Home, above everything else including
                     // the category chips — a compact promoted-song banner.
                     // Renders nothing if there's no active campaign or
@@ -344,17 +357,6 @@ fun HomeScreen(
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                     )
                 }
-
-                if (showHomeCategoryChips) {
-                    item {
-                        ChipsRow(
-                            chips = homePage?.chips.orEmpty().map { it to it.title },
-                            currentValue = selectedChip,
-                            onValueUpdate = {
-                                viewModel.toggleChip(it)
-                            }
-                        )
-                    }
                 }
 
                 quickPicks?.takeIf { it.isNotEmpty() }?.let { picks ->
