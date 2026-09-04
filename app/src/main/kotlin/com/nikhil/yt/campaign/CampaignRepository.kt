@@ -459,7 +459,7 @@ class CampaignRepository {
                 val metadata = result?.firstOrNull()?.toMediaMetadata()
                 metadata?.toMediaItem()
             } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Failed to resolve media item for ${'$'}{campaign.songId}")
+                Timber.tag(TAG).e(e, "Failed to resolve media item for ${campaign.songId}")
                 null
             }
         }
