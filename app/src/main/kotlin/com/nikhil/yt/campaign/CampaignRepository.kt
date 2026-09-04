@@ -516,7 +516,7 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("ensureDeviceListener: HTTP ${'$'}{response.code}")
+                    Timber.tag(TAG).w("ensureDeviceListener: HTTP ${response.code}")
                     return@use null
                 }
                 // Postgres RETURNS UUID via PostgREST comes back as a
