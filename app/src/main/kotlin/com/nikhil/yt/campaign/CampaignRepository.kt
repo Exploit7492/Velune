@@ -135,29 +135,29 @@ class CampaignRepository {
      *   this file, never a thrown exception reaching the caller.
      */
     suspend fun fetchLiveCampaignsForBanner(): List<CampaignCard> = withContext(Dispatchers.IO) {
-        val (url, anonKey) = config() ?: return@withContext emptyList()
-        try {
-            val request = Request.Builder()
-                .url("$url/rest/v1/rpc/get_live_campaigns_for_banner")
-                .header("apikey", anonKey)
-                .header("Authorization", "Bearer $anonKey")
-                .header("Content-Type", "application/json")
-                .post("{}".toRequestBody(jsonMediaType))
-                .build()
+    val (url, anonKey) = config() ?: return@withContext emptyList()
+    try {
+        val request = Request.Builder()
+            .url("$url/rest/v1/track_campaigns?select=id,source_url,artist_id,total_streams,current_stage&is_active=eq.true&is_paused=eq.false&current_stage=neq.completed&current_stage=neq.cancelled")
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer $anonKey")
+            .header("Content-Type", "application/json")
+            .get()
+            .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchLiveCampaignsForBanner: HTTP ${response.code}")
-                    return@use emptyList()
-                }
-                val body = response.body?.string().orEmpty()
-                parseLiveBannerRows(body)
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                Timber.tag(TAG).w("fetchLiveCampaignsForBanner: HTTP ${response.code}")
+                return@use emptyList()
             }
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "fetchLiveCampaignsForBanner failed")
-            emptyList()
+            val body = response.body?.string().orEmpty()
+            parseLiveBannerRows(body)
         }
+    } catch (e: Exception) {
+        Timber.tag(TAG).e(e, "fetchLiveCampaignsForBanner failed")
+        emptyList()
     }
+}
 
     private fun parseLiveBannerRows(body: String): List<CampaignCard> {
         val array = try {
@@ -168,7 +168,7 @@ class CampaignRepository {
         }
         return (0 until array.length()).mapNotNull { i ->
             val row = array.optJSONObject(i) ?: return@mapNotNull null
-            val campaignId = row.optString("campaign_id", "")
+            val campaignId = row.optString("id", "")
             if (campaignId.isBlank()) return@mapNotNull null
 
             val sourceUrl = row.optString("source_url", "")
@@ -610,7 +610,7 @@ class CampaignRepository {
         }
         return (0 until array.length()).mapNotNull { i ->
             val row = array.optJSONObject(i) ?: return@mapNotNull null
-            val campaignId = row.optString("campaign_id", "")
+            val campaignId = row.optString("id", "")
             val sourceUrl = row.optString("source_url", "")
             if (campaignId.isBlank()) return@mapNotNull null
 
