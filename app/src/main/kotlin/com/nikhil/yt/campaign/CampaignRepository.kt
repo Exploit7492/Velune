@@ -254,58 +254,59 @@ class CampaignRepository {
      *   eligible campaign was already served very recently — not an
      *   error) or if resolution failed for any reason.
      */
-    
-
-suspend fun fetchNextCampaignForQueueSlot(genre: String): MediaItem? = withContext(Dispatchers.IO) {
-    val (url, anonKey) = config() ?: return@withContext null
-    try {
-        // Build query: active, unpaused, not completed/cancelled
-        var query = "$url/rest/v1/track_campaigns?select=id,source_url,resolved_song_id&is_active=eq.true&is_paused=eq.false&current_stage=neq.completed&current_stage=neq.cancelled"
-        // If genre is provided and not blank, add the contains condition
-        if (genre.isNotBlank()) {
-            // Use cs. operator for array contains (target_genres is a text[] column)
-            // The genre must be single-quoted inside the array: cs.{"Pop"} -> cs.%7BPop%7D
-            val encodedGenre = URLEncoder.encode("{$genre}", "UTF-8")
-            query += "&target_genres=cs.$encodedGenre"
-        }
-        // Limit to 1 result (no random ordering – we'll get the first match)
-        query += "&limit=1"
-        
-        val request = Request.Builder()
-            .url(query)
-            .header("apikey", anonKey)
-            .header("Authorization", "Bearer $anonKey")
-            .get()
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${response.code}")
-                return@use null
+    suspend fun fetchNextCampaignForQueueSlot(genre: String): MediaItem? = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext null
+        try {
+            val payload = JSONObject().apply {
+                put("p_genre", genre)
             }
-            val body = response.body?.string().orEmpty()
-            Timber.tag(TAG).d("fetchNextCampaignForQueueSlot response: $body")
-            val array = try { JSONArray(body) } catch (e: Exception) { return@use null }
-            if (array.length() == 0) return@use null
-            val row = array.optJSONObject(0) ?: return@use null
-            val sourceUrl = row.optString("source_url", "")
-            val resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() }
-            val videoId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
-            if (videoId == null) {
-                Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract video id")
-                return@use null
+            val request = Request.Builder()
+                .url("$url/rest/v1/rpc/get_next_campaign_for_queue_slot")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .header("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${response.code}")
+                    return@use null
+                }
+                val body = response.body?.string().orEmpty()
+                val array = try {
+                    JSONArray(body)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot: malformed response")
+                    return@use null
+                }
+                // Empty array = no eligible campaign for this genre right
+                // now (the RPC's own fail-closed/no-match behavior, per
+                // migration 023) -- not an error, just "skip this slot."
+                if (array.length() == 0) return@use null
+                val row = array.optJSONObject(0) ?: return@use null
+
+                val sourceUrl = row.optString("source_url", "")
+                val resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() }
+                // Same resolution order CampaignUrlResolver already
+                // establishes for the trending-list path: a stored
+                // resolved id wins if present, falls back to extracting
+                // one from the raw source URL otherwise.
+                val videoId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+                if (videoId == null) {
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract a video id")
+                    return@use null
+                }
+
+                val result = YouTube.queue(listOf(videoId)).getOrNull()
+                val metadata = result?.firstOrNull()?.toMediaMetadata()
+                metadata?.toMediaItem()
             }
-            val result = YouTube.queue(listOf(videoId)).getOrNull()
-            val metadata = result?.firstOrNull()?.toMediaMetadata()
-            metadata?.toMediaItem()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed for genre=$genre")
+            null
         }
-    } catch (e: Exception) {
-        Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed")
-        null
     }
-}
-
-
 
     /**
      * Fetch the reviewed portion of `campaign_genre_tile_mapping`
