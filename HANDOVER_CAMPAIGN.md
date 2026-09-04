@@ -1240,3 +1240,24 @@ caught either bug (both left braces/parens genuinely balanced):**
 pasted log is the only real compiler signal either of these bugs ever
 got — recommend re-running CI on this fix directly rather than trusting
 the sandbox-side checks above as sufficient on their own this time.
+
+## 25. 2026-09-04 — CampaignRepository.kt HTTP-status log-escape bug, Part a fixed
+
+**Kept concise here — Mavins-web's `handover.md` has the full
+write-up (near the top "START HERE" box and Task 59's own "Round 10"
+entry).** Round 10 flagged six log lines writing a broken Kotlin
+string-template escape (`${'$'}{response.code}`, printing the literal
+text instead of the actual HTTP status). Confirmed via grep before
+starting: two of the six were already written correctly, so only five
+were actually broken. Split the five in half per the standing
+mandatory task-splitting rule — this is Part a:
+`fetchActiveCampaigns`, `fetchNextCampaignForQueueSlot`,
+`fetchGenreTileMapping` (lines 64/273/363) fixed. Part b
+(`ensureDeviceListener`, `recordCampaignStream`, lines 519/573) not
+done.
+
+Purely cosmetic — broken debug logging only, nothing functional.
+Verified via brace/paren balance on the modified file (102/102,
+357/357 — balanced). Not compile-verified — no Android SDK in this
+sandbox, same standing limitation as every prior Velune part in this
+project.
