@@ -3,7 +3,21 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-05, latest of all) — CI build failure fixed:
+> **Newest note (2026-09-05, even later) — §28: campaign banner not
+> showing on Home, three real bugs found and fixed.** Likely the true
+> root cause: `SUPABASE_URL`/`ANON_KEY` defaulted to `""` when
+> unconfigured, silently disabling every campaign fetch in the app —
+> a later commit "fixed" this with a duplicate, conflicting
+> `buildConfigField()` call instead of fixing the default; both
+> resolved. Plus two real display bugs: `CampaignCardSection` was
+> accidentally nested inside an unrelated settings toggle's `if`
+> block, and the banner's own query was missing several columns it
+> tried to read (some never even existed as flat columns on
+> `track_campaigns` to begin with — fixed via a proper join). Full
+> write-up in §28 below; canonical version in Mavins-web's own
+> `handover.md`.
+>
+> **Older note (2026-09-05, latest of all) — CI build failure fixed:
 > two real syntax breaks, reported directly via a pasted failed
 > GitHub Actions log, not found by any prior session's own
 > verification.** `CampaignRepository.kt`'s KDoc for
@@ -1294,3 +1308,62 @@ the broken pattern anywhere in this file now.
 Verified via brace/paren balance (99/99, 357/357 — balanced). Not
 compile-verified — no Android SDK in this sandbox, same standing
 limitation as every prior Velune part in this project.
+
+## 28. 2026-09-05 — Campaign banner not showing on Home: three real bugs found and fixed
+
+**Trigger:** the product owner reported the campaign card wasn't
+showing on Home, and asked for a review of the recent chain of rushed
+"Fix:"/"Debug:" commits in this repo's own history. All three findings
+below came from reading the actual current code end to end, not
+guessed from the symptom alone.
+
+**Bug 1 (likely the true root cause) — `app/build.gradle.kts`:**
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` defaulted to an empty string
+whenever `local.properties`/an env var wasn't set. `CampaignRepository.kt`'s
+own `config()` returns `null` immediately when either is blank, and
+**every single campaign-fetching function in that file** starts with
+that same check — meaning a fresh checkout, without an undocumented
+setup step, silently had a completely non-functional Supabase client
+for anything campaign-related, with zero visible error. A later commit
+(`8f45760`) "fixed" this by hardcoding the real URL/key directly as a
+**second, duplicate** `buildConfigField()` call earlier in the same
+file — confirmed via grep this created two competing declarations for
+the same field names, itself a real risk (undefined which one Gradle/
+AGP actually uses). Fixed properly: removed the duplicate, folded the
+real values in as this established pattern's own default fallback
+instead of `""` — `local.properties`/env still override for anyone
+pointing at a different project, but a fresh checkout now just works.
+
+**Bug 2 — `HomeScreen.kt`:** `CampaignCardSection`'s `item{}` block was
+nested **inside** `if (showHomeCategoryChips) { ... }` — a leftover
+from commit `3fff6d4`'s own "move it after ChipsRow" edit, which moved
+the code one brace-level too deep. This coupled the banner's
+visibility to an unrelated settings toggle (defaults `true`, but a
+real one), directly contradicting the composable's own doc comment
+that it should render based only on live campaign data. Fixed: moved
+to a sibling `item{}`, unconditional, positioned first as that same
+comment already claimed.
+
+**Bug 3 — `CampaignRepository.kt`:** `fetchLiveCampaignsForBanner()`'s
+`select=` list never included `resolved_song_id`, or any of the fields
+`parseLiveBannerRows` has always read (`track_title`, `artist_name`,
+`cover_url`) — the latter three were never even valid flat columns on
+`track_campaigns` to begin with (confirmed against Mavins-web's own
+`supabase_schema.sql` directly): title/cover live on `tracks`, artist
+name lives on `users`, both real FKs off this table. Every card that
+did render would have shown "Untitled" by "Unknown Artist" with no
+image. Fixed: added the missing flat columns, pulled the rest in via
+PostgREST's embedded-resource syntax off those two FKs, updated the
+parser to read the resulting nested objects.
+
+**Verification, same standing limitation as always (no Android SDK/
+Gradle in this sandbox):** brace/paren balance on all three changed
+files; a Python simulation of the updated parser's own logic against
+four realistic PostgREST response shapes (full join, null `tracks` FK,
+null `users` FK, missing id) — all four degrade correctly, none crash;
+grepped for exactly one `buildConfigField` declaration per field name
+post-fix, confirming the duplicate is really gone.
+
+Full write-up, same content, in Mavins-web's own `handover.md` as the
+canonical version (this task doesn't have its own numbered slot there
+yet — filed as a new entry).
