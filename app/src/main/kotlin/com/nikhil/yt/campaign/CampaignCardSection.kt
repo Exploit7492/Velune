@@ -54,9 +54,10 @@ import com.nikhil.yt.R
  * source and the rendering code) — this was never meant to be a
  * "browse all active campaigns" surface, it's a single rotating
  * spotlight, deliberately compact (a rectangle banner, not a tall
- * feature card): this sits at the very top of Home, above
- * Trending/Popular, so it needs to read at a glance and get out of
- * the way, not compete with the rest of the page for space.
+ * feature card): it sits directly below the home category chips
+ * (`ChipsRow` in `HomeScreen.kt`) and above Quick Picks/Trending, so
+ * it needs to read at a glance and get out of the way, not compete
+ * with the rest of the page for space.
  *
  * Feeds from [CampaignRepository.fetchLiveCampaignsForBanner] (Task
  * 59 Part 3a), not [CampaignRepository.fetchActiveCampaigns] — the
@@ -162,6 +163,20 @@ private fun CampaignBanner(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center,
         ) {
+            // "Promoted" indicator — lives on the Home banner card only.
+            // Player.kt has its own separate gold "Promoted" label for
+            // the full player screen (a different surface, deliberately
+            // left as-is); this blue fire version doesn't touch that.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "🔥", style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    text = "Promoted",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2196F3),
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = campaign.title,

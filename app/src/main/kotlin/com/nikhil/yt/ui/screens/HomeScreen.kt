@@ -332,32 +332,6 @@ fun HomeScreen(
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
 
-                item {
-                    // First thing on Home, above everything else including
-                    // the category chips — a compact promoted-song banner.
-                    // Renders nothing if there's no active campaign or
-                    // Supabase isn't configured; see CampaignCardSection's
-                    // doc for why there's deliberately no placeholder/
-                    // skeleton state for an empty slot.
-                    //
-                    // Bug fixed here: this item{} block was previously
-                    // nested INSIDE the `if (showHomeCategoryChips)` block
-                    // below (a leftover from a rushed "move this section"
-                    // edit — see git history), meaning the campaign banner
-                    // silently disappeared whenever a user had category
-                    // chips turned off in settings (ShowHomeCategoryChipsKey,
-                    // defaults to true but is a real, user-facing toggle) —
-                    // even though this composable's own visibility is
-                    // supposed to depend only on live campaign data, per its
-                    // own doc comment above. Moved out to be a sibling item,
-                    // unconditional, matching that comment's own claim.
-                    CampaignCardSection(
-                        repository = campaignRepository,
-                        onCampaignClick = onCampaignClick,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
-                }
-
                 if (showHomeCategoryChips) {
                     item {
                         ChipsRow(
@@ -368,6 +342,31 @@ fun HomeScreen(
                             }
                         )
                     }
+                }
+
+                item {
+                    // Below the category chips, above Quick Picks/Trending
+                    // — a compact promoted-song banner. Renders nothing if
+                    // there's no active campaign or Supabase isn't
+                    // configured; see CampaignCardSection's doc for why
+                    // there's deliberately no placeholder/skeleton state
+                    // for an empty slot.
+                    //
+                    // Kept as its own unconditional sibling item (not
+                    // nested inside the `if (showHomeCategoryChips)` block
+                    // above) even after this reorder — a prior session's
+                    // bug fix already established that this composable's
+                    // visibility must depend only on live campaign data,
+                    // never on whether a user has category chips turned
+                    // off in settings (ShowHomeCategoryChipsKey). Moving
+                    // this item below ChipsRow doesn't reintroduce that
+                    // coupling, since it's still a separate item{}, not
+                    // nested inside the chips' own conditional.
+                    CampaignCardSection(
+                        repository = campaignRepository,
+                        onCampaignClick = onCampaignClick,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
                 }
 
                 quickPicks?.takeIf { it.isNotEmpty() }?.let { picks ->

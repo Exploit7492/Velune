@@ -12,6 +12,9 @@ import com.nikhil.yt.extensions.toMediaItem
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.models.toMediaMetadata
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -87,23 +90,32 @@ class CampaignRepository {
      * ordering, matching this surface's own "no competition, all is
      * accommodated for" spec.
      *
-     * **Deliberately does NOT call [CampaignUrlResolver.resolve] (no
-     * live YouTube metadata round-trip per row)** — that resolver
-     * exists because [fetchActiveCampaigns]'s own RPC never returns
-     * display metadata at all, only ids. `get_live_campaigns_for_banner`
-     * is different: it already joins and returns `artist_name`/
-     * `track_title`/`cover_url` directly from the DB (see the
-     * migration's own `SELECT`), specifically so this surface — which
-     * must show *every* live campaign, not a capped top-N — doesn't
-     * need one YouTube API call per row just to render a title and
-     * thumbnail. [CampaignCard.songId] is still computed here (needed
-     * for actual playback once a card is tapped), just not resolved
-     * eagerly against YouTube for every row up front. This matches
-     * [CampaignCard]'s own field doc comments, which already describe
-     * `title`/`artist`/`thumbnailUrl` as "resolved from YouTube **or
-     * fallback to** track_title/artist_name/cover_url" — this function
-     * is what actually uses that fallback path; nothing used it before
-     * this session.
+     * **Trusts the DB join first, falls back to one live YouTube
+     * round-trip only per row that actually needs it** — updated this
+     * session; previously this deliberately never called
+     * [CampaignUrlResolver.resolve] at all, trusting
+     * `get_live_campaigns_for_banner`'s own joined `artist_name`/
+     * `track_title`/`cover_url` unconditionally. That trust turned out
+     * to be misplaced: some campaigns' `tracks` row is never written at
+     * all (confirmed against Mavins-web's own seed/create-campaign
+     * code — `track_id` stays null), so `track_title`/`cover_url` come
+     * back null/empty and every such card rendered the literal
+     * "Untitled" fallback forever, even though the video itself
+     * resolves fine. Now: a row missing title or cover art gets
+     * resolved live (same [CampaignUrlResolver.resolve] path
+     * [fetchActiveCampaigns] already uses), concurrently across
+     * whichever rows need it, and this whole thing still finishes
+     * before the function returns — [CampaignCardSection]'s own
+     * `LaunchedEffect` awaits this suspend call before touching UI
+     * state, so there's no frame where the fallback text is what's on
+     * screen for a resolvable campaign. A row that's both missing DB
+     * metadata AND fails live resolution (deleted video, network
+     * failure) keeps the "Untitled"/"Unknown Artist" fallback rather
+     * than disappearing — the original rationale (this surface
+     * shouldn't need one API call per row) still holds for the common,
+     * properly-linked case: those rows cost nothing extra.
+     * [CampaignCard.songId] is still computed here either way (needed
+     * for actual playback once a card is tapped).
      *
      * `totalStreams`/`trendingScore`/`playCount` are always `0` here —
      * not omitted by accident: the underlying RPC doesn't return them
@@ -164,7 +176,7 @@ class CampaignRepository {
             .get()
             .build()
 
-        client.newCall(request).execute().use { response ->
+        val parsed = client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 Timber.tag(TAG).w("fetchLiveCampaignsForBanner: HTTP ${response.code}")
                 return@use emptyList()
@@ -172,13 +184,59 @@ class CampaignRepository {
             val body = response.body?.string().orEmpty()
             parseLiveBannerRows(body)
         }
+
+        // Bug fixed here: rows whose `tracks` row was missing/never
+        // written (e.g. campaigns created via a path that only ever
+        // set source_url/artist_id, never track_id -- confirmed
+        // against Mavins-web's own seed and create-campaign code, not
+        // assumed) rendered the literal "Untitled" fallback text
+        // forever, even though the video itself resolves fine. Instead
+        // of trusting that possibly-incomplete DB join, any row
+        // missing a title or cover art gets one live YouTube lookup
+        // via the same CampaignUrlResolver.resolve() fetchActiveCampaigns
+        // already uses -- reusing its real title/artist/thumbnail
+        // resolution rather than duplicating it. This runs to
+        // completion INSIDE this suspend function, before it returns,
+        // so CampaignCardSection's own LaunchedEffect (which awaits
+        // this whole call before touching UI state) never has a frame
+        // where "Untitled"/no-thumbnail is what's on screen -- resolved
+        // before display, not after.
+        //
+        // Only rows that actually need it pay for the extra network
+        // call, run concurrently rather than one-by-one -- a properly-
+        // linked campaign (the common case once campaigns write a real
+        // tracks row) costs nothing extra, preserving this function's
+        // own "no per-row YouTube call" design intent for that path.
+        // A row that still can't resolve live (deleted video, network
+        // failure) keeps its fallback text rather than disappearing --
+        // same fail-soft posture as the rest of this file.
+        coroutineScope {
+            parsed.map { entry ->
+                async {
+                    if (!entry.needsLiveResolution) return@async entry.card
+                    CampaignUrlResolver.resolve(entry.row) ?: entry.card
+                }
+            }.awaitAll()
+        }
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "fetchLiveCampaignsForBanner failed")
         emptyList()
     }
 }
 
-    private fun parseLiveBannerRows(body: String): List<CampaignCard> {
+    /** A banner row's best-effort DB-only [CampaignCard] alongside the
+     * [CampaignRow] shape [CampaignUrlResolver.resolve] needs, plus
+     * whether that live resolution is actually necessary — i.e.
+     * whether the DB-joined title/cover art was missing, not a re-
+     * derivable property of the card itself (a real track legitimately
+     * named "Untitled" must not trigger a needless re-resolution). */
+    private data class BannerRowEntry(
+        val card: CampaignCard,
+        val row: CampaignRow,
+        val needsLiveResolution: Boolean,
+    )
+
+    private fun parseLiveBannerRows(body: String): List<BannerRowEntry> {
         val array = try {
             JSONArray(body)
         } catch (e: Exception) {
@@ -206,6 +264,12 @@ class CampaignRepository {
             }
 
             val currentStage = row.optString("current_stage", "planting")
+            val trackId = row.optString("track_id", "").takeIf { it.isNotBlank() } ?: ""
+            val artistId = row.optString("artist_id", "").takeIf { it.isNotBlank() } ?: ""
+            val certified = when (currentStage) {
+                "branching", "full_bloom" -> true
+                else -> false
+            }
             // Nested embedded resources -- PostgREST returns these as
             // JSON objects (or null if the FK itself is null), not
             // flat fields. A campaign's own tracks/users row could in
@@ -220,17 +284,15 @@ class CampaignRepository {
             val artistName = usersObj?.optString("artist_name", "")?.takeIf { it.isNotBlank() }
             val coverUrl = tracksObj?.optString("cover_url", "") ?: ""
 
-            CampaignCard(
+            val card = CampaignCard(
                 id = campaignId,
                 songId = songId,
-                trackId = row.optString("track_id", "").takeIf { it.isNotBlank() } ?: "",
-                artistId = row.optString("artist_id", "").takeIf { it.isNotBlank() } ?: "",
+                trackId = trackId,
+                artistId = artistId,
                 // Fallback path CampaignCard's own field docs already
                 // anticipated ("resolved from YouTube or fallback to
-                // track_title/artist_name/cover_url") -- this is the
-                // first call site to actually use it, per this
-                // function's own header comment on why no live YouTube
-                // resolution happens here.
+                // track_title/artist_name/cover_url") -- only ever the
+                // final answer now if live resolution below also fails.
                 title = trackTitle ?: "Untitled",
                 artist = artistName ?: "Unknown Artist",
                 thumbnailUrl = coverUrl,
@@ -238,13 +300,32 @@ class CampaignRepository {
                 trendingScore = 0.0,
                 geographicTier = "local",
                 currentStage = currentStage,
-                certified = when (currentStage) {
-                    "branching", "full_bloom" -> true
-                    else -> false
-                },
+                certified = certified,
                 isLive = true, // the RPC's own WHERE clause guarantees this
                 playCount = 0L,
                 ctaLabel = "Play",
+            )
+
+            val campaignRow = CampaignRow(
+                id = campaignId,
+                sourceUrl = songId,
+                resolvedSongId = songId,
+                trackId = trackId.takeIf { it.isNotBlank() },
+                artistId = artistId.takeIf { it.isNotBlank() },
+                totalStreams = 0L,
+                trendingScore = 0.0,
+                geographicTier = "local",
+                currentStage = currentStage,
+                certified = certified,
+                isLive = true,
+                playCount = 0L,
+                ctaLabel = "Play",
+            )
+
+            BannerRowEntry(
+                card = card,
+                row = campaignRow,
+                needsLiveResolution = trackTitle == null || coverUrl.isBlank(),
             )
         }
     }
