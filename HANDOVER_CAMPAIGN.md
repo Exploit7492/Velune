@@ -3,7 +3,32 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-06, latest of all) — §34: the Supabase SQL for
+> **Newest note (2026-09-06, latest of all) — §35: §34's SQL targeted
+> the wrong table entirely; corrected against the real live schema,
+> and the RPC turns out to have never existed on this project at
+> all.** Product owner ran §34's own diagnostic queries and pasted
+> back the results: `pg_get_functiondef` for
+> `get_next_campaign_for_queue_slot` returned **zero rows** — the
+> function has never been created on this Supabase project, not a
+> null-genre bug in an existing one — and
+> `information_schema.columns` showed the live table is
+> `public.track_campaigns` (the v1-era shape:
+> `is_active`/`is_paused`/`completed_at`/`scheduled_for` instead of a
+> single `active`+date-window pair, and genre as an array column
+> `target_genres`, not a scalar), not this repo's checked-in v2
+> `campaign_schema.sql` `campaigns` table §34's SQL was written
+> against. That means every prior call to this RPC — from a
+> genre-tile queue or otherwise — has always silently failed and
+> returned nothing (caught by `CampaignRepository.kt`'s own
+> try/catch), so campaign injection into the queue has likely never
+> worked end-to-end at all, not only for non-genre-tile queues as §33
+> diagnosed. Deleted `campaign_schema_queue_slot_rpc.sql` (wrong
+> table); added `track_campaigns_queue_slot_rpc.sql` — same
+> atomic pick-and-mark design, real column names this time,
+> genre matched via `p_genre = any(target_genres)`. Full write-up in
+> §35 below.
+>
+> **Older note (2026-09-06, latest of all) — §34: the Supabase SQL for
 > §33's null-genre RPC, written against this repo's own checked-in v2
 > `campaign_schema.sql`, plus the patch format switched to
 > `git format-patch`/`git am` per product owner request.** SQL adds a
@@ -1973,3 +1998,102 @@ accompanies for the exact commands.
    v2) is actually live, via the diagnostic query included in the SQL
    file's own trailing comment.
 3. Everything already open from §33 (items 1-3 there) remains open.
+
+## 35. 2026-09-06 — §34's SQL was against the wrong table; corrected against the real live schema (`track_campaigns`); RPC turns out to have never existed at all
+
+**Trigger:** product owner ran both diagnostic queries from §34's SQL
+file and pasted back the real results, rather than this sandbox
+assuming which schema was live.
+
+**Finding 1 — the RPC has never existed on this project:**
+`select pg_get_functiondef(oid) from pg_proc where proname =
+'get_next_campaign_for_queue_slot'` came back with **zero rows**.
+Every doc comment across this file and the Kotlin source (Task 59
+Part 1/2a, "migration 023") describes this function as already
+existing and just needing a null-genre fix — that assumption was
+wrong. It has never been created on the live database at all. Every
+call `CampaignRepository.fetchNextCampaignForQueueSlot` has ever made
+— from a genre-tile queue or any other — has silently failed (HTTP
+error caught by that function's own try/catch, logged via `Timber`,
+returned as `null`, which the app correctly treats as "no eligible
+campaign this slot"). Practical implication: campaign injection into
+the queue has likely **never actually worked end-to-end**, on any
+queue type, not only on non-genre-tile queues as §33 diagnosed from
+the app side alone. §33's app-side fix (removing the genre gate) was
+still the right, necessary change — it just wasn't sufficient on its
+own, because the thing it now calls unconditionally didn't exist yet
+either.
+
+**Finding 2 — the live table is `track_campaigns`, not `campaigns`:**
+`information_schema.columns` for `('campaigns', 'track_campaigns')`
+returned 32 columns, all under `track_campaigns`, zero under
+`campaigns` — i.e. this repo's own checked-in `campaign_schema.sql`
+(the "v2" rewrite, `drop table if exists public.campaigns cascade;`
++ a fresh simpler table) describes a schema that has apparently never
+actually been deployed to this live project. The real table is the
+older, richer `track_campaigns` shape: `is_active`/`is_paused`/
+`completed_at`/`scheduled_for` for lifecycle state (no single
+`active` boolean + `start_date`/`end_date` window pair), and genre as
+`target_genres` (a text array), not a scalar `genre` column — matching
+what `CampaignCard.kt`'s own field comments already described
+(`geographicTier`, `currentStage`) far more closely than the v2
+schema file does. §34's SQL, written against `campaigns`, was
+therefore for a table that doesn't exist here — it would have failed
+outright (`relation "campaigns" does not exist`) if run. **Not run
+against the live project — corrected before it caused any actual
+error**, per this file's own standing rule about not guessing schema
+shapes.
+
+**Fix — deleted `campaign_schema_queue_slot_rpc.sql`
+(wrong table), added `track_campaigns_queue_slot_rpc.sql`:** same
+design as §34 (a `last_served_at` fairness column added via `alter
+table ... add column if not exists`, an index, and a `plpgsql`
+function doing an atomic `select ... for update skip locked` +
+`update` pick-and-mark, `security definer`, `grant execute ... to
+anon`), rewritten against `track_campaigns`'s real columns:
+
+- Eligibility: `is_active = true and is_paused = false and
+  completed_at is null and (scheduled_for is null or scheduled_for <=
+  now())` — replaces v2's `active = true and now() between start_date
+  and end_date`, since none of those columns exist here.
+- Genre: `p_genre is null or p_genre = any(tc.target_genres)` — an
+  array-containment check, not `genre = p_genre`, since genre is
+  multi-valued on this table (`target_genres`). `p_genre = null`
+  (the common, non-genre-tile case per §33's app-side fix) still
+  matches every row regardless of its `target_genres` array, same
+  "inject on every queue" behavior §33 asked for.
+
+**Not touched:** `certified`/`is_live` (`CampaignCard.kt` fields) have
+no matching raw column on `track_campaigns` either — consistent with
+that class's own doc comments describing both as *derived* ("from
+stage" / "from metadata or manual flag"), not stored columns, likely
+computed inside whatever RPC/view `fetchActiveCampaigns`/
+`fetchLiveCampaignsForBanner` actually read from. Not investigated
+this session — out of scope for the queue-slot RPC specifically, and
+those two paths were reported working (the Home banner renders real
+campaigns), unlike the queue-slot path this session is about.
+
+**Files changed this session:**
+- `HANDOVER_CAMPAIGN.md` (this entry)
+- `campaign_schema_queue_slot_rpc.sql` — deleted
+- `track_campaigns_queue_slot_rpc.sql` — new, replaces it
+
+**Verification:** same standing limitation as §33/§34 — no Supabase
+credentials or DB connection from this sandbox, so this SQL was not
+run against the live project either. Reviewed by hand against the
+exact column list the product owner pasted back (not the assumed v2
+schema) for name/type correctness, and against
+`fetchNextCampaignForQueueSlot`'s own atomicity requirement, same as
+§34's review. The corrected patch's `git am` compatibility was
+verified the same way as §34 — applied to a fresh clone on top of
+§34's own commit, confirmed a real second commit lands.
+
+**Not done / open:**
+1. Running `track_campaigns_queue_slot_rpc.sql` against the actual
+   Supabase project — still has to happen from the product owner's
+   own SQL editor.
+2. Whether `certified`/`is_live` are computed by a view or by
+   application-side logic in some RPC not yet read this session —
+   flagged, not investigated, since it's outside the queue-slot RPC
+   this task is about.
+3. Everything already open from §33 (items 2-3 there) remains open.
