@@ -23,9 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -286,31 +283,29 @@ private fun CampaignBanner(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
             ) {
-                // "Promoted" indicator — now the same gold as Player.kt's
-                // own full-screen "Promoted" label (previously a
-                // different blue here; unified as part of this redesign).
+                // "Promoted" indicator — same gold as Player.kt's own
+                // full-screen "Promoted" label. HANDOVER_CAMPAIGN.md
+                // §33: a 🔥 sits right after the word itself (part of
+                // the same Text so it never wraps onto its own line),
+                // purely a visual accent — it is not read from
+                // CampaignCard.currentStage/trendingScore, same "never
+                // derive this label from stage/tier data" rule as the
+                // rest of this card.
                 Text(
-                    text = "Promoted",
+                    text = "Promoted \uD83D\uDD25",
                     style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
                     fontWeight = FontWeight.Bold,
                     color = premiumGold,
                 )
                 Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = campaign.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (campaign.isLive) {
-                        Spacer(Modifier.width(6.dp))
-                        LiveBadge(color = liveRed)
-                    }
-                }
+                Text(
+                    text = campaign.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     text = campaign.artist,
                     style = MaterialTheme.typography.bodySmall,
@@ -319,29 +314,27 @@ private fun CampaignBanner(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            // HANDOVER_CAMPAIGN.md §33: the trailing glass "play" CTA
+            // chip is removed outright, not just hidden — the whole
+            // card is already a single tap target (see the outer Box's
+            // own .clickable above), so a second play affordance next
+            // to it was redundant, not a distinct action.
+        }
 
-            Spacer(Modifier.width(8.dp))
-
-            // Trailing glass CTA chip — a generic action affordance,
-            // not a ranking signal. Renders campaign.ctaLabel's icon
-            // only (always "Play" for this surface); the label's text
-            // itself is intentionally never shown here to avoid
-            // reintroducing a stage-derived word onto this surface.
-            Box(
+        // HANDOVER_CAMPAIGN.md §33: LIVE pill moved off the title row
+        // and onto the card itself, top-right corner, so it reads as a
+        // card-level status flag rather than crowding the title text —
+        // and shrunk (see LiveBadge's own `compact` param) to match its
+        // new, smaller corner placement. Added last among this Box's
+        // children so it draws above Layer 3's content, not beneath it.
+        if (campaign.isLive) {
+            LiveBadge(
+                color = liveRed,
+                compact = true,
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.16f))
-                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = campaign.ctaLabel,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp),
+            )
         }
     }
 }
@@ -350,9 +343,15 @@ private fun CampaignBanner(
  * data claim; the claim itself is [CampaignCard.isLive], set truthfully
  * by whoever created the campaign. Restyled for legibility over real
  * art (higher-contrast chip background) as part of HANDOVER_CAMPAIGN.md
- * §32 — the pulse mechanic itself is untouched. */
+ * §32 — the pulse mechanic itself is untouched.
+ *
+ * [compact] (HANDOVER_CAMPAIGN.md §33) shrinks the pill for its new
+ * top-right corner placement on [CampaignBanner] — smaller dot, tighter
+ * padding, explicit 8.sp text instead of `labelSmall` (which reads too
+ * large at this corner size). Defaults to `false` so nothing else that
+ * might ever reuse this composable changes size unless it opts in. */
 @Composable
-private fun LiveBadge(color: Color, modifier: Modifier = Modifier) {
+private fun LiveBadge(color: Color, modifier: Modifier = Modifier, compact: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "liveDotPulse")
     val alpha by transition.animateFloat(
         initialValue = 1f,
@@ -363,24 +362,31 @@ private fun LiveBadge(color: Color, modifier: Modifier = Modifier) {
         ),
         label = "liveDotAlpha",
     )
+    val dotSize = if (compact) 4.dp else 6.dp
+    val horizontalPadding = if (compact) 4.dp else 5.dp
+    val verticalPadding = if (compact) 0.5.dp else 1.dp
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(color.copy(alpha = 0.5f))
             .border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 5.dp, vertical = 1.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
+                .size(dotSize)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = alpha)),
         )
         Spacer(Modifier.width(3.dp))
         Text(
             text = "LIVE",
-            style = MaterialTheme.typography.labelSmall,
+            style = if (compact) {
+                MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp)
+            } else {
+                MaterialTheme.typography.labelSmall
+            },
             color = Color.White,
             fontWeight = FontWeight.Bold,
         )

@@ -1552,36 +1552,41 @@ class MusicService :
         // injection slot now, not once per queue (see
         // CampaignInjectedQueue's own doc comment for why).
         //
-        // Task 59 Part 2b-b Round 14 (handover.md) — this is the real
-        // wiring Round 13 left as the single remaining sub-part, with
-        // everything it needs already built across Rounds 11-13:
-        // queue.genre (Round 12, Queue.kt) is null for every queue
-        // type except a genre-tile-originated YouTubeQueue; returning
-        // null immediately here for that case is the same fail-closed
-        // default CampaignInjectedQueue's own constructor already
-        // falls back to, just made explicit at this call site rather
-        // than left implicit. When a real genre string IS present,
-        // GenreTileMappingCache.resolveGenreId() (Round 13) does the
-        // tile-title -> genre-id lookup (with its own periodic-refresh
-        // caching and lookup-miss ingest, not repeated here), and only
-        // a successfully resolved id reaches
-        // fetchNextCampaignForQueueSlot() -- an unresolved/unknown
-        // tile (still being reviewed, or genuinely not a genre)
-        // correctly injects nothing for this slot, not a guess.
+        // HANDOVER_CAMPAIGN.md §33 — the Round 14 genre gate below this
+        // comment used to `return null` immediately whenever
+        // `queue.genre` was null, which in practice meant EVERY queue
+        // except a genre-tile-originated YouTubeQueue: search results,
+        // playlists, albums, liked songs, artist radio, plain
+        // "radio"/autoplay — all of it. That was reported as "campaigns
+        // aren't injected into the queue at all" (screenshot of a
+        // 70-song autoplay queue with zero campaign rows in it), and it
+        // was correct: this was never a bug in the injection splice
+        // itself ([CampaignInjectedQueue] below has always spliced
+        // correctly into any queue it's given), it was this call site
+        // deliberately skipping the provider outright for every queue
+        // that wasn't genre-tile-originated, exactly as Round 14's own
+        // comment documented at the time as the intended behavior.
+        //
+        // Campaign injection is a monetization slot, not a genre
+        // feature — it belongs on every queue, unconditionally, the
+        // way an ad break doesn't check what station you're on. So the
+        // gate is removed outright, not widened: [queueGenre] is still
+        // read and still passed through (a genre-tile queue keeps
+        // narrowing to its own genre via [GenreTileMappingCache]), but
+        // an absent genre no longer short-circuits the slot to `null`
+        // — it now reaches [com.nikhil.yt.campaign.CampaignRepository.fetchNextCampaignForQueueSlot]
+        // as a `null` genre, which asks the RPC for any eligible
+        // campaign regardless of genre (see that function's own doc
+        // comment for the exact contract, and its "requires an SQL
+        // change too" note — the current Supabase RPC still expects a
+        // non-null genre and needs its own null-check added server-side
+        // for this to take effect end-to-end).
         val queueGenre = queue.genre
         val wrappedQueue = com.nikhil.yt.playback.queues.CampaignInjectedQueue(
             baseQueue = queue,
             campaignSlotProvider = {
-                if (queueGenre == null) {
-                    null
-                } else {
-                    val genreId = com.nikhil.yt.campaign.GenreTileMappingCache.resolveGenreId(queueGenre)
-                    if (genreId == null) {
-                        null
-                    } else {
-                        com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(genreId)
-                    }
-                }
+                val genreId = queueGenre?.let { com.nikhil.yt.campaign.GenreTileMappingCache.resolveGenreId(it) }
+                com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(genreId)
             }
         )
         currentQueue = wrappedQueue

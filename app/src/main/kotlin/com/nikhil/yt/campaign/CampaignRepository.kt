@@ -332,9 +332,29 @@ class CampaignRepository {
 
     /**
      * Fetch ONE campaign for a single queue-slot injection point, via
-     * the genre-locked, fair-rotation `get_next_campaign_for_queue_slot`
-     * RPC (migration 023, Task 59 Part 1/2a — see handover.md, Mavins-
-     * web repo).
+     * the fair-rotation `get_next_campaign_for_queue_slot` RPC
+     * (migration 023, Task 59 Part 1/2a — see handover.md, Mavins-web
+     * repo).
+     *
+     * HANDOVER_CAMPAIGN.md §33 — no longer genre-gated. [genre] is now
+     * optional and defaults to `null`, and every call site
+     * ([com.nikhil.yt.playback.queues.CampaignInjectedQueue] via
+     * `MusicService.kt`) now passes through whatever `queue.genre`
+     * happens to be — including `null` for the overwhelming majority
+     * of queues (search results, playlists, albums, liked songs,
+     * non-genre-tile radio, etc.) that never had a genre to begin
+     * with. `null` is sent as a real JSON `null` for `p_genre`, not
+     * omitted or coerced to an empty string — the RPC is expected to
+     * treat `p_genre is null` as "match any active, eligible campaign
+     * regardless of genre" (this is a behavior change on the Supabase
+     * side too: the RPC previously required a genre and returned no
+     * rows for one — see this task's write-up in
+     * `HANDOVER_CAMPAIGN.md` §33 for the exact SQL needed). This is
+     * what makes campaign injection a genuine "runs like an ad slot on
+     * every queue" mechanic instead of a genre-tile-only feature: this
+     * function's own contract no longer treats genre as a requirement,
+     * only as an optional narrowing filter for the one queue type that
+     * actually has one.
      *
      * Deliberately called once PER injection point by
      * [com.nikhil.yt.playback.queues.CampaignInjectedQueue] — never
@@ -359,16 +379,16 @@ class CampaignRepository {
      * This function was written after that fix and never had the bug.
      *
      * @return a playable [MediaItem] for the selected campaign, or
-     *   `null` if no eligible campaign exists for [genre] right now
-     *   (a normal, expected outcome — a thin genre, or one where every
-     *   eligible campaign was already served very recently — not an
-     *   error) or if resolution failed for any reason.
+     *   `null` if no eligible campaign exists right now (a normal,
+     *   expected outcome — nothing currently active, or every eligible
+     *   campaign was already served very recently — not an error) or
+     *   if resolution failed for any reason.
      */
-    suspend fun fetchNextCampaignForQueueSlot(genre: String): MediaItem? = withContext(Dispatchers.IO) {
+    suspend fun fetchNextCampaignForQueueSlot(genre: String? = null): MediaItem? = withContext(Dispatchers.IO) {
         val (url, anonKey) = config() ?: return@withContext null
         try {
             val payload = JSONObject().apply {
-                put("p_genre", genre)
+                put("p_genre", genre ?: JSONObject.NULL)
             }
             val request = Request.Builder()
                 .url("$url/rest/v1/rpc/get_next_campaign_for_queue_slot")

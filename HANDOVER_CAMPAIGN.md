@@ -3,7 +3,46 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-06, even later) — §31: the real bug, finally —
+> **Newest note (2026-09-06, latest of all) — §34: the Supabase SQL for
+> §33's null-genre RPC, written against this repo's own checked-in v2
+> `campaign_schema.sql`, plus the patch format switched to
+> `git format-patch`/`git am` per product owner request.** SQL adds a
+> `last_served_at` fairness column and rewrites
+> `get_next_campaign_for_queue_slot` to accept (but, on this schema,
+> not filter by — v2's `campaigns` table has no genre column at all)
+> an optional `p_genre`, atomically picking + marking the
+> least-recently-served eligible campaign via `FOR UPDATE SKIP LOCKED`.
+> Flagged explicitly, not guessed: if the live project is still on an
+> older genre/`track_campaigns` schema instead of this repo's v2
+> rewrite, this SQL is the wrong shape — a diagnostic query to check
+> which is live is included instead of assuming. Full write-up in §34
+> below.
+>
+> **Older note (2026-09-06, latest of all) — §33: campaign card visual
+> tweaks done; the real queue-injection bug found and fixed at the app
+> layer — was genre-gated by design, never a splice bug.** Product
+> owner reported the §32 redesign looking right but campaigns still
+> absent from an actual 70-song autoplay queue (screenshot attached).
+> Traced it to `MusicService.kt`'s own Round 14 wiring
+> (`campaignSlotProvider`), which `return`ed `null` immediately for any
+> queue where `queue.genre` was `null` — i.e. every queue except a
+> genre-tile-originated one, exactly as that round's own comment
+> documented as intentional at the time. Removed that gate outright:
+> `campaignSlotProvider` now always calls through to
+> `CampaignRepository.fetchNextCampaignForQueueSlot`, genre passed as an
+> optional narrowing filter (`null` for the common case) instead of a
+> hard requirement. **This needs a matching SQL change the product
+> owner has to run themselves** — `get_next_campaign_for_queue_slot`'s
+> current signature expects a non-null `p_genre`; it needs a
+> `p_genre is null or genre = p_genre`-style null-check added
+> server-side before injection actually reaches non-genre-tile queues
+> end-to-end. Card changes: removed the trailing "play" CTA chip
+> (redundant — the whole card is already one tap target), moved
+> `LiveBadge` off the title row onto the card's own top-right corner
+> and shrunk it, added a 🔥 next to "Promoted". Patch file provided per
+> this doc's own handoff convention. Full write-up in §33 below.
+>
+> **Older note (2026-09-06, even later) — §31: the real bug, finally —
 > `CampaignUrlResolver`'s own `watch\?` regex silently failed on the
 > single most common real-world YouTube share-link shape.** Product
 > owner filtered a live curl to just YouTube-URL campaign rows and
@@ -1704,3 +1743,233 @@ eyeball contrast against a genuinely bright or genuinely dark piece of
 album art (the fixed dark scrim alphas were chosen to work across both,
 not tuned against a real screenshot) — flag as the first thing to
 sanity-check visually once this lands somewhere a screen exists.
+
+## 33. 2026-09-06 — Card polish (icon/badge/emoji) + the real queue-injection bug: genre-gated by design, fixed at the app layer (SQL follow-up required)
+
+**Trigger:** product owner said the §32 card redesign "is good now,"
+asked for three small visual tweaks, and separately reported — with a
+screenshot of a real 70-song "Continue Playing" autoplay queue
+containing zero campaign rows — that campaigns "are not being injected"
+into the queue anywhere, asking for injection into "ALL queues (radio,
+search, playlists, everywhere)," explicitly "not genre based."
+
+**Task split:** one session, two independent halves of the same
+surface (card visuals vs. queue wiring) — not split further, since
+each half is already a single self-contained change with no natural
+sub-parts.
+
+### Part A — card visual tweaks, `CampaignCardSection.kt` only
+
+- Removed the trailing circular glass "play" CTA chip
+  (`Icons.Filled.PlayArrow`) entirely — the whole card is already one
+  `.clickable` tap target (the outer `Box`), so a second play
+  affordance next to the text was a redundant control, not a distinct
+  action. Removed the now-unused `Icons`/`PlayArrow`/`Icon` imports
+  with it.
+- Moved `LiveBadge` off the title `Row` (where it sat inline after the
+  title text) onto the card's own top-right corner, via
+  `Modifier.align(Alignment.TopEnd)` on the outer `Box` — added as that
+  `Box`'s last child so it draws above Layer 3's content. Added a new
+  `compact: Boolean = false` param to `LiveBadge` (smaller 4.dp dot,
+  tighter padding, explicit 8.sp text) and set it `true` at this call
+  site only — the default stays `false` in case anything else ever
+  reuses this composable at its original size.
+- "Promoted" label now reads `"Promoted \uD83D\uDD25"` (🔥) — one
+  `Text`, so it can never wrap the emoji onto its own line. Purely a
+  visual accent, same as §32's own rule for this label: still never
+  derived from `currentStage`/`trendingScore`/`geographicTier`.
+
+**Verification (same standing limitation — no Android SDK in this
+sandbox):** brace/paren/bracket balance checked via the same Python
+scanner every prior session in this file has used (clean, all three
+edited files). `LiveBadge` confirmed to have exactly one call site
+before adding the `compact` param, so widening its signature is safe.
+Not compile-verified.
+
+### Part B — queue injection: not a splice bug, a deliberate genre gate
+
+**Root cause, confirmed by reading, not guessed:** `MusicService.kt`'s
+Round 14 wiring (the block right before `currentQueue = wrappedQueue`,
+~line 1571 pre-fix) read:
+
+```kotlin
+val queueGenre = queue.genre
+val wrappedQueue = CampaignInjectedQueue(
+    baseQueue = queue,
+    campaignSlotProvider = {
+        if (queueGenre == null) {
+            null
+        } else { /* resolve genre id, then fetch */ }
+    }
+)
+```
+
+`queue.genre` (`Queue.kt`, Round 12) is `null` for every queue type in
+this app except a genre-tile-originated `YouTubeQueue` — so this
+provider returned `null` for search-result queues, playlists, albums,
+liked songs, artist radio, and plain autoplay/"Continue Playing" radio,
+which is exactly the queue in the attached screenshot. This was
+`CampaignInjectedQueue`'s own splice logic working exactly as designed
+(that class's `inject()` correctly tries every 4th slot regardless of
+queue type) being handed a provider that had already decided, before
+ever calling `fetchNextCampaignForQueueSlot`, to inject nothing outside
+one specific queue origin. That gate was Round 14's own documented
+intent at the time (§ notes throughout this file describe it as the
+"fail-closed default" for exactly this reason) — not a regression, a
+design that the product owner is now explicitly overriding.
+
+**Fix — `MusicService.kt`:** removed the `queueGenre == null` early
+return outright. The provider now always calls through:
+
+```kotlin
+val queueGenre = queue.genre
+val wrappedQueue = CampaignInjectedQueue(
+    baseQueue = queue,
+    campaignSlotProvider = {
+        val genreId = queueGenre?.let { GenreTileMappingCache.resolveGenreId(it) }
+        CampaignRepository().fetchNextCampaignForQueueSlot(genreId)
+    }
+)
+```
+
+A genre-tile queue still narrows to its own resolved genre id; every
+other queue now passes `null` through instead of short-circuiting
+before the network call.
+
+**Fix — `CampaignRepository.fetchNextCampaignForQueueSlot`:** signature
+changed from `(genre: String)` to `(genre: String? = null)`. The POST
+payload now sends `p_genre` as a real JSON `null`
+(`JSONObject.NULL`) rather than always a string, when no genre is
+available — not omitted from the payload and not coerced to `""`,
+either of which a Postgres RPC could plausibly treat differently from
+an explicit `null`.
+
+**`CampaignInjectedQueue.kt`:** its own class-doc paragraph describing
+"real injection only activates for a genre-tile-originated queue,
+every other queue gets zero injection by construction" was rewritten
+to match the new contract — a stale doc comment here would mislead the
+very next session into re-adding the gate this task just removed,
+matching this file's own repeated pattern of doc-comment drift causing
+real bugs (see §28, §30).
+
+**What this fix does NOT reach — flagged, not fixed, per this file's
+own convention for out-of-sandbox work:** `get_next_campaign_for_queue_slot`
+is a Supabase RPC (migration 023) this sandbox has no access to (no
+Supabase project credentials, no live DB connection — the same
+standing limitation §9/§10/§28/§30 all note for anything server-side).
+Sending `p_genre: null` from the app is necessary but not sufficient —
+if the RPC's own SQL currently does a plain `where genre = p_genre`
+(or similar) without a null-check, a `null` genre either matches
+nothing (Postgres' standard `= NULL` behavior) or errors, and every
+non-genre-tile queue keeps getting silently skipped even after this
+patch. **Real next step for the product owner:** open that function's
+definition in the Supabase SQL editor and confirm/add a
+`(p_genre is null or genre = p_genre)`-shaped clause (exact column/
+table names depend on what that function currently queries — this
+repo's own `campaign_schema.sql` v2 rewrite doesn't even have a
+`genre` column on `campaigns` anymore, which may mean this RPC already
+needs a broader rewrite against the current schema, not just a
+null-check patch — worth confirming which schema version the live RPC
+is actually written against before editing it). This app-side fix is
+what makes the queue **try** to inject on every queue type
+unconditionally; whether campaigns actually **appear** end-to-end still
+depends on that RPC accepting a null genre.
+
+**Files changed this session:**
+- `app/src/main/kotlin/com/nikhil/yt/campaign/CampaignCardSection.kt`
+- `app/src/main/kotlin/com/nikhil/yt/campaign/CampaignRepository.kt`
+- `app/src/main/kotlin/com/nikhil/yt/playback/MusicService.kt`
+- `app/src/main/kotlin/com/nikhil/yt/playback/queues/CampaignInjectedQueue.kt`
+
+Patch file: `velune-0033-campaign-card-polish-and-global-injection.patch`
+(this doc's own handoff convention — a single `git diff` covering all
+four files above, apply from the repo root with
+`git apply velune-0033-campaign-card-polish-and-global-injection.patch`).
+
+**Not done / open:**
+1. The Supabase-side SQL null-check/rewrite described above — cannot be
+   done from this sandbox, no DB access.
+2. Device/emulator verification of the new badge position and sizing
+   (same standing "not compile-verified, no Android SDK here"
+   limitation every session in this file has had).
+3. Whether `CampaignRepository.fetchActiveCampaigns` (used elsewhere,
+   not by the queue-slot path) has any genre-required assumption of its
+   own worth revisiting for consistency — not investigated this
+   session, out of scope for the reported bug.
+
+## 34. 2026-09-06 — §33 addendum: the actual SQL for the RPC fix, plus switching to a `git format-patch`/`git am` handoff
+
+**Trigger:** product owner asked for (1) the SQL to fix
+`get_next_campaign_for_queue_slot` directly, since §33 only flagged
+the need for it, and (2) the patch file re-issued as a `git am`-style
+patch instead of a plain `git diff`, for applying from a phone
+(`~/storage/downloads`) via `git am`.
+
+**SQL — new file, `campaign_schema_queue_slot_rpc.sql`, repo root:**
+Written against this repo's own checked-in `campaign_schema.sql` (the
+v2 rewrite — a single `campaigns` table, no `track_campaigns`, no
+genre column at all), since that's the only schema this sandbox has
+ever actually seen a definition for. Adds:
+- `last_served_at timestamptz` on `public.campaigns` — the fairness
+  bookkeeping column v2's schema never had (CampaignRepository.kt's
+  own older doc comments describe this existing on the v1
+  `track_campaigns` table; v2 dropped it along with the rest of that
+  table).
+- `campaigns_serving_idx` — supports the "least-recently-served,
+  nulls (never served) first" ordering below.
+- `get_next_campaign_for_queue_slot(p_genre text default null)` —
+  rewritten as a `plpgsql` function that does the pick-and-mark in one
+  transaction via `select ... for update skip locked` followed by an
+  `update`, so two concurrent callers can never be handed the same
+  campaign. Accepts `p_genre` (so the app's existing call, which always
+  passes an argument — `null` or a real value, per §33's app-side fix —
+  keeps working without another app-side signature change) but does
+  **not** filter on it, because there is no genre column on this
+  schema to filter by.
+
+**Explicitly flagged, not guessed:** the SQL file's own final comment
+block includes a diagnostic query
+(`select pg_get_functiondef(oid) from pg_proc where proname = '...'`)
+and says plainly: if the live Supabase project is actually still on
+an older genre/`track_campaigns` schema rather than this repo's
+checked-in v2 one, this rewrite is the wrong shape for it, and the
+real fix there is almost certainly a small `(p_genre is null or genre
+= p_genre)` addition to whatever that function's real WHERE clause
+already is — not a guess at column names this sandbox has never seen.
+Still true this session, same as §33: no Supabase credentials, no DB
+connection, no way to confirm which schema is actually live from here.
+
+**Patch format — switched to `git format-patch`:** all of §33's four
+Kotlin/doc file changes plus this session's new SQL file and this
+`HANDOVER_CAMPAIGN.md` update are now one real commit
+(`git add -A && git commit`) in this sandbox's own local clone, turned
+into an `am`-compatible patch via `git format-patch -1 --stdout`. That
+produces the `From <sha>` / `From:` / `Date:` / `Subject:` header
+block `git apply`'s plain-diff output never had, which is what
+`git am` requires to reconstruct a real commit (not just modified
+files) on the other end. Filename kept the same descriptive slug as
+§33's patch, extension changed to `.patch` still, content is now a
+proper single-commit mailbox file.
+
+**Files changed this session:**
+- `campaign_schema_queue_slot_rpc.sql` (new)
+- `HANDOVER_CAMPAIGN.md` (this entry)
+
+**Verification:** the SQL was not run against any live database (no
+credentials/connection from this sandbox, same standing limitation as
+every server-side note in this file) — reviewed by hand for the same
+concurrency property `fetchNextCampaignForQueueSlot`'s own doc comment
+requires (atomic pick-and-mark, safe under concurrent callers), but
+not executed. The patch's `git am` compatibility was verified by
+applying it against a fresh clone of the pre-§33 commit and confirming
+a real commit lands (not just files) — see the reply this entry
+accompanies for the exact commands.
+
+**Not done / open:**
+1. Running `campaign_schema_queue_slot_rpc.sql` against the actual
+   Supabase project — has to happen from the product owner's own SQL
+   editor, not this sandbox.
+2. Confirming which schema (v1 genre-based vs. this repo's checked-in
+   v2) is actually live, via the diagnostic query included in the SQL
+   file's own trailing comment.
+3. Everything already open from §33 (items 1-3 there) remains open.

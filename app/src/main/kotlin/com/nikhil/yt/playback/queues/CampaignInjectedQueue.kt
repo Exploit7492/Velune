@@ -40,18 +40,18 @@ import com.nikhil.yt.models.MediaMetadata
  * fresh per slot is what makes the global fairness guarantee real
  * rather than approximate.
  *
- * [campaignSlotProvider] returning `null` — this class's own default,
- * and the value the one existing call site in `MusicService.kt` passes
- * as of this same part (Part 2a's own compile-compatibility edit there)
- * — means "no injection at all" for that slot; every slot boundary is
- * simply skipped, and the base items pass through unchanged. This is
- * the deliberate fail-closed default: real campaign injection only
- * activates once Part 2b threads a genre-aware provider through from a
- * genre-tile-originated queue specifically (Task 59 Round 3's confirmed
- * fail-closed rule) — every other queue in the app (search results,
- * playlists, albums, radio, etc.) continues to get zero injection,
- * unchanged from before this task, by construction rather than a
- * runtime check.
+ * [campaignSlotProvider] returning `null` — this class's own default —
+ * means "no injection at all" for that slot; every slot boundary is
+ * simply skipped, and the base items pass through unchanged. That's a
+ * per-slot outcome only (no eligible campaign existed at that exact
+ * moment), never a per-queue-type one: HANDOVER_CAMPAIGN.md §33 removed
+ * the fail-closed "only a genre-tile-originated queue gets a real
+ * provider, every other queue gets `{ null }`" rule this class's own
+ * doc previously described here. `MusicService.kt`'s one call site now
+ * wires a real provider onto every queue unconditionally — search
+ * results, playlists, albums, radio, liked songs, all of it — so a
+ * `null` slot result from here on means "the RPC had nothing eligible
+ * right now," not "this queue type was never wired for injection."
  *
  * ## Index Adjustment
  * When the user taps a song at index N in the original queue, that song
