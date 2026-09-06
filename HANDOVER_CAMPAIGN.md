@@ -3,7 +3,19 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
-> **Newest note (2026-09-06, latest of all) — §35: §34's SQL targeted
+> **Newest note (2026-09-06, latest of all) — §36: §35's RPC deployed
+> fine, but its eligibility filter had no YouTube-only check —
+> smoke-tested and it picked a real Spotify-linked campaign, which the
+> app can never play.** Product owner ran the RPC directly and pasted
+> back the picked row's own `source_url`
+> (`open.spotify.com/artist/...`, `resolved_song_id` null). Added an
+> `ilike`-based YouTube-shape filter (`youtube.com/watch` /
+> `music.youtube.com/watch` / `youtu.be/`, or an already-resolved
+> `resolved_song_id`) to the `where` clause — deliberately substring
+> checks, not a regex, after §31's own regex-failure history in this
+> same file. Full write-up in §36 below.
+>
+> **Older note (2026-09-06, latest of all) — §35: §34's SQL targeted
 > the wrong table entirely; corrected against the real live schema,
 > and the RPC turns out to have never existed on this project at
 > all.** Product owner ran §34's own diagnostic queries and pasted
@@ -2097,3 +2109,84 @@ verified the same way as §34 — applied to a fresh clone on top of
    flagged, not investigated, since it's outside the queue-slot RPC
    this task is about.
 3. Everything already open from §33 (items 2-3 there) remains open.
+
+## 36. 2026-09-06 — §35's RPC deployed and confirmed to exist, but picked a non-YouTube campaign; added a YouTube-only eligibility filter
+
+**Trigger:** product owner ran all four verification queries from the
+previous reply. `pg_get_functiondef` now returns §35's function body
+(deployed correctly). But `select * from
+get_next_campaign_for_queue_slot(null)` returned one real row —
+`source_url = 'https://open.spotify.com/artist/2oSONDGHNJJJBBDNYQqiSl'`,
+`resolved_song_id = null` — and asked directly why a Spotify URL was
+being picked instead of a YouTube one.
+
+**Root cause:** §35's eligibility filter never constrained `source_url`
+to a YouTube shape at all — it only checked
+`is_active`/`is_paused`/`completed_at`/`scheduled_for`/`target_genres`.
+`track_campaigns` apparently holds campaigns pointed at other
+platforms too (Spotify, at least), which makes sense for a table shared
+across whatever else this project promotes — but Velune itself has no
+non-YouTube playback path anywhere in the app:
+`CampaignUrlResolver.extractVideoId` only recognizes
+`youtube.com`/`youtu.be`/`music.youtube.com` share-link shapes, and
+`CampaignRepository.fetchNextCampaignForQueueSlot` already has a
+documented fallback for exactly this case — "could not extract a
+video id," logged, returns `null` — meaning the Spotify row was picked
+by the RPC, marked served (consuming its fairness turn), and then
+silently dropped by the app anyway. Net effect: the slot still comes
+back empty, just via a different path than §33-35's bugs.
+
+**Fix — `track_campaigns_queue_slot_rpc.sql` (`create or replace
+function` only, `alter table`/`create index` lines are unchanged and
+already idempotent from §35):** added
+
+```sql
+and (
+    tc.resolved_song_id is not null
+    or tc.source_url ilike '%youtube.com/watch%'
+    or tc.source_url ilike '%music.youtube.com/watch%'
+    or tc.source_url ilike '%youtu.be/%'
+)
+```
+
+to the `where` clause. A campaign either already has a resolved
+YouTube video id cached, or its raw `source_url` matches one of the
+three real YouTube share-link shapes this app's own
+`CampaignUrlResolver` (§31's own fix) actually parses — anything else
+(Spotify, Apple Music, a bare artist-profile link, etc.) is excluded
+from the pick entirely, so a slot that returns a row is now guaranteed
+to be one the app can actually turn into a playable `MediaItem`.
+Deliberately plain `ilike` substring checks, not a regex — §31 of this
+same file is a whole write-up on a regex silently failing on the most
+common real-world URL shape; a substring check has no equivalent
+failure mode to get subtly wrong here.
+
+**Not reset:** the Spotify campaign's `last_served_at` (set by the
+product owner's own test call) was left as-is — it's now permanently
+excluded by the new filter regardless of its position in the
+"least-recently-served" ordering, so resetting it would have no
+behavioral effect.
+
+**Files changed this session:**
+- `HANDOVER_CAMPAIGN.md` (this entry)
+- `track_campaigns_queue_slot_rpc.sql` (function body only)
+
+**Verification:** same standing limitation — not run against the live
+project from this sandbox. Reviewed by hand against the exact
+`source_url` value the product owner pasted back (confirmed it does
+NOT match any of the three `ilike` patterns, so this row is correctly
+excluded now) and against a synthetic YouTube-shaped URL (confirmed it
+DOES match). Patch chain re-verified: applied on top of §34 and §35's
+own commits in sequence on a fresh clone, real third commit lands.
+
+**Not done / open:**
+1. Re-running the smoke test
+   (`select * from get_next_campaign_for_queue_slot(null)`) against
+   the live project after this patch — should now either return a
+   real YouTube-sourced row, or an empty result if no eligible
+   YouTube campaign currently exists (worth checking how many
+   `track_campaigns` rows actually have a YouTube `source_url` at
+   all, if it comes back empty).
+2. The actual on-device end-to-end check from §33/§34's own "Not done"
+   lists — still not done, no Android SDK in this sandbox.
+3. Everything already open from §35 remains open.
