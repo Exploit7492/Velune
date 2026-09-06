@@ -3,6 +3,39 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-09-06, latest of all) — §30: re-reported "campaign
+> card isn't showing at all," screenshot turned out to predate §28's own
+> fix, no new bug found.** Product owner attached a screenshot
+> (`Screenshot_2026-09-04-18-58-06…`) of a completely bannerless Home as
+> fresh evidence the issue was still live. Timestamp check against this
+> repo's own commit log says otherwise: 18:58 on 2026-09-04 falls
+> *between* `3fff6d4`/`8f45760` (18:35/18:38 — the nest-inside-`if` and
+> duplicate-`buildConfigField` bugs §28 already describes) and
+> `2c820c5`/`8a890af` (23:57/23:59 same day — §28's own fix commits) —
+> i.e. this screenshot is a photograph of the exact broken window §28
+> already closed, not a new failure. Re-verified all three of §28's
+> fixes directly against current `HEAD` (`db50966`) line by line, not
+> just trusted the prior write-up: single `SUPABASE_URL`/
+> `SUPABASE_ANON_KEY` `buildConfigField()` pair with the real project
+> baked in as the default (`app/build.gradle.kts`), `CampaignCardSection`
+> as its own unconditional sibling `item{}` ahead of `ChipsRow`
+> (`HomeScreen.kt`), and `fetchLiveCampaignsForBanner`'s `select=` list
+> carrying `resolved_song_id`/`track_id`/the `tracks(...)`/`users(...)`
+> embeds `parseLiveBannerRows` reads (`CampaignRepository.kt`) — all
+> three confirmed present, no regression from the two commits made after
+> §28 (`1eee5c0` docs-only, `db50966` Task 66 deep-link work, neither
+> touches these three files' campaign-visibility logic). Brace/paren
+> balance and an `xml.etree.ElementTree` parse re-run on every file in
+> that chain, same as every prior session's own standing verification
+> method — all clean. **No code change made this session** — the fix
+> already exists on `main`; this device's build predates it. **Real
+> ask for the product owner:** confirm the installed APK was actually
+> built from a checkout that includes `2c820c5`/`8a890af` or later
+> (`git log -1` on the device's own clone, or just a fresh
+> `git pull && ./gradlew assembleDebug` reinstall) before treating this
+> as a fourth bug — nothing in the code itself points to one. Full
+> write-up in §30 below.
+>
 > **Newest note (2026-09-05, even later) — §28: campaign banner not
 > showing on Home, three real bugs found and fixed.** Likely the true
 > root cause: `SUPABASE_URL`/`ANON_KEY` defaulted to `""` when
@@ -1413,3 +1446,85 @@ would never catch; verified this session via a direct
 
 Not compile-verified — no Android SDK in this sandbox, same standing
 limitation every Velune code change in this project has had.
+
+## 30. 2026-09-06 — Re-reported "campaign card isn't showing," screenshot predates §28's fix, no new bug
+
+**Trigger:** product owner attached a screenshot of Home
+(`Screenshot_2026-09-04-18-58-06-930_com_nikhil_yt.jpg`) with no
+campaign banner visible above "Today's biggest hits," reporting the
+campaign card "isn't showing or working at all."
+
+**First check, before touching any code: does the screenshot's own
+timestamp line up with a genuinely current build?** This repo's commit
+log gives an exact answer:
+
+| time (2026-09-04) | commit | what it did |
+| --- | --- | --- |
+| 18:35 | `3fff6d4` | introduces the nest-inside-`if(showHomeCategoryChips)` bug |
+| 18:38 | `8f45760` | introduces the duplicate `buildConfigField()` bug |
+| **18:58** | *(screenshot taken here)* | — |
+| 23:57 | `2c820c5` | fixes the nest-inside-`if` bug + a second display bug |
+| 23:59 | `8a890af` | fixes the duplicate `buildConfigField`/empty-default root cause |
+
+The screenshot sits squarely inside the ~5-hour window where both of
+§28's bugs were live and neither fix had landed yet. That's not
+circumstantial — it's the same day, same device package
+(`com.nikhil.yt`), and the visible symptom (zero banner, chips still
+rendering) matches §28's own bug 2 exactly (banner's visibility wrongly
+coupled to `showHomeCategoryChips`, which is `true` in the screenshot,
+so on a version with that bug the banner would only be hidden by bug 1
+underneath it — consistent with what's shown).
+
+**Verification performed this session, against current `HEAD`
+(`db50966`), to make sure §28's own fixes are still actually there and
+nothing since has undone them:**
+- `app/build.gradle.kts` — exactly one `buildConfigField("String",
+  "SUPABASE_URL", ...)` and one for `SUPABASE_ANON_KEY` (grepped, not
+  assumed), real project URL/anon key as the fallback default, not
+  `""`.
+- `HomeScreen.kt` — `CampaignCardSection`'s `item{}` is a sibling of,
+  and ordered before, the `if (showHomeCategoryChips) { item { ChipsRow
+  (...) } }` block — not nested inside it.
+- `CampaignRepository.kt` — `fetchLiveCampaignsForBanner()`'s `select=`
+  list includes `resolved_song_id`, `track_id`, `artist_id`, and the
+  `tracks(title,cover_url)` / `users(artist_name)` embeds —
+  `parseLiveBannerRows` doesn't read anything the query doesn't
+  request.
+- Brace/paren balance (Python, same convention every prior session in
+  this file has used) on all three files, plus `CampaignCardSection.kt`
+  and `CampaignCarouselState.kt`: all balanced.
+- Read `CampaignCarouselState.kt`'s carousel logic end to end (not
+  re-verified since it was written) looking for a reason `.current`
+  could stay `null` even with a non-empty `campaigns` list — found
+  none; `updateCampaigns`/`advance`/`onResume` all handle the
+  non-empty case correctly, `AnimatedVisibility(visible = campaign !=
+  null)` in `CampaignCardSection.kt` gates correctly on that.
+- The two commits made *after* §28's fix landed (`1eee5c0`, docs-only,
+  and `db50966`, Task 66's deep-link work) don't touch any of
+  `HomeScreen.kt`/`CampaignRepository.kt`/`CampaignCardSection.kt`/
+  `CampaignCarouselState.kt`/`app/build.gradle.kts` — confirmed via
+  `git show --stat` on both — so neither could have reintroduced §28's
+  bugs even accidentally.
+
+**Conclusion: no new bug, no code change made this session.** The fix
+already exists on `main`, at or after `2c820c5`/`8a890af`. The
+screenshot is real evidence of a real bug — just one that predates its
+own fix by a few hours, not one still present in the current tree.
+
+**What would actually confirm or rule this out, for whoever has the
+device:** run `git log -1 --format=%H` in the on-device checkout used
+to build the installed APK. If it resolves to a commit before
+`2c820c5`, that's the whole explanation — pull latest `main` and
+rebuild. If it's already at or after `8a890af`/`db50966` and the banner
+*still* doesn't show, that's a genuinely new, fourth issue this session
+did not find, and the next step would be a live check of whether
+`track_campaigns` currently has any row matching
+`is_active=true,is_paused=false,current_stage NOT IN
+(completed,cancelled)` at all (an empty *result*, as opposed to a
+broken *query*, would look identical from the phone and isn't
+distinguishable from here — no live DB network path from this sandbox,
+same standing limitation as §9/§10/§28) — worth product owner running
+that query directly, same as §9's own step 2.
+
+Not compile-verified, same standing limitation as every session in this
+file — this session made no code changes to verify in the first place.
