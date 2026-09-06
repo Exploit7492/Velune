@@ -107,6 +107,44 @@
                 <data android:pathPrefix="/search" />
             </intent-filter>
 
+            <!-- Task 66 Part a-ii-b-ii (handover.md, Mavins-web repo) —
+                 the reward=true deep-link handoff from mavins-web's own
+                 /earn task board. Deliberately a SEPARATE intent-filter
+                 from the YouTube one above, not folded into it, for two
+                 real reasons: (1) that one has no android:autoVerify —
+                 it relies on the older, chooser-dialog-based deep-link
+                 mechanism, since Velune could never pass real Android
+                 App Link verification for youtube.com anyway (Google
+                 controls that domain's own assetlinks.json, not this
+                 app); this one CAN be verified, since Mavins-web
+                 controls its own domain and can host the required
+                 assetlinks.json. (2) mixing a verified and
+                 non-verified data block in one intent-filter is not a
+                 supported/well-defined pattern: autoVerify applies to
+                 the whole filter's declared hosts.
+                 MAVINS_LISTEN_HOST is a placeholder: no confirmed
+                 production domain was available when this was written
+                 (checked: nothing in Mavins-web's own next.config.mjs/
+                 package.json/README.md names one). Replace with the
+                 real domain before this can ever actually verify;
+                 until then this filter simply won't verify (Android
+                 falls back to the non-verified chooser behavior for
+                 it, same as any unverified https link; nothing breaks,
+                 it just doesn't yet grant the "auto-open, no chooser,
+                 native install prompt if missing" behavior this whole
+                 feature is for). See this app's own README or the
+                 product owner directly for the confirmed value. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:host="MAVINS_LISTEN_HOST_PLACEHOLDER" />
+                <data android:pathPrefix="/listen/" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />

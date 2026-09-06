@@ -1367,3 +1367,49 @@ post-fix, confirming the duplicate is really gone.
 Full write-up, same content, in Mavins-web's own `handover.md` as the
 canonical version (this task doesn't have its own numbered slot there
 yet — filed as a new entry).
+
+## 29. 2026-09-05 — Task 66 Part a-ii-b-ii, first pass: the reward=true deep-link handoff from mavins-web's own /earn page
+
+**Sync note — full write-up in Mavins-web's own `handover.md`, Task
+66's own section.** Kept concise here per this project's established
+cross-repo convention (§9, §10, §28 above all do the same).
+
+Three files changed in this repo: `AndroidManifest.xml` (new, separate
+`android:autoVerify="true"` intent-filter for
+`https://<MAVINS_LISTEN_HOST_PLACEHOLDER>/listen/{campaignId}` — kept
+deliberately apart from the existing YouTube intent-filter, which has
+no `autoVerify` and could never pass real verification for
+`youtube.com` anyway, a domain Velune doesn't control), `MainActivity.kt`
+(`handleDeepLinkIntent` now recognizes this new link shape, looks the
+campaign up via `fetchLiveCampaignsForBanner()`, and starts playback
+using the exact same sequence `HomeScreen.kt`'s own `onCampaignClick`
+already uses — not a second, parallel implementation), and
+`CampaignPlaybackTracker.kt` (new `isRewardEligible` flag, default
+`false`, only ever set `true` by this new deep-link path — the
+existing in-app tap flow is unaffected).
+
+**Real limitation flagged, not silently risked:** if this deep link
+arrives at a genuinely cold app start (before `playerConnection` has
+finished binding), the handler currently no-ops with a log line rather
+than crashing or silently dropping without a trace — making this
+reliably work cold is real, additional work, not attempted in this
+pass.
+
+**Not done:** the actual gating of qualifying-play recording on
+`isRewardEligible` (still needs a change at `MusicService.kt`'s own
+recording call site — a genuinely separate part), the 60-second
+progress-pill UI, and the real production domain / signing certificate
+fingerprint `assetlinks.json` needs to actually verify (neither
+available in any sandbox this project has used — a real hand-off to
+the product owner). Caught and fixed a real XML error while building
+this, worth remembering for future manifest edits: **XML comments
+cannot contain a literal `--` anywhere in their body, not just at the
+closing `-->`** — an early draft of the new intent-filter's own comment
+used `--` as a prose separator (a habit carried over from this
+project's own markdown/commit-message conventions) and broke the
+manifest's well-formedness in a way a brace/paren balance check alone
+would never catch; verified this session via a direct
+`xml.etree.ElementTree` parse, not just visual review.
+
+Not compile-verified — no Android SDK in this sandbox, same standing
+limitation every Velune code change in this project has had.

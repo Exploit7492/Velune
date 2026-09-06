@@ -234,6 +234,7 @@ import com.nikhil.yt.utils.get
 import com.nikhil.yt.utils.rememberEnumPreference
 import com.nikhil.yt.utils.rememberPreference
 import com.nikhil.yt.utils.reportException
+import timber.log.Timber
 import com.nikhil.yt.utils.setAppLocale
 import com.nikhil.yt.viewmodels.HomeViewModel
 import java.net.URLDecoder
@@ -1667,6 +1668,73 @@ class MainActivity : ComponentActivity() {
             pendingTogetherJoinLink = uri.toString()
             startMusicServiceSafely()
             joinPendingTogetherIfReady()
+            return
+        }
+
+        // Task 66 Part a-ii-b-ii (handover.md, Mavins-web repo) — the
+        // reward=true deep-link handoff from mavins-web's own /earn
+        // task board (https://<MAVINS_LISTEN_HOST>/listen/{campaignId}
+        // ?reward=true, matching the intent-filter added alongside
+        // this in AndroidManifest.xml — that filter's own comment has
+        // the full reasoning for why this is a separate filter/host
+        // placeholder, not repeated here).
+        //
+        // Deliberately reuses the exact same playback-start sequence
+        // HomeScreen.kt's own onCampaignClick already uses
+        // (YouTube.queue -> toMediaMetadata -> setActive ->
+        // playQueue(YouTubeQueue.radio(...))) rather than a second,
+        // parallel implementation — the only real difference is the
+        // campaign is looked up by id from a deep link instead of
+        // already being the tapped Compose item, and setActive's new
+        // rewardEligible=true is passed here specifically.
+        //
+        // Known, unaddressed limitation of this first pass, flagged
+        // rather than silently risking a crash: if this intent arrives
+        // at a cold app start (before the media session/playerConnection
+        // has finished binding), playerConnection is still null here
+        // and this branch no-ops with a log line instead of queuing
+        // anything. onNewIntent's own warm-app path (the far more
+        // common case, matching how a real deep link normally arrives
+        // — the OS resumes/creates the task, onCreate's own bootstrap
+        // has usually already run once before) doesn't hit this, but a
+        // genuinely cold start still can. Making this reliably work
+        // cold (queuing the pending action the same way
+        // `pendingIntent`/`pendingTogetherJoinLink` already defer their
+        // own cold-start cases above) is real, additional work — not
+        // done here, left for a future part if this limitation turns
+        // out to matter in practice.
+        if (uri.scheme.equals("https", ignoreCase = true) &&
+            uri.pathSegments.firstOrNull() == "listen"
+        ) {
+            val campaignId = uri.pathSegments.getOrNull(1)
+            val isReward = uri.getQueryParameter("reward") == "true"
+            val connection = playerConnection
+            if (campaignId == null) {
+                Timber.tag("MainActivity").w("listen deep link with no campaign id: $uri")
+                return
+            }
+            if (connection == null) {
+                Timber.tag("MainActivity").w(
+                    "listen deep link arrived before playerConnection was ready, dropping: $uri"
+                )
+                return
+            }
+            coroutineScope.launch {
+                val campaign = com.nikhil.yt.campaign.CampaignRepository()
+                    .fetchLiveCampaignsForBanner()
+                    .firstOrNull { it.id == campaignId }
+                if (campaign == null) {
+                    Timber.tag("MainActivity").w("listen deep link: no live campaign matching id $campaignId")
+                    return@launch
+                }
+                YouTube.queue(listOf(campaign.songId)).onSuccess { list ->
+                    val mediaMetadata = list.firstOrNull()?.toMediaMetadata()
+                    if (mediaMetadata != null) {
+                        com.nikhil.yt.campaign.CampaignPlaybackTracker.setActive(campaign, rewardEligible = isReward)
+                        connection.playQueue(YouTubeQueue.radio(mediaMetadata))
+                    }
+                }.onFailure { reportException(it) }
+            }
             return
         }
 
