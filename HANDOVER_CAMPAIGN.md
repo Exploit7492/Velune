@@ -1609,3 +1609,98 @@ campaign link is ever reported as not resolving.
 
 Not compile-verified — no Android SDK in this sandbox, same standing
 limitation every Velune code change in this project has had.
+
+## 32. 2026-09-06 — Home banner cinematic glass-panel redesign (Part A of 2, Part A built); Task 59 slot-queue ingestion re-verified, not touched
+
+**Trigger:** product owner asked for a "more premium," "mature," "cinematic"
+glassmorphism redesign of the Home campaign card, and to "make sure
+the campaign are being ingested in the slots queue of the app."
+
+**Task split (mandatory per this file's own build-focus rule above):**
+- **Part A (built this session):** visual-only redesign of
+  `CampaignBanner`/`LiveBadge` in `CampaignCardSection.kt`. No data
+  layer, no repository, no queue code touched.
+- **Part B (not started):** any further visual polish (e.g. a subtle
+  shimmer sweep, per-stage accent theming) if the product owner wants
+  more after seeing Part A. Not split further beyond that — there's no
+  second natural sub-part inside "redesign one card's visuals" once
+  Part A already covers the whole card.
+
+**Slot-queue ingestion — verified already correct, deliberately NOT
+rebuilt:** re-read `CampaignInjectedQueue.kt` end to end plus its one
+call site in `MusicService.kt` (`grep` for `CampaignInjectedQueue`/
+`campaignSlotProvider`/`fetchNextCampaignForQueueSlot` in that file —
+lines 1551-1582, 3603-3605) before writing any code. Task 59 Part 2a
+(§11 above) already built this: campaigns are injected into every 5th
+position of a genre-tile-originated queue via a per-slot, atomic
+`get_next_campaign_for_queue_slot` RPC call, fail-closed (`null`
+provider) for every other queue type. This was already live and
+correct — there was no ingestion bug to fix, so nothing in
+`playback/queues/` or `MusicService.kt` was changed. Said so explicitly
+here instead of quietly touching working code to look like more was
+done.
+
+**What almost went wrong, caught by reading doc comments first:** the
+redesign's plan was to surface `CampaignCard.ctaLabel` as a visible
+stage-based chip ("Discover"/"Trending"/"Hot"/"Viral"/"Charting") for
+a richer premium look. `CampaignRepository.fetchLiveCampaignsForBanner`'s
+own doc comment (lines 127-133) explicitly documents hardcoding
+`ctaLabel = "Play"` here on purpose, because Part 3's spec flagged that
+stage ladder as ranking-adjacent data that must never reach this
+surface — the same spirit as §0's "never fabricate/reveal a
+competitive number" rule. Did not implement the chip-with-stage-text
+idea; `ctaLabel` is rendered only as a generic CTA icon's content
+description, and `currentStage`/`geographicTier` remain unread by this
+file, same as before.
+
+**What changed, `app/src/main/kotlin/com/nikhil/yt/campaign/CampaignCardSection.kt`
+only:**
+- `CampaignBanner`: 72.dp → 92.dp tall (300.dp → 320.dp wide), same
+  fixed-size single-item contract, still sits in `HomeScreen.kt`
+  exactly where it did (that file is unchanged). Three-layer
+  glassmorphism build: (1) the campaign's own thumbnail blurred
+  (`Modifier.blur(26.dp)`, a documented no-op below API 31 — safe on
+  `minSdk 26`, never a crash) and stretched to fill the card as
+  ambient art; (2) a dark linear-gradient scrim for text legibility
+  plus a hairline white-to-transparent gradient border for the glass
+  edge highlight; (3) foreground content — sharp 64.dp thumbnail with
+  a translucent ring border, the existing certified badge untouched,
+  a gold (`0xFFD4AF37`, matching `Player.kt`'s own "Promoted" gold —
+  previously a different blue here) "Promoted" label, title/artist
+  forced to white/white-alpha (theme surface-color tokens don't make
+  sense once the background is real art), the existing `LiveBadge`
+  restyled for contrast over art (higher chip alpha + a border, pulse
+  animation itself untouched), and a new trailing circular glass "play"
+  chip.
+- Deliberately does NOT use this app's own `Modifier.liquidGlass`
+  backdrop-blur system (`GlassEffectStubs.kt`, real
+  `RenderEffect`-backed backdrop sampling, already used by
+  `GlassMiniPlayer.kt`/nav bar). Reasoning written into the new doc
+  comment: that system blurs whatever's actually rendered *behind* the
+  composable on screen — the right tool for a floating overlay staying
+  put while content scrolls underneath it, the wrong one for this card,
+  which is itself an inline `LazyColumn` item scrolling with everything
+  else (nothing meaningful sits "behind" it to sample). It would also
+  tie this card's whole premium look to `GlassEffectConfig.globalEnabled`,
+  which defaults to `false` — most users would silently get a plain
+  card. Self-contained blur-your-own-art avoids both problems and
+  needed no new `GlassComponent` entry / Settings-screen change.
+- `HomeScreen.kt`: **not touched** — `CampaignCardSection`'s public
+  signature is unchanged, so the existing call site (§section "Below
+  the category chips...") still compiles as-is.
+
+**Verification, same standing limitation as always (no Android
+SDK/Gradle in this sandbox):** brace/paren/bracket balance checked via
+a small Python scanner (balanced) and every import checked for use via
+a second Python scan (`setValue` flagged as "unused" is the same
+`by remember { mutableStateOf(...) }` delegate-operator false positive
+the original file's import list already had — not a real issue).
+Confirmed `Icons.Filled.PlayArrow` is already used elsewhere in this
+app (`RingtoneTrimmerDialog.kt`), so it's a real, available icon, not a
+guess. Not compile-verified.
+
+**Not done / open:** actually running this on a device/emulator to
+eyeball contrast against a genuinely bright or genuinely dark piece of
+album art (the fixed dark scrim alphas were chosen to work across both,
+not tuned against a real screenshot) — flag as the first thing to
+sanity-check visually once this lands somewhere a screen exists.
