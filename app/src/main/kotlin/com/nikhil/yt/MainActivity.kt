@@ -193,11 +193,13 @@ import com.nikhil.yt.db.entities.SearchHistory
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.innertube.models.SongItem
 import com.nikhil.yt.extensions.toMediaItem
+import com.nikhil.yt.models.toMediaMetadata
 import com.nikhil.yt.playback.DownloadUtil
 import com.nikhil.yt.playback.MusicService
 import com.nikhil.yt.playback.MusicService.MusicBinder
 import com.nikhil.yt.playback.PlayerConnection
 import com.nikhil.yt.playback.queues.ListQueue
+import com.nikhil.yt.playback.queues.YouTubeQueue
 
 import com.nikhil.yt.ui.component.BottomSheetMenu
 import com.nikhil.yt.ui.component.BottomSheetPage
