@@ -3,6 +3,27 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-09-06, even later) — §31: the real bug, finally —
+> `CampaignUrlResolver`'s own `watch\?` regex silently failed on the
+> single most common real-world YouTube share-link shape.** Product
+> owner filtered a live curl to just YouTube-URL campaign rows and
+> pasted back two genuine `music.youtube.com/watch?v=...&si=...` rows,
+> both `is_active`/un-paused/non-completed — i.e. rows §30 already
+> confirmed the app's own query would fetch. Ran the actual regex from
+> `CampaignUrlResolver.kt` against both real URLs directly (not assumed
+> from reading it): **neither matched.** Root cause: the pattern's own
+> literal `\?` right after `watch` already consumes the URL's one `?`,
+> so the `[?&]` it then required immediately before `v=` could only
+> ever be satisfied when `v=` wasn't the first query parameter (e.g.
+> `?feature=share&v=ID`) — but every real share link puts `v=` first
+> (`?v=ID&si=...`), so this had silently never worked for the ordinary
+> case, only for a rare one. Fixed by allowing zero-or-more other
+> `key=value&` pairs ahead of `v=` instead of requiring a second `?`/`&`
+> unconditionally — verified against both real campaign URLs plus five
+> edge cases (bare `?v=`, trailing `&t=`, `v=` after another param,
+> non-YouTube/garbage input) in a throwaway Python harness, all correct.
+> Full write-up in §31 below.
+>
 > **Newest note (2026-09-06, latest of all) — §30: re-reported "campaign
 > card isn't showing at all," screenshot turned out to predate §28's own
 > fix, no new bug found.** Product owner attached a screenshot
@@ -1528,3 +1549,63 @@ that query directly, same as §9's own step 2.
 
 Not compile-verified, same standing limitation as every session in this
 file — this session made no code changes to verify in the first place.
+
+## 31. 2026-09-06 — The real bug: `CampaignUrlResolver`'s `watch\?` regex never matched the common share-link shape
+
+**Trigger:** product owner pushed back on §30 with a specific,
+concrete counter-example — a real campaign whose `source_url` is an
+actual YouTube link, not Spotify, still not showing — and asked for a
+curl filtered to just YouTube-URL rows so both sides could see the raw
+data instead of arguing from a diagnosis alone.
+
+**What the filtered curl showed:** two genuinely live rows —
+`ff616798-ee70-4488-a37f-a61abd743b92`
+(`https://music.youtube.com/watch?v=PHkZZkqPM7Y&si=ryKfJ8EsooCwZEmq`)
+and `2b14f512-f5a6-40cd-9fcc-370bf0042e59`
+(`https://music.youtube.com/watch?v=1RKCUgX2nHY&si=YImvWMq6RpEfTx2Z`) —
+both `is_active=true`, `is_paused=false`, `current_stage=planting`
+(not completed/cancelled). §30 already established the app's own
+`fetchLiveCampaignsForBanner` query would fetch rows exactly like
+this. So if these still don't render, the failure has to be in
+extraction, not fetching.
+
+**Root cause, confirmed by actually running the regex, not just
+reading it:** `CampaignUrlResolver.kt`'s `watch\?.*[?&]v=(...)` pattern
+consumes the URL's one literal `?` as part of `watch\?`, then requires
+a *second* `?` or `&` to immediately precede `v=`. That's only ever
+true when `v=` isn't the first query parameter — e.g.
+`?feature=share&v=ID`. Every real YouTube Music share link puts `v=`
+first (`?v=ID&si=...`, the `si=` tracking param YouTube Music appends
+automatically) — meaning this regex had silently never matched the
+single most common real-world shape, only a rare one. Verified via a
+direct Python `re.search` against both real URLs above before touching
+any Kotlin: neither matched, confirming this wasn't a hypothesis.
+
+**Fix:** `app/src/main/kotlin/com/nikhil/yt/campaign/CampaignUrlResolver.kt`
+— changed the pattern to
+`(?:music\.)?youtube\.com/watch\?(?:[^&]*&)*v=([A-Za-z0-9_-]{11})`,
+allowing zero or more other `key=value&` pairs ahead of `v=` instead of
+unconditionally requiring a second `?`/`&` right before it. This
+correctly matches `v=` whether it's first (`?v=ID&si=...`, now fixed)
+or not first (`?feature=share&v=ID`, already worked, still works).
+
+**Verification, same standing limitation as always (no Android
+SDK/Gradle in this sandbox):** a throwaway Python harness (not
+committed) against both real production URLs above plus: bare `?v=ID`,
+`?v=ID&t=30s` (trailing param), `?feature=share&v=ID` (the old
+pattern's one working case), a `?list=...&v=ID&index=...` playlist-
+context link, a non-YouTube URL, and a plain garbage string — all
+behaved correctly (match the right id, or no match) after the fix.
+Brace/paren balance on the changed file: clean.
+
+**Not yet re-checked against every other `URL_PATTERNS` entry
+(`/shorts/`, `/live/`, `youtu.be/`)** — those don't have the same
+"already consumed the one delimiter" structure (`/shorts/ID` and
+`/live/ID` are path segments, not query strings; `youtu.be/ID` has no
+`?` at all), so there's no equivalent bug reasoning to apply, but they
+weren't independently re-verified against real URLs this session the
+way `watch\?` was — worth a quick pass if a `/shorts` or `youtu.be`
+campaign link is ever reported as not resolving.
+
+Not compile-verified — no Android SDK in this sandbox, same standing
+limitation every Velune code change in this project has had.

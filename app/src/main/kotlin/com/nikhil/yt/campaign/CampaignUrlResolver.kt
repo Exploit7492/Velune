@@ -26,7 +26,20 @@ object CampaignUrlResolver {
     private val VIDEO_ID_REGEX = Regex("[A-Za-z0-9_-]{11}")
 
     private val URL_PATTERNS = listOf(
-        Regex("""(?:music\.)?youtube\.com/watch\?.*[?&]v=([A-Za-z0-9_-]{11})"""),
+        // Bug fixed here: this used to be
+        // `watch\?.*[?&]v=([A-Za-z0-9_-]{11})` -- the literal `\?` right
+        // after `watch` already consumes the URL's one `?`, so the
+        // `[?&]` immediately before `v=` could only ever match when
+        // `v=` was NOT the first query parameter (e.g.
+        // `?feature=share&v=ID`). Every real YouTube Music share link
+        // puts `v=` first (`?v=ID&si=...`) -- confirmed against two real
+        // campaign rows in production, both silently failing extraction
+        // this way despite being genuine, well-formed
+        // `music.youtube.com/watch?v=...` URLs. Fixed by allowing zero
+        // or more other `key=value&` pairs ahead of `v=`, so `v=` being
+        // first (the common case), or not first (the rare case the old
+        // pattern accidentally only supported), both match.
+        Regex("""(?:music\.)?youtube\.com/watch\?(?:[^&]*&)*v=([A-Za-z0-9_-]{11})"""),
         Regex("""(?:music\.)?youtube\.com/shorts/([A-Za-z0-9_-]{11})"""),
         Regex("""(?:music\.)?youtube\.com/live/([A-Za-z0-9_-]{11})"""),
         Regex("""youtu\.be/([A-Za-z0-9_-]{11})"""),
