@@ -508,10 +508,67 @@ and is masked in output, which is what is needed here.
 
 ---
 
-## B. Spotify links on the campaign card — feasibility + the real fix
+## B. Spotify links on the campaign card — feasibility verdict
 
-**Short answer: the capability already exists in Velune. The blocker is
-data quality plus one deliberate SQL filter, not missing code.**
+**Short answer: yes, achievable — but not the way it is usually
+imagined. A Spotify link can be *read* and turned into a *playable*
+song, because the app already does exactly that. It cannot be played
+*as Spotify*.**
+
+The distinction is the whole answer, so it is worth stating plainly.
+Velune's player is a YouTube player. `CampaignUrlResolver.resolve()`
+(lines 64–75) takes a row and requires a **YouTube video id**; if it
+cannot get one, it logs a warning and returns `null` — no card, nothing
+to play. `CampaignRepository.fetchNextCampaignForQueueSlot()` (line 431)
+then calls `YouTube.queue(...)` and converts the result to a
+`MediaItem`. There is no Spotify playback path anywhere in the app:
+`SpotifyMapper` is reachable only from `spotifyimport/`, and the
+`Spotify.kt` methods that mention `spotify:track:` URIs are
+playlist-editing endpoints, not playback.
+
+So the achievable goal — and the one the repaired data already proves
+works — is:
+
+    Spotify link  ->  resolved_song_id (YouTube id)  ->  plays
+
+That is "the campaign card reads a Spotify link and the song plays in
+the app". It is real, and 252 rows are already in that state.
+
+What is **not** achievable without a much larger change is playing the
+Spotify track itself in-app (Spotify App Remote / Spotify SDK, a
+different player, different licensing). That is a different project and
+should be treated as out of scope unless explicitly wanted.
+
+**Why it is not done yet — three separate things, none of them "missing
+Spotify support":**
+
+1. **Data.** 252 of 381 rows are repaired; 127 are still artist-level
+   with no `resolved_song_id`, so they resolve to `null` and vanish.
+2. **One deliberate SQL filter.** `track_campaigns_queue_slot_rpc.sql:74`
+   requires `resolved_song_id is not null`, which is what makes an
+   unrepaired row invisible rather than broken. It is a safety net, not
+   a bug — but it means "reading Spotify links" only works for rows that
+   have been through the resolver.
+3. **Nothing resolves a Spotify URL at runtime.** `extractVideoId()`
+   only understands YouTube URL shapes, so a Spotify URL reaching it
+   today returns `null`. The resolution currently has to be precomputed
+   into `resolved_song_id`.
+
+**On the second repo — SpotiFLAC-Mobile — read this before relying on
+it.** It is a useful *technique* reference, not a drop-in component:
+it is not Kotlin, it talks to songlink/odesli rather than
+`api.spotify.com`, and it requires a **user-supplied
+`spotify_client_secret`**. Most importantly it solves the *same* problem
+this repo already solves — resolving a Spotify track to a playable
+source — so it overlaps `CampaignUrlResolver` rather than filling a gap.
+Its value is as a second opinion on the resolution strategy, and as a
+fallback when Spotify's own API is unavailable. Do not plan to graft it
+in wholesale. It is registered as a reference repo for that reason.
+
+**Conclusion:** success is achievable for "read Spotify links and play
+the song in the app". The work is tasks 8–18 — finish the data repair,
+harden the resolver, and optionally add a runtime Spotify branch — not
+new infrastructure.
 
 ### B1. What is already there (verified by reading the code)
 Velune already contains a complete Spotify subsystem:
