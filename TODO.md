@@ -60,6 +60,77 @@ Per the repo convention: one part-letter (a–e) per session.
 **Four decisions are needed before several tasks can be scoped — see §F.**
 They are listed there, not here, so this list stays a work queue.
 
+---
+
+### ▶ RESUME HERE — state at end of the 2026-10-15 session
+
+**Everything below is verified, not assumed. Read this block, then start
+at task 1.**
+
+**Pushed and live:**
+- `Zapier-codes/Velune` — commit `1f4a7d8` on `main`.
+- `Zapier-codes/mavins-web` — commit `66a4cec` on `main`.
+- `TODO.md` is byte-identical in both (git blob
+  `25ba6212ebf7800d389822ded84374ff2124246c`). Edit one, copy to the
+  other, push both — that is the convention.
+
+**The one thing blocking Phase 1:** there is no route to run DDL against
+the live DB. PostgREST cannot, under any key. A direct Postgres
+connection **is** reachable — session pooler,
+`aws-0-eu-west-1.pooler.supabase.com`, user
+`postgres.atojskxrxfsbpeefigtm` — but the **database password** was
+missing from the secret store. The product owner has now added a
+PostgreSQL secret; **the first job of the next session is to find which
+env-var name it is registered under and confirm it connects.** See §A4
+for the exact matrix of what was tried and what each failure means.
+
+**Secret names — resolved, §A3 has the full table.** The mismatches were
+a typo plus a naming-convention clash, not a code fault. Register:
+`SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` (same value),
+`SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same value),
+`SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`. The existing
+`SUPABASE_SECRETE_KEY` is misspelled *and* unread by any code — it never
+worked except for manual probing. Add `SUPABASE_DB_PASSWORD` for the
+migrations. Do not commit any of it; `.env*` is gitignored.
+
+**Tooling:** `tools/probe_rpc_existence.py` is committed in mavins-web.
+Run it before believing any "this RPC is missing" claim.
+
+**Then, in order, for Phase 1:**
+1. Connect. If the password works, everything below is quick.
+2. Apply exactly **three** migrations — not 025→044. The live DB is
+   close to current; only these are genuinely absent:
+   - `supabase_migration_025_live_campaigns_banner.sql`
+     (defines `get_live_campaigns_for_banner` — the `/earn` 500 cause)
+   - `supabase_migration_026_award_points.sql` (defines `award_points`)
+   - `supabase_migration_034_bpay_tag.sql` (adds `users.bpay_tag`)
+   All three are idempotent (`CREATE OR REPLACE` /
+   `ADD COLUMN IF NOT EXISTS`), so re-running them is safe.
+3. Re-probe: both RPCs must stop returning `PGRST202`; `users.bpay_tag`
+   must exist. Then `GET /api/listener/campaigns` should return 200.
+4. Tasks 3–4 (env var names), then Phase 2.
+
+**Correction to carry forward — do not re-derive this:** the previous
+handover's claim that "live Supabase is stuck at migration ~023, nine
+RPCs missing" was **wrong**, and §A1 now carries a correction box
+explaining why. The probe called parameterised functions with zero
+arguments; PostgREST answers that with `PGRST202`, which looks exactly
+like non-existence. **If you probe an RPC, pass a deliberately malformed
+argument** — an existing function replies with a cast error
+(`22P02`/`22007`), a missing one with `PGRST202`. 31 RPCs are live.
+
+**Known trap when pushing:** the git remotes may carry a stale token.
+`$GITHUB_TOKEN` is a GitHub **App** installation token and gets `403` on
+push. **Use `$Gh_AUTH_TOKEN`** (a PAT with `repo` + `workflow` scope) —
+`git remote set-url origin "https://x-access-token:${Gh_AUTH_TOKEN}@github.com/Zapier-codes/<repo>.git"`.
+Set `git config user.name openhands` / `user.email
+openhands@all-hands.dev` in a fresh clone; it is not preconfigured.
+
+**Also known:** `/tmp` is wiped between sessions. Anything not committed
+is gone. The Spotify repair scripts were lost that way (task 8).
+
+---
+
 ### Phase 1 — Unblock the database (nothing is verifiable until this clears)
 
 > **SCOPE CORRECTED 2026-10-15.** The original plan was "apply 025→044".
@@ -94,88 +165,93 @@ They are listed there, not here, so this list stays a work queue.
 
 ### Phase 2 — Finish the Spotify campaign work
 
-10. **B5a** — Persist the repair tooling **into the repo**, not `/tmp`.
+8. **B5a** — Persist the repair tooling **into the repo**, not `/tmp`.
     The 2026-10-15 session lost `resolve_tracks.py`,
     `update_tracks.py`, `resolution.json` and the backup when `/tmp` was
     cleared between turns; only the DB writes survived. *Done when:*
     the scripts + a backup export are committed under a `tools/` path.
-11. **B4c** — Relax the queue-slot RPC filter to gate on
+9. **B4c** — Relax the queue-slot RPC filter to gate on
     `resolved_song_id is not null` rather than on URL shape, preserving
     §36's intent (never hand the app something unplayable) while removing
     the blanket Spotify exclusion. *Note:* the current filter already
     accepts `resolved_song_id`, so this is hardening, not a blocker.
-12. **B5b** — Harden the seed migration: `20260831000024_seed_user_campaigns.sql:91`
+10. **B5b** — Harden the seed migration: `20260831000024_seed_user_campaigns.sql:91`
     still fabricates `'https://open.spotify.com/artist/' || id::TEXT` as
     its last-resort `COALESCE` fallback. Make it fail loudly instead of
     inventing a URL.
-13. **B5c** — Close the recurrence hole: `ensure_seed_campaigns()` skips
+11. **B5c** — Close the recurrence hole: `ensure_seed_campaigns()` skips
     a seed only while it has an **active** campaign. If a repaired
     campaign is ever deactivated or completed and the function re-runs, a
     fresh row is created with the fabricated URL. Guard against it.
-14. **B5d** — Repair the remaining **127 rows**, pass 1: artists kworb
+12. **B5d** — Repair the remaining **127 rows**, pass 1: artists kworb
     covers. Re-run the pipeline and re-apply.
-15. **B5e** — Repair remaining rows, pass 2: MusicBrainz-only artists.
-16. **B5f** — Repair remaining rows, pass 3: the ~53 hard artists
+13. **B5e** — Repair remaining rows, pass 2: MusicBrainz-only artists.
+14. **B5f** — Repair remaining rows, pass 3: the ~53 hard artists
     (non-Latin scripts, common-word names). Expect manual review; do not
     loosen the artist-agreement rule to raise the count.
-17. **B5g** — Add a DB-level guard/test asserting no row has an
+15. **B5g** — Add a DB-level guard/test asserting no row has an
     artist-level `source_url` with a null `resolved_song_id`.
-18. **B4b** — Add a Spotify branch to `CampaignUrlResolver` so the app
+16. **B4b** — Add a Spotify branch to `CampaignUrlResolver` so the app
     can resolve a Spotify link at runtime, not just pre-resolved data.
     *Only if §F3 is answered "yes".*
-19. **B4b-2** — Wire `SpotifyMapper` into the campaign path. It is
+17. **B4b-2** — Wire `SpotifyMapper` into the campaign path. It is
     currently reachable only from `spotifyimport/`, never from
     `campaign/`.
-20. **B4e** — On-device check that a repaired campaign actually plays.
+18. **B4e** — On-device check that a repaired campaign actually plays.
     **Blocked:** no Android SDK, emulator, or device in this sandbox.
 
 ### Phase 3 — mavins-web wiring
 
-21. **C1a** — Wire the header search box (`Header.tsx` renders a
+19. **C1a** — Wire the header search box (`Header.tsx` renders a
     placeholder input with no handler at all).
-22. **C1b** — Add platform validation to `/promote` and
+20. **C1b** — Add platform validation to `/promote` and
     `/api/campaigns/create`. This omission is exactly how the fabricated
     Spotify rows entered the table.
-23. **C1c** — Remove the dead `/share/:path*` matcher entry, or add the
+21. **C1c** — Remove the dead `/share/:path*` matcher entry, or add the
     missing route. Decide which.
-24. **C3a** — Delete-vs-keep for `currency.service.ts`,
+22. **C3a** — Delete-vs-keep for `currency.service.ts`,
     `purchaseMetrics.ts`, `shareUtils.ts`. Check `purchaseMetrics.ts`
     against `handover.md` ~12139 first — it may be a deliberate stub.
-25. **C1d** — Fix `/earn` 500. **Depends on Phase 1.**
-26. **C1e** — Fix `/api/listener/balance` 500. **Depends on Phase 1.**
+23. **C1d** — Fix `/earn` 500. **Depends on Phase 1.**
+24. **C1e** — Fix `/api/listener/balance` 500. **Depends on Phase 1.**
 
 ### Phase 4 — Pawns SDK
 
-27. **D1a** — Rotate the Pawns key exposed in this public repo's git
+25. **D1a** — Rotate the Pawns key exposed in this public repo's git
     history. *Needs the product owner; cannot be verified from here.*
-28. **D1b** — Decide git-history rewrite vs accept-and-move-on. Rotating
+26. **D1b** — Decide git-history rewrite vs accept-and-move-on. Rotating
     is load-bearing; rewriting is optional hardening.
-29. **D2a** — Surface `getStatus()` / `getLastError()` in the UI; today a
+27. **D2a** — Surface `getStatus()` / `getLastError()` in the UI; today a
     user cannot tell whether sharing is running.
-30. **D2b** — Wire `PawnsManager.clearAllData()` to account deletion. The
+28. **D2b** — Wire `PawnsManager.clearAllData()` to account deletion. The
     consent copy implies the user can clear their data; nothing calls it.
-31. **D2c** — Confirm the AAR versions are current and that the AARs are
+29. **D2c** — Confirm the AAR versions are current and that the AARs are
     legitimately redistributable in a public repo.
-32. **D2d** — Confirm a tenant built with an empty `PAWNS_API_KEY`
+30. **D2d** — Confirm a tenant built with an empty `PAWNS_API_KEY`
     degrades gracefully rather than silently attempting to start.
 
 ### Phase 5 — Inherited handover work
 
-33. **mavins 46e** — Audit trail + safety rails across all admin work.
-34. **mavins 46f** — Admin roles/permissions + user-management mutating
+31. **mavins 46e** — Audit trail + safety rails across all admin work.
+32. **mavins 46f** — Admin roles/permissions + user-management mutating
     actions + starting-capital grant.
-35. **mavins 48d** — Finish the gamification wiring (Part 1 done).
-36. **mavins Task 70** — Fork B-Pay into `Zapier-codes`, reconfigure onto
+33. **mavins 48d** — Finish the gamification wiring (Part 1 done).
+34. **mavins Task 70** — Fork B-Pay into `Zapier-codes`, reconfigure onto
     mavins-web's own Supabase project as a dedicated disbursement app.
-37. **mavins Task 16** — Resolve the `role DEFAULT 'artist'` contradiction
+35. **mavins Task 16** — Resolve the `role DEFAULT 'artist'` contradiction
     against Task 48's finding of zero `'artist'` rows in live data. Check
     the live column default directly.
-38. **Velune** — Build the flanger effect for Simple. Confirmed zero
+36. **Velune** — Build the flanger effect for Simple. Confirmed zero
     flanger implementation exists anywhere; genuine from-scratch DSP.
-39. **Velune** — Resolve the hide-vs-grey discrepancy on the local-track
+37. **Velune** — Resolve the hide-vs-grey discrepancy on the local-track
     video toggle. Confirm intended treatment before changing anything.
-40. **Velune** — On-device EQ/DSP verification pass. The largest standing
+38. **Velune** — On-device EQ/DSP verification pass. The largest standing
     gap: nothing EQ/DSP-related has ever run on a real phone.
+39. **A5** — Reproducibility: give every out-of-band live function a
+    committed migration, and resolve the 027/029 numbering gaps.
+40. **A6** — After 025/026/034 land: re-verify the whole listener payout
+    chain end-to-end (stream → earnings → request → disburse → B-Pay
+    ledger), since it has never been confirmed working as a whole.
 
 ---
 
@@ -321,6 +397,75 @@ correct key will keep looking like a broken one.
   actual secret names.
 - **A3b** — Rename/re-register so names match reads; re-verify an
   authenticated request end-to-end.
+
+#### A3 RESOLVED (2026-10-15) — the exact names to register
+
+**Root cause of the mismatch: the registered names do not match what
+either codebase reads.** There are two independent problems — a typo,
+and a naming convention clash — and neither codebase is at fault.
+
+What the code actually reads (verified by grepping both repos, not from
+memory):
+
+| Read by | Variable | Count |
+|---|---|---|
+| Velune (`app/build.gradle.kts:121-129`) | `SUPABASE_URL` | 7 |
+| Velune | `SUPABASE_ANON_KEY` | 5 |
+| mavins-web | `NEXT_PUBLIC_SUPABASE_URL` | 26 |
+| mavins-web | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 21 |
+| mavins-web | `SUPABASE_SERVICE_ROLE_KEY` | 7 |
+
+What is currently registered, and why it fails:
+
+| Registered | Problem |
+|---|---|
+| `SUPABASE_URL` | **Correct.** Matches Velune. mavins-web still needs the `NEXT_PUBLIC_` twin. |
+| `SUPABASE_PUBLIC_KEY` | **No code reads this.** Velune wants `SUPABASE_ANON_KEY`; mavins-web wants `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
+| `SUPABASE_SECRETE_KEY` | **Two problems.** Misspelled (`SECRETE` → `SECRET`), *and* no code reads this name — mavins-web wants `SUPABASE_SERVICE_ROLE_KEY`. |
+
+**Register these six names.** The values are the same two keys repeated
+under each name the code expects — that redundancy is what makes both
+repos work without editing either one:
+
+| Name to register | Value | Needed by |
+|---|---|---|
+| `SUPABASE_URL` | project URL | Velune |
+| `NEXT_PUBLIC_SUPABASE_URL` | **same** project URL | mavins-web |
+| `SUPABASE_ANON_KEY` | anon / publishable key | Velune |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **same** anon key | mavins-web |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key | mavins-web (server only) |
+| `NEXT_PUBLIC_APP_URL` | site origin, e.g. `http://localhost:3000` | mavins-web |
+
+Plus, to unblock §A4 (migrations) — **one** of these, whichever you
+prefer; the next session will look for both:
+
+| Name to register | Value |
+|---|---|
+| `SUPABASE_DB_PASSWORD` | the Postgres password, or a full `postgresql://` URI |
+
+**Notes that matter:**
+- `SUPABASE_SECRETE_KEY` is misspelled. Fix it to `SUPABASE_SECRET_KEY`
+  *or* delete it — but note that **neither spelling is read by any
+  code**. It only ever worked for manual REST probing. Renaming it to
+  `SUPABASE_SERVICE_ROLE_KEY` is the change that actually matters.
+- The anon key is **safe** to expose to the browser and is expected in a
+  `NEXT_PUBLIC_` variable. The service_role key is **not** — it bypasses
+  RLS. Keep it server-side only. All 7 current uses in mavins-web are in
+  `src/app/api/**` route handlers or `src/lib/supabase/admin.ts`, which
+  is correct; do not add `NEXT_PUBLIC_` to it.
+- `.env*` is gitignored in mavins-web (`.gitignore:34`), so none of this
+  belongs in the repo. Velune reads the same values from
+  `local.properties` (also untracked) or the environment.
+- **Do not rename to match the Supabase dashboard's newer vocabulary.**
+  The dashboard may now label these "publishable key" and "secret key";
+  the code still reads the names above, so register under the names
+  above.
+
+- **A3a** — *done* — enumeration complete, table above.
+- **A3b** — Register the six names above; then load `/earn` and confirm
+  it no longer fails on a missing key. (It will still 500 until §A1's
+  migration 025 is applied — those are two separate faults, and fixing
+  the names will not fix the 500 on its own.)
 
 ### A4. There is no working path to run DDL against the live database
 **Established this session by direct test, not assumption.** Applying a
