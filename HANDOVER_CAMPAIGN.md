@@ -3,6 +3,71 @@
 > **▶ START HERE — read this box only, then go to §8 below for the
 > real next work. Skip the rest unless you get stuck.**
 >
+> **Newest note (2026-10-15) — new consolidated cross-repo Todo list
+> (`TODO.md`, repo root), and a direct answer to "can the campaign card
+> read Spotify links?".**
+>
+> `TODO.md` at this repo's root is a new consolidated work list across
+> Velune / mavins-web / B-Pay-backend. It is a companion to this file,
+> not a replacement. The same `TODO.md` is committed in mavins-web. Its
+> §B is the Spotify write-up summarised below; its §A is a live-DB
+> blocker that also affects this repo's campaign reads.
+>
+> **The Spotify question, answered directly.** "Can the campaign card
+> read Spotify links?" — **the capability already exists in this repo,
+> and this is not a port job.** §36 below excludes Spotify rows from the
+> queue-slot RPC deliberately, and the current `main` tip (`b453a02`,
+> "Restrict queue-slot RPC to YouTube-playable campaigns only") encodes
+> that intent. But `spotify/SpotifyMapper.kt` already does
+> Spotify-track → YouTube search (`YouTube.search` with
+> `FILTER_SONG`) and returns a playable `SongItem`, and
+> `spotify/SpotifyAuth.kt` already obtains tokens via `sp_dc` + TOTP.
+> There is **no Spotify playback SDK in this app** — playback is
+> YouTube-backed plus local media — so "playable" necessarily means
+> "resolved to a YouTube video", which is exactly what `SpotifyMapper`
+> already does for playlist import.
+>
+> **`Zapier-codes/SpotiFLAC-Mobile` was cloned and read: do not port
+> it.** It is Flutter/Dart plus a Go backend, so none of it is directly
+> reusable in Kotlin — but more importantly its actual resolution
+> mechanism no longer works. It resolves Spotify → YouTube through
+> `api.song.link`; tested live, that endpoint now returns **HTTP 401
+> without an API key**, and the public `song.link` page for a track
+> returns **no YouTube URL at all**. The one thing worth borrowing is
+> Spotify's **oEmbed** endpoint
+> (`https://open.spotify.com/oembed?url=...`), which returns title +
+> thumbnail unauthenticated (200 for tracks and artists).
+>
+> **The real blocker is the data, not the code.** Of 380
+> `track_campaigns` rows, **379 are `open.spotify.com/artist/...` and
+> only 1 is YouTube-shaped**. Those artist IDs are fabricated:
+> `supabase/migrations/20260831000024_seed_user_campaigns.sql` (in
+> mavins-web) builds them as
+> `'https://open.spotify.com/artist/' || seed_record.id::TEXT` — the
+> artist's internal UUID, not a real Spotify ID. Spot-checked against
+> Spotify's own oEmbed: Central Cee's stored
+> `1Cd373x9fTEKCKjpKK0JXZ` → **404**, while the real
+> `5H4yInM5zmHqpKIoMNAx4r` → 200. Of 20 distinct sampled IDs, 7 resolved
+> and 12 did not. The seed row prefers
+> `COALESCE(spotify_url, youtube_url, ...)`, so it picks the broken
+> Spotify value even though a **valid `youtube_url` already exists on
+> the same user row** — which may be the cheapest fix available.
+>
+> **So: fix the data (and/or reorder that `COALESCE`), add a Spotify
+> branch to `CampaignUrlResolver` fed by oEmbed + the existing
+> `SpotifyMapper` search, and relax §36's URL-shape filter to gate on
+> `resolved_song_id is not null` instead of on the URL looking like
+> YouTube** — that keeps §36's original intent (never hand the app
+> something it cannot play) while removing the blanket Spotify
+> exclusion. Full part-by-part split is `TODO.md` §B4.
+>
+> **Also relevant to this repo: mavins-web's live Supabase is stuck at
+> migration ~023.** `get_live_campaigns_for_banner` (025) and
+> `ensure_device_listener` (028) return `PGRST202` — not in the schema
+> cache. `CampaignRepository` calls `ensure_device_listener` directly
+> (line ~640), so that call cannot succeed today regardless of anything
+> in this app's own code. See `TODO.md` §A1.
+>
 > **Newest note (2026-09-06, latest of all) — §36: §35's RPC deployed
 > fine, but its eligibility filter had no YouTube-only check —
 > smoke-tested and it picked a real Spotify-linked campaign, which the
