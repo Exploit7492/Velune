@@ -74,24 +74,27 @@ at task 1.**
   `25ba6212ebf7800d389822ded84374ff2124246c`). Edit one, copy to the
   other, push both — that is the convention.
 
-**The one thing blocking Phase 1:** there is no route to run DDL against
-the live DB. PostgREST cannot, under any key. A direct Postgres
-connection **is** reachable — session pooler,
+**The one thing that was blocking Phase 1:** there was no route to run
+DDL against the live DB. PostgREST cannot, under any key. A direct
+Postgres connection **is** reachable — session pooler,
 `aws-0-eu-west-1.pooler.supabase.com`, user
-`postgres.atojskxrxfsbpeefigtm` — but the **database password** was
-missing from the secret store. The product owner has now added a
-PostgreSQL secret; **the first job of the next session is to find which
-env-var name it is registered under and confirm it connects.** See §A4
-for the exact matrix of what was tried and what each failure means.
+`postgres.atojskxrxfsbpeefigtm`. The product owner has now registered a
+**full PostgreSQL connection secret**; **the first job of the next
+session is to discover which env-var name it is registered under, then
+connect and apply the migrations.** See §A4 for the matrix of what was
+tried and what each failure mode means. Note `db.<ref>.supabase.co` does
+**not** resolve from this sandbox (IPv6-only) — use the pooler.
 
-**Secret names — resolved, §A3 has the full table.** The mismatches were
-a typo plus a naming-convention clash, not a code fault. Register:
-`SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` (same value),
-`SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same value),
+**Secret names — §A3 has the full table.** The mismatch was a typo plus
+a naming-convention clash, not a code fault. Register: `SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_URL` (same value), `SUPABASE_ANON_KEY`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` (same value),
 `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`. The existing
 `SUPABASE_SECRETE_KEY` is misspelled *and* unread by any code — it never
-worked except for manual probing. Add `SUPABASE_DB_PASSWORD` for the
-migrations. Do not commit any of it; `.env*` is gitignored.
+worked except for manual probing. **The `NEXT_PUBLIC_` twins are not
+optional duplication:** they are inlined at build time, so the exact
+names must exist when Next.js builds, and `next.config.mjs` has no
+`env:` alias. Do not commit any of it; `.env*` is gitignored.
 
 **Tooling:** `tools/probe_rpc_existence.py` is committed in mavins-web.
 Run it before believing any "this RPC is missing" claim.
@@ -444,6 +447,22 @@ prefer; the next session will look for both:
 | `SUPABASE_DB_PASSWORD` | the Postgres password, or a full `postgresql://` URI |
 
 **Notes that matter:**
+- **The `NEXT_PUBLIC_` twins cannot be skipped, even though the values
+  are identical.** `NEXT_PUBLIC_*` is a Next.js *build-time* convention:
+  the literal value is inlined into the client bundle at build, and a
+  reference to a name that did not exist at build time is inlined as
+  `undefined` — with no error. So `NEXT_PUBLIC_SUPABASE_URL` must be set
+  under that exact name *at build time*, independently of
+  `SUPABASE_URL`. `next.config.mjs` does **not** define an `env:` block,
+  so there is no alias in place. Two options:
+  (a) register both names — two entries, zero risk, **preferred**; or
+  (b) add `env: { NEXT_PUBLIC_SUPABASE_URL: process.env.SUPABASE_URL, … }`
+  to `next.config.mjs` and register only the unprefixed names. (b) is a
+  code change that must be done *before* the next build, and is not worth
+  the risk purely to avoid two duplicate entries.
+  Note the asymmetry: `SUPABASE_SERVICE_ROLE_KEY` is read only
+  server-side and is **not** a `NEXT_PUBLIC_` variable, so it genuinely
+  needs only one name.
 - `SUPABASE_SECRETE_KEY` is misspelled. Fix it to `SUPABASE_SECRET_KEY`
   *or* delete it — but note that **neither spelling is read by any
   code**. It only ever worked for manual REST probing. Renaming it to
