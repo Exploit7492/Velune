@@ -50,6 +50,49 @@ genuinely-missing migrations".)
 
 ---
 
+> **SESSION 2026-10-15 (third) — status, all verified live.**
+>
+> - **Task 7b (A5b) — ✅ DONE.** `public.points_history` created and
+>   applied as **migration 045**
+>   (`mavins-web/supabase_migration_045_points_history.sql`). Verified
+>   inside a rolled-back transaction: `award_points(<uuid>, 5, 'probe',
+>   'probe')` returns `5`, `users.points` moves 0→5, and the matching
+>   `points_history` row is written — the `42P01` runtime failure is
+>   gone. Idempotent (re-run is a clean no-op). RLS enabled with
+>   own-row SELECT/INSERT policies matching `user_listening_history`;
+>   verified an anon-key insert is rejected `42501` while
+>   `service_role` passes RLS. The shape is not a design decision — it
+>   is fixed by the four live call sites (see the migration's own
+>   header).
+> - **§H — a new finding that changes the fix's shape.** The live queue
+>   RPC is **not** migration 023's genre-locked version; it is the
+>   later §35/§36 rewrite (`p_genre text default null`, returns
+>   `id/source_url/resolved_song_id`, rotation on
+>   `track_campaigns.last_served_at`). The "falls through to the
+>   unscoped path" behaviour is **not** in that SQL — it is
+>   **client-side**. `CampaignInjectedQueue`'s provider passes
+>   `GenreTileMappingCache.resolveGenreId(...)`'s result, which is
+>   `null` whenever the mapping table has no reviewed row for that
+>   tile, and `null` p_genre means "match any genre" in the RPC. Live,
+>   **`campaign_genre_tile_mapping` (migration 024) does not exist** —
+>   so `fetchGenreTileMapping()` fails, the cache stays empty, every
+>   genre-tile lookup returns `null`, and **every** queue is
+>   effectively unscoped. That is the real mechanism behind "an R&B
+>   listener is served Hip-Hop", and it sits *upstream* of the 14-vs-136
+>   vocabulary mismatch: that mismatch is real (only **6 of 381**
+>   campaign rows match a canonical genre exactly) but is currently
+>   *unreachable*, because no non-null genre ever reaches the RPC. Fix
+>   order matters — see the corrected §H5.
+> - **Push blocked.** This session's `GITHUB_TOKEN` is a GitHub App
+>   user-to-server token (`ghu_`, empty `x-oauth-scopes`): reads return
+>   200, but `git push` and every write endpoint return 403. The three
+>   stranded commits were recovered from the bundles and fast-forward
+>   cleanly (Velune `eac4ed6`, mavins-web `2f11804`), and migration 045
+>   is committed locally, but **nothing could be pushed**. See
+>   `NEXT_SESSION_PROMPT.md`.
+
+---
+
 ## NEXT 40 TASKS — ordered work queue
 
 Ordered by dependency, not by appeal. Phases 1 and 2 unblock everything
@@ -304,19 +347,25 @@ priority after the data work.
    migration, and the 027/029 numbering gaps. *Done when:* either every
    live function has a committed definition, or the gap is documented as
    accepted. This is what makes the DB reproducible at all.
-7b. **A5b (new, 2026-10-15 second session)** — **Create the missing
-   `public.points_history` table.** `award_points` (026) is live but
-   fails with `42P01` because this table does not exist anywhere in
-   either repo's migrations and is genuinely absent live. Its shape is
-   already fixed by live code, so it is **not** a design decision:
-   `user_id uuid`, `amount integer`, `type text`, `description text`,
-   `created_at timestamptz` — exactly the columns
-   `gamification/tasks/claim/route.ts` inserts and
-   `gamification/points/history/route.ts` / `usePointsHistory.ts` read.
-   Add an `id uuid default gen_random_uuid()` and index `user_id`.
-   *Done when:* `select award_points(<real uuid>, 5, 'probe')` succeeds
-   and a row appears in `points_history`. **Left undone deliberately** —
-   the session's instruction was "apply exactly three migrations".
+7b. **A5b (new, 2026-10-15 second session)** — ✅ **DONE
+   2026-10-15 (third session).** `public.points_history` created as
+   **migration 045** and applied live. Verified by calling
+   `award_points(<real uuid>, 5, 'probe', 'probe')` inside a
+   rolled-back transaction: returns `5`, `users.points` 0→5, and a row
+   appears in `points_history` — the `42P01` is gone. Idempotent; RLS
+   own-row policies match `user_listening_history`; anon-key insert is
+   rejected `42501` (verified), `service_role` passes RLS (verified).
+   Shape taken from the four live call sites, not invented:
+   `user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE`,
+   `amount integer NOT NULL` (**not** positive-constrained — the
+   withdrawal path inserts a negative amount), `type text NOT NULL`
+   (deliberately **not** a CHECK enum: live call sites already use six
+   distinct values and it is an open-ended activity log — adding an
+   enum here is how `award_points` would break a second time),
+   `description text`, `created_at timestamptz NOT NULL DEFAULT now()`,
+   `id uuid PRIMARY KEY DEFAULT gen_random_uuid()` (pgcrypto already
+   present live), plus `idx_points_history_user_created
+   (user_id, created_at DESC)` matching the route's only read query.
 
 
 
@@ -1232,6 +1281,64 @@ Recorded so nothing here is mistaken for a stronger claim than it is:
 
 ## H. Genre-targeted queue slots serve the wrong genre — CONFIRMED, needs a migration
 
+> ### ⚠️ CORRECTION (2026-10-15, third session) — the mechanism below is real but **not** the live one
+>
+> The root cause described in H1 is a genuine defect in the *schema*, but
+> it is **not what is producing the live symptom today**, and it cannot
+> be, because no non-null genre ever reaches the RPC. Two findings,
+> both verified live this session:
+>
+> **1. The live RPC is not migration 023's version.** `pg_get_functiondef`
+> returns the later §35/§36 rewrite, not 023's genre-locked function:
+>
+> | | migration 023 (in the repo) | **live** (§35/§36) |
+> |---|---|---|
+> | signature | `p_genre TEXT` (**required**) | `p_genre text DEFAULT NULL` |
+> | null genre | **fail-closed** — `RETURN` immediately | **matches every campaign** |
+> | returns | 8 columns | `id, source_url, resolved_song_id` |
+> | rotation column | `last_queue_slot_at` | `last_served_at` |
+>
+> `track_campaigns.last_queue_slot_at` (added by 023) **does not exist**
+> live; only `last_served_at` does. So migration 023 was superseded and
+> the live function has *no* "fail closed on a null genre" rule at all —
+> `p_genre is null` is an explicit match-anything branch.
+>
+> **2. The fall-through is client-side, and the mapping table does not
+> exist.** `MusicService.kt` passes
+> `GenreTileMappingCache.resolveGenreId(queue.genre)`. That returns
+> `null` whenever the tile has no *reviewed* row in
+> `campaign_genre_tile_mapping` — including the case where the table is
+> simply missing, since `fetchGenreTileMapping()` treats any failure as
+> an empty map and caches it. **`campaign_genre_tile_mapping` (migration
+> 024) does not exist live**, so that map is always empty, every tile
+> lookup returns `null`, and every queue — genre-tile or not — sends
+> `p_genre = null`, which the RPC answers with *any* eligible campaign.
+>
+> **So the true sequence is:** missing table → empty mapping cache →
+> `resolveGenreId` returns `null` → `p_genre = null` → RPC's
+> match-anything branch → an R&B tile can be served Hip-Hop.
+>
+> **Why this reorders the fix.** H3's canonical-taxonomy work is still
+> correct and still needed — the 14-vs-136 mismatch is real (only **6 of
+> 381** campaign rows match a canonical genre exactly, so even a
+> correctly-passed genre would miss). But building it *first* would be
+> invisible: the RPC would still receive `null` every time. The
+> dependency runs the other way, so the order is: **(a)** restore the
+> mapping table (024), **(b)** fix the client so a `null` genre is never
+> silently equivalent to "any genre", **(c)** *then* the canonical
+> taxonomy + mapping tables, which is what makes a *non-null* genre
+> actually match. H4's product decision is unchanged and still required
+> — it is (b)'s answer — but note the decision now has a sharper
+> framing: today the product *already* has "serve anything" behaviour
+> by accident, so both H4 options are a change from the status quo, and
+> the strict option is the only one that satisfies the stated
+> requirement literally.
+>
+> **Also note:** `get_trending_campaigns` (the home banner) has the
+> identical `p_genre = ANY(target_genres)` exact-match and the identical
+> null-means-any behaviour, so it shares this defect. `fetchActiveCampaigns`
+> passes no genre at all, so the banner is unscoped by construction.
+
 **Status: not started. Confirmed against live data this session.** This
 is the product-owner's "a listener who loves R&B or Soul must not be
 served Hip-Hop in their queue slot" requirement, and it is currently
@@ -1325,6 +1432,24 @@ mechanical once that is decided.
 
 ### H5. Tasks
 
+> **Reordered 2026-10-15 (third session)** — H5a0/H5b0 must land first or
+> the rest is invisible; see the correction box at the top of §H.
+> H5a0 restores migration 024 (whose table is **absent** live), and H5b0
+> makes a `null` genre stop meaning "any genre". H5a/H5b/H5d then become
+> the canonical-taxonomy work exactly as originally written. H5c is still
+> the H4 product decision and is still blocked on the user.
+
+- **H5a0 (new, first)** — Apply migration 024
+  (`campaign_genre_tile_mapping`). Its absence is what makes every genre
+  lookup return `null`. Idempotent (`CREATE TABLE IF NOT EXISTS`), pure
+  addition.
+- **H5b0 (new, second)** — Stop a missing/unreviewed tile mapping from
+  degrading silently into "any genre". Two candidate shapes, to be
+  chosen with H4: either the RPC fails closed on `p_genre is null` (the
+  pre-§35 behaviour, which the client's doc comments already assume), or
+  the client stops sending `null` for a genre-tile queue and treats "no
+  mapping" as "no injection". Note the live RPC's current null-means-any
+  branch is what makes the leak possible at all.
 - **H5a** — Add `campaign_genres` and `user_genres`, backfilled from
   the existing compound strings. Idempotent, and a pure addition: no
   existing column changes, so it cannot break the current (broken but
