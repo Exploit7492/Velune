@@ -65,43 +65,52 @@ object GenreTileMappingCache {
     private var lastFetchedAtMs: Long = 0L
 
     /**
-     * Resolves a genre-tile title (e.g. the exact string shown on a
-     * YouTube Music mood/genre tile) to a confirmed genre id for
-     * campaign targeting, or `null`.
+     * What a genre-tile tap should send to
+     * [CampaignRepository.fetchNextCampaignForQueueSlot], or `null` when
+     * there is genuinely no genre context.
      *
-     * Three distinct cases, per [CampaignRepository.fetchGenreTileMapping]'s
-     * own documented map shape:
-     * 1. **Tile known, mapped to a real genre id** — returns that id.
-     * 2. **Tile known, explicitly reviewed as NOT a genre** (a mood/
-     *    charts/etc. tile an admin has confirmed isn't genre-target-able)
-     *    — the cached value is a real `null` for a present key; returns
-     *    `null`, no ingest call (it's already been reviewed, nothing to
-     *    flag for review again).
-     * 3. **Tile not in the map at all** — unreviewed/unknown. Fires
-     *    [CampaignRepository.ingestGenreTile] (fire-and-forget, per that
-     *    function's own contract) so an admin can review it later, and
-     *    returns `null` for *this* call regardless — there is no
-     *    confirmed mapping yet, so nothing to inject this time either
-     *    way. This is the "ingest at lookup-miss time, not at tap time"
-     *    behavior Round 12 flagged as the resolved design question: a
-     *    tile only gets reported when a real campaign-injection slot
-     *    actually needs it, not on every browse regardless of whether a
-     *    campaign slot is ever reached.
+     * The distinction this function exists to preserve:
      *
-     * @param tileTitle The exact genre-tile title string, expected to be
-     *   `Queue.genre` (see [com.nikhil.yt.playback.queues.Queue]'s own
-     *   `genre` property, added Round 12) once a real caller in
-     *   `MusicService.kt` is wired up to pass it — not yet, as of this
-     *   round.
+     * * **No genre context** (search, album, playlist, artist radio,
+     *   autoplay — `queue.genre` is null). Never reaches this function;
+     *   the caller sends `null` and the RPC reads it as "any eligible
+     *   campaign". Campaign injection is a monetization slot that belongs
+     *   on every one of these (§33).
+     * * **Genre context, resolved** (the tile has a reviewed mapping).
+     *   Returns that canonical genre id.
+     * * **Genre context, unresolved** (tile unseen or not yet reviewed).
+     *   Returns the **raw tile title**, never `null`. Fires
+     *   [CampaignRepository.ingestGenreTile] fire-and-forget so the tile
+     *   reaches an admin for review.
+     * * **Genre context, reviewed as a mood** (present key, null value —
+     *   an admin confirmed this tile is not genre-targetable). Returns
+     *   `null`, deliberately: there is no genre promise to keep, so the
+     *   slot behaves like an unscoped queue.
+     *
+     * The third case is the §H fix. Returning `null` there is what let an
+     * R&B tile be served Hip-Hop: the tile had no reviewed mapping, so the
+     * client sent null, and the RPC's null branch means "match any genre".
+     * A genre-scoped slot must never widen to the whole catalogue. Sending
+     * the raw title instead lets the server resolve it against the
+     * canonical taxonomy, and the server fails closed if it cannot — which
+     * is a deliberate no-campaign slot, not a wrong-genre one.
+     *
+     * The tile title is the right thing to send rather than a client-side
+     * guess: it is the same string the server's own resolver reads, so the
+     * mapping stays a data decision on one side of the wire.
      */
-    suspend fun resolveGenreId(tileTitle: String): String? {
+    suspend fun resolveTile(tileTitle: String): String? {
         ensureFresh()
 
         if (!cachedMapping.containsKey(tileTitle)) {
             repository.ingestGenreTile(tileTitle)
-            return null
+            return tileTitle
         }
 
+        // A present key with a null value is an admin's reviewed,
+        // deliberate "this tile is a mood, not a genre" decision. There is
+        // no genre promise to keep, so the slot behaves like any other
+        // unscoped queue and the RPC's match-any branch is correct here.
         return cachedMapping[tileTitle]
     }
 

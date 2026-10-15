@@ -26,10 +26,20 @@ interface Queue {
     // LocalAlbumRadio, YouTubeAlbumRadio, EmptyQueue,
     // CampaignInjectedQueue) inherits `null` for free, zero changes
     // required to any of them except the one (YouTubeQueue) that a
-    // genre-tile tap can actually construct. `null` here is the
-    // correct fail-closed default for every queue not explicitly
-    // genre-tagged -- exactly Task 59's own standing rule, satisfied
-    // structurally rather than by a caller remembering to check.
+    // genre-tile tap can actually construct.
+    //
+    // `null` means "this queue has no genre context" -- search results,
+    // albums, playlists, artist radio, autoplay. The RPC reads it as
+    // "any eligible campaign", which is correct: campaign injection is
+    // a monetization slot that belongs on every queue (§33).
+    //
+    // It does NOT mean "fail closed". §H was exactly that conflation: a
+    // genre-tile queue whose tile had no reviewed mapping also sent
+    // `null`, so the RPC widened to the whole catalogue and an R&B tile
+    // could be served Hip-Hop. A genre-tile queue must carry a concrete
+    // term; see [com.nikhil.yt.campaign.GenreTileMappingCache.resolveTile]
+    // for how the client guarantees that, and migration 046 for the
+    // server side, which fails closed on a term it cannot resolve.
     val genre: String? get() = null
 
     suspend fun getInitialStatus(): Status

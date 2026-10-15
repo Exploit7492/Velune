@@ -83,13 +83,88 @@ genuinely-missing migrations".)
 >   campaign rows match a canonical genre exactly) but is currently
 >   *unreachable*, because no non-null genre ever reaches the RPC. Fix
 >   order matters — see the corrected §H5.
-> - **Push blocked.** This session's `GITHUB_TOKEN` is a GitHub App
+> - **Push blocked — RESOLVED.** The blocker was a GitHub App
 >   user-to-server token (`ghu_`, empty `x-oauth-scopes`): reads return
->   200, but `git push` and every write endpoint return 403. The three
->   stranded commits were recovered from the bundles and fast-forward
->   cleanly (Velune `eac4ed6`, mavins-web `2f11804`), and migration 045
->   is committed locally, but **nothing could be pushed**. See
->   `NEXT_SESSION_PROMPT.md`.
+>   200, but every write endpoint returns 403. `GH_AUTH_TOKEN` is now
+>   registered and **is** a writable classic PAT (`ghp_`), so the three
+>   stranded commits (Velune `393a18f`, mavins-web `bda1ffe`) were pushed
+>   to `main` on 2026-10-15. `GITHUB_TOKEN` is still read-only — **push
+>   with `GH_AUTH_TOKEN`.** The previous handover's claim that
+>   `GH_AUTH_TOKEN` does not exist is now wrong.
+
+---
+
+### ▶ §H IS FIXED — state at end of the 2026-10-15 (fourth) session
+
+**Migration 046 is applied live and verified.** `mavins-web/
+supabase_migration_046_genre_taxonomy.sql`. §H's genre leak is closed, and
+the fix is data-driven rather than hardcoded.
+
+**The mechanism, corrected once more.** `Queue.genre` is `get() = null` in
+the interface and `YouTubeQueue` defaults its override to `null` too — so
+in practice **every** queue sent `p_genre = null` today, and the live RPC's
+null branch matches any campaign. The genre-tile wiring existed but was
+inert. That is the whole leak: not a fall-through after a miss, but no
+genre ever being sent at all.
+
+**What 046 adds** (all new tables, no existing column, policy or signature
+changed; both RPCs keep their exact signatures and return shapes, so no
+client change was required for correctness):
+
+| Object | Purpose |
+|---|---|
+| `genre_aliases` | free-text term → canonical genre; composite key so a hybrid maps to both |
+| `genre_adjacency` | the bounded fallback graph — **empty for R&B**, so strict by default |
+| `campaign_genres` | (campaign, canonical genre), trigger-maintained |
+| `user_genres` | (user, canonical genre), trigger-maintained |
+| `genre_resolution_queue` | every term that will not resolve — a worklist, not a silent drop |
+| `normalize_genre_term` / `genre_slug` / `genre_term_pattern` | normalization + word-boundary matching |
+| `resolve_genre_terms` / `resolve_genre_set` | the resolver: exact → alias → whole-word containment |
+| `sync_campaign_genres` / `sync_user_genres` + triggers | keeps the mapping current as data changes |
+
+**Nothing hardcodes the vocabulary.** The resolver reads `public.genres` and
+`public.genre_aliases` at query time. Verified live: inserting a new genre
+plus one alias row made a previously-unknown term resolve immediately, with
+no code change. Adding a genre or synonym is an INSERT.
+
+**The H4 policy, chosen as the industry-standard pair — strict by default,
+nearest-genre where declared.** `p_genre` resolves → serve only campaigns
+mapped to those genres **plus declared adjacent ones**. `p_genre` resolves
+to nothing → **serve nothing** (fail closed). `p_genre` is null → unchanged
+match-any, because injection is a monetization slot that belongs on every
+non-genre queue (§33). `genre_adjacency` ships with two same-family pairs
+(Hip-Hop↔Drill, Afrobeats↔Afro-fusion) and **nothing touching R&B**, so
+"never show Hip-Hop to an R&B listener" holds literally. Enabling
+nearest-genre for a pair is one INSERT by the product owner.
+
+**Verified live, 2026-10-15:**
+
+* 381/381 campaigns mapped to ≥1 canonical genre; 0 unresolved terms.
+* 40 consecutive R&B slot picks: every row mapped to R&B; **0 Hip-Hop-only
+  leaks**.
+* Unresolvable terms (`'Neon Genre'`, `'Chill'`) → **no rows**. Null → a row.
+* Real genre tiles (`R&B`, `Hip-Hop`, `K-Pop`, `Rock`, `Jazz`) resolve and
+  serve; real mood tiles (`Chill`, `Workout`, `Focus`, `Party`) fail closed
+  instead of serving an arbitrary genre.
+* Both RPCs verified through **PostgREST with the anon key** — the exact
+  path the app calls.
+* Idempotent: re-running the whole file is a clean no-op.
+
+**Client half.** `GenreTileMappingCache.resolveTile` replaces
+`resolveGenreId`: an unresolved tile now returns its **raw title** (which the
+server resolves) instead of `null`, and only a tile an admin has explicitly
+reviewed as a mood returns `null`. `MusicService` calls it; `Queue.genre`'s
+contract comment was corrected — `null` means "no genre context", not
+"fail closed".
+
+**Migration 024 was deliberately not applied.** Its table stays empty
+without admin review, and the resolver now maps tiles by title, so 024 is
+orthogonal to the leak. It remains a pure addition if the curated-tile
+override is wanted later.
+
+**Remaining for §H:** nothing blocking. H5d is now data curation, not code —
+see `genre_resolution_queue` and `tools/genre_report.py`, which prints the
+unresolved worklist and the reviewed tile titles.
 
 ---
 
@@ -1430,37 +1505,47 @@ product owner's answer before the migration is written**, so it is
 recorded here rather than implemented. Everything else in H3 is
 mechanical once that is decided.
 
-### H5. Tasks
+### H5. Tasks — ✅ ALL DONE (2026-10-15, fourth session), migration 046
 
-> **Reordered 2026-10-15 (third session)** — H5a0/H5b0 must land first or
-> the rest is invisible; see the correction box at the top of §H.
-> H5a0 restores migration 024 (whose table is **absent** live), and H5b0
-> makes a `null` genre stop meaning "any genre". H5a/H5b/H5d then become
-> the canonical-taxonomy work exactly as originally written. H5c is still
-> the H4 product decision and is still blocked on the user.
+> **Closed by migration 046**, applied live and verified. One correction to
+> the plan below: H5a0 was **not** the fix. Migration 024's table stays
+> empty without admin review, so restoring it would have changed nothing;
+> and the resolver now maps a tile by its raw title, which makes 024
+> orthogonal rather than prerequisite. **024 is deliberately still
+> unapplied.** H5b0 and H5c are the two that actually closed the leak, and
+> both landed server-side in 046, so no client change was required for
+> correctness. See the box at the top of §H for the verified results.
 
-- **H5a0 (new, first)** — Apply migration 024
-  (`campaign_genre_tile_mapping`). Its absence is what makes every genre
-  lookup return `null`. Idempotent (`CREATE TABLE IF NOT EXISTS`), pure
-  addition.
-- **H5b0 (new, second)** — Stop a missing/unreviewed tile mapping from
-  degrading silently into "any genre". Two candidate shapes, to be
-  chosen with H4: either the RPC fails closed on `p_genre is null` (the
-  pre-§35 behaviour, which the client's doc comments already assume), or
-  the client stops sending `null` for a genre-tile queue and treats "no
-  mapping" as "no injection". Note the live RPC's current null-means-any
-  branch is what makes the leak possible at all.
-- **H5a** — Add `campaign_genres` and `user_genres`, backfilled from
-  the existing compound strings. Idempotent, and a pure addition: no
-  existing column changes, so it cannot break the current (broken but
-  working) behaviour while it lands.
-- **H5b** — Rewrite the queue filter to join through the mapping.
-  **Do not delete the `resolved_song_id`/YouTube eligibility condition**
-  — that is §36's separate, still-valid "never hand the app something
-  it cannot play" guard (task 9/B4c).
-- **H5c** — Implement the H4 decision for the empty-match case.
-- **H5d** — Reconcile the vocabulary: the 136 compound strings contain
-  fragments with no canonical home (e.g. `'Corridos Tumbados'`,
-  `'Zanku'`, `'OPM'`). Either extend `public.genres` or map them onto
-  the nearest canonical genre — a reviewable data decision, not a code
-  one.
+- ~~**H5a0 (new, first)** — Apply migration 024~~ — **SKIPPED, deliberately.**
+  Its absence is real but not causal once the resolver maps tiles by title.
+  ⁠Left as an optional curated-tile override.
+- **H5b0 (new, second)** — ✅ DONE in 046. The RPC now fails closed on a
+  genre it cannot resolve. Note the shape actually chosen is narrower than
+  the plan's: `p_genre is null` still means "match any", because injection
+  is a monetization slot that belongs on every non-genre queue (§33). What
+  changed is that a **requested but unresolvable** genre no longer degrades
+  into that branch — the client sends the raw tile title instead of `null`,
+  and the server returns nothing when it cannot resolve it.
+- **H5a** — ✅ DONE in 046. `campaign_genres` + `user_genres`, backfilled
+  (381/381 campaigns mapped) and **trigger-maintained**, so they cannot go
+  stale as `target_genres` changes. `genre_aliases` holds the term→genre
+  map; `genre_resolution_queue` holds what will not resolve.
+- **H5b** — ✅ DONE in 046. Both RPCs join through `campaign_genres`. The
+  `resolved_song_id`/YouTube eligibility condition is **preserved verbatim**
+  — §36's "never hand the app something it cannot play" guard (task 9/B4c).
+- **H5c** — ✅ DONE in 046, and the H4 decision is now **data, not code**.
+  Strict by default (fail closed); `genre_adjacency` declares the bounded
+  nearest-genre exceptions and ships empty for R&B, so "never show Hip-Hop
+  to an R&B listener" holds literally. Widening a pair is one INSERT.
+- **H5d** — ✅ DONE for the live vocabulary: all 137 compound strings now
+  resolve (0 unresolved). 67 alias rows + whole-word containment did the
+  work, so `public.genres` was **not** extended — that keeps the 14-genre
+  canonical set stable for the browse UI while still placing every granular
+  tag. `'Corridos Tumbados'`/`'Zanku'`/`'OPM'` map onto Pop/Afrobeats/Pop.
+  Future gaps appear in `genre_resolution_queue`; `tools/genre_report.py`
+  prints the worklist. **Ongoing curation, not a code task.**
+- **H5e (new)** — Optional, not blocking: seed `campaign_genre_tile_mapping`
+  with the real YouTube Music mood/genre tile titles, or leave every tile to
+  the server resolver. Verified behaviour either way: genre tiles resolve and
+  serve, mood tiles fail closed.
+

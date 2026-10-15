@@ -1570,23 +1570,33 @@ class MusicService :
         // Campaign injection is a monetization slot, not a genre
         // feature — it belongs on every queue, unconditionally, the
         // way an ad break doesn't check what station you're on. So the
-        // gate is removed outright, not widened: [queueGenre] is still
-        // read and still passed through (a genre-tile queue keeps
-        // narrowing to its own genre via [GenreTileMappingCache]), but
-        // an absent genre no longer short-circuits the slot to `null`
-        // — it now reaches [com.nikhil.yt.campaign.CampaignRepository.fetchNextCampaignForQueueSlot]
-        // as a `null` genre, which asks the RPC for any eligible
-        // campaign regardless of genre (see that function's own doc
-        // comment for the exact contract, and its "requires an SQL
-        // change too" note — the current Supabase RPC still expects a
-        // non-null genre and needs its own null-check added server-side
-        // for this to take effect end-to-end).
+        // gate is removed outright, not widened: an absent genre
+        // reaches the RPC as a `null` genre and asks for any eligible
+        // campaign, while a genre-tile queue narrows to its own genre.
+        //
+        // §H — the server side now matches that contract. Migration 046
+        // rewrote the RPC so `p_genre is null` means "no genre context,
+        // match any" (this case) and a genre that cannot be resolved
+        // means "serve nothing" rather than widening to the whole
+        // catalogue. See [GenreTileMappingCache.resolveTile] for the
+        // client half of that split.
         val queueGenre = queue.genre
         val wrappedQueue = com.nikhil.yt.playback.queues.CampaignInjectedQueue(
             baseQueue = queue,
             campaignSlotProvider = {
-                val genreId = queueGenre?.let { com.nikhil.yt.campaign.GenreTileMappingCache.resolveGenreId(it) }
-                com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(genreId)
+                // §H — the two cases must stay distinct. A queue with no
+                // genre context (search, album, playlist, artist radio,
+                // autoplay) sends null and the RPC answers with any
+                // eligible campaign: injection is a monetization slot, not
+                // a genre feature (§33). A genre-tile queue sends a
+                // concrete term and the RPC confines the pick to that
+                // genre, failing closed if the term is unresolvable. The
+                // old code sent null for *both*, which is precisely how an
+                // R&B tile got served Hip-Hop.
+                val genre = queueGenre?.let {
+                    com.nikhil.yt.campaign.GenreTileMappingCache.resolveTile(it)
+                }
+                com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(genre)
             }
         )
         currentQueue = wrappedQueue

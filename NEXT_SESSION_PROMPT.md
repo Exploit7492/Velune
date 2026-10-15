@@ -4,166 +4,134 @@ Copy everything between the lines into the next session.
 
 ---
 
-You are resuming a multi-repo project (Velune + mavins-web). A previous
-session finished the database work and has the commits ready, but could
-not push because its GitHub token was read-only. Its commits and full
-handover are at a live URL.
+You are resuming a multi-repo project (Velune + mavins-web + B-Pay-backend).
+The previous session pushed all previously-stranded commits, closed TODO §H
+with a live migration, and left both repos clean on `main`. **There is
+nothing to recover and nothing to un-strand.** Do not go looking for a
+handover tarball, a bundle, a patch, or a stranded branch — those were
+consumed on 2026-10-15 and their contents are now in `main`.
 
-## STEP 0 — download and unpack the handover
+## STEP 0 — read the current state, do not replay history
 
 ```bash
 cd /workspace
-BASE=https://work-1-xkqswycqxlnnlnvt.prod-runtime.all-hands.dev
-curl -fsS -o handover.tar.gz.b64 "$BASE/handover.tar.gz.b64"
-curl -fsS -o SHA256SUMS "$BASE/SHA256SUMS"
-base64 -d handover.tar.gz.b64 > handover.tar.gz
-sha256sum -c SHA256SUMS          # expect: handover.tar.gz: OK
-mkdir -p handover && tar xzf handover.tar.gz -C handover
-cat handover/HANDOVER.md
+git -C Velune log --oneline -8
+git -C mavins-web log --oneline -8
+sed -n '1,200p' Velune/TODO.md     # the resume box and §H outcome are at the top
 ```
 
-The tarball contains `HANDOVER.md`, `NEXT_SESSION_PROMPT.md`, `TODO.md`,
-`Velune.bundle`, `mavins-web.bundle`, both `*-stranded.patch` fallbacks,
-and `supabase_migration_045_points_history.sql`.
+`Velune/TODO.md` and `mavins-web/TODO.md` are identical and are the
+authoritative state. Read the box at the top of §H before touching anything
+genre-related.
 
-`SHA256SUMS` is served as a **separate file** on purpose — the tarball
-cannot contain a checksum of itself.
+## STEP 1 — push with the right token
 
-If the URL is dead (sandbox recycled), ask the user to re-serve the
-files; they are the only copy of this session's unpushed commits.
+`GITHUB_TOKEN` is a **read-only** GitHub App user-to-server token (`ghu_`,
+empty `x-oauth-scopes`). Reads work; every write returns 403. This is not a
+broken secret — it is the wrong secret for pushing.
 
-## STEP 1 — verify the token before anything else
+**Push with `GH_AUTH_TOKEN`**, which is a writable classic PAT (`ghp_`).
+Probe it before relying on it:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Authorization: Bearer $GH_AUTH_TOKEN" \
   https://api.github.com/repos/Zapier-codes/Velune/git/blobs \
   -d '{"content":"probe","encoding":"utf-8"}'
+# 201 → writable, proceed.  403 → stop and ask the user to re-register it.
 ```
 
-* **201** → writable. Go to STEP 2.
-* **403** → still the read-only App token. **Stop and tell the user.**
-  See `handover/HANDOVER.md` §1 for the full diagnosis and the exact fix.
-  Short version: the token here is a `ghu_` GitHub App user-to-server
-  token with **empty `x-oauth-scopes`**; it reads fine and even reports
-  `permissions.push: true` on the repo object, but every write is
-  refused. A writable token is a classic PAT (`ghp_…`) or a fine-grained
-  PAT (`github_pat_…`). Ask the user to either set the `GITHUB_TOKEN`
-  secret's **value** to the PAT, or register it under a new name and tell
-  you that name. **`GH_AUTH_TOKEN` does not exist in this environment** —
-  it was searched for exhaustively and is not registered; do not go
-  looking for it.
-
-  If the user has already updated the secret and it still serves `ghu_`,
-  the platform is likely caching it — a **fresh conversation** is the
-  reliable way to pick up a changed secret, because secrets resolve at
-  session start.
-
-## STEP 2 — push (only once STEP 1 returns 201)
-
-Everything is already committed. Nothing needs rebuilding, re-applying,
-or re-committing.
+Then, per repo:
 
 ```bash
-cd /workspace
-git clone https://github.com/Zapier-codes/Velune.git Velune
-cd Velune
-git fetch /workspace/handover/Velune.bundle 'refs/heads/main:refs/heads/stranded'
-git merge --ff-only stranded
+cd /workspace/Velune
 git config user.name openhands && git config user.email openhands@all-hands.dev
-gh auth setup-git
+GIT_REMOTE=$(git remote get-url origin)          # intentionally tokenless
+git remote set-url origin "https://x-access-token:${GH_AUTH_TOKEN}@github.com/Zapier-codes/Velune.git"
 GIT_TERMINAL_PROMPT=0 git push origin main
-
-cd /workspace
-git clone https://github.com/Zapier-codes/mavins-web.git mavins-web
-cd mavins-web
-git fetch /workspace/handover/mavins-web.bundle 'refs/heads/main:refs/heads/stranded'
-git merge --ff-only stranded
-git config user.name openhands && git config user.email openhands@all-hands.dev
-gh auth setup-git
-GIT_TERMINAL_PROMPT=0 git push origin main
+git remote set-url origin "$GIT_REMOTE"          # restore the tokenless remote
 ```
 
-Both are clean fast-forwards (verified: behind 0). The bundles are
-**incremental**, so clone first then fetch the bundle — a bare
-`git clone Velune.bundle` fails with "Repository lacks these prerequisite
-commits". That is expected, not corruption.
+Same for `mavins-web`. **Do not leave a token in `.git/config`** — restore
+the tokenless remote immediately after pushing, as shown.
 
-Fallback if a bundle will not apply: `git am` the matching
-`*-stranded.patch` onto a clean checkout of `main` (tested and working).
+Repo convention, granted in writing by the product owner: **push directly to
+`main`; no branches and no PRs.** Never force-push. (Note the one existing
+exception: Velune PR #1, `fix/build-errors` → `main`, is still open and
+predates that instruction — leave it alone unless the user asks.)
 
-## STEP 3 — the database work is DONE. Do not redo it.
+## STEP 2 — the database work is DONE. Do not redo it.
 
-* **Migrations 025/026/034** — applied and verified in an earlier
-  session. Leave them.
-* **Task 7b (`points_history`)** — ✅ **DONE**, as **migration 045**
-  (`mavins-web/supabase_migration_045_points_history.sql`). Applied live
-  and verified in a rolled-back transaction: `award_points(<uuid>, 5,
-  'probe', 'probe')` returns `5`, `users.points` moves 0→5, and the
-  `points_history` row is written. The `42P01` runtime failure is gone.
-  Idempotent; RLS verified (anon insert → `42501`, `service_role`
-  passes).
-* Use the `POSTGRESQL` secret (full `postgresql://` URI). `pip install
-  pg8000`; `psql`/`psycopg2` are absent.
-* Remember: `PGRST202` does **not** mean "absent" — PostgREST also
-  returns it for a call missing a *required argument*. Read the error
-  body.
+Applied and verified, all idempotent. **Do not re-apply any of these:**
 
-## STEP 4 — the next real work is §H, and it needs a product decision first
+* Migrations **025 / 026 / 034** — applied and verified in an earlier session.
+* Migration **045** (`points_history`) — applied and verified. Task 7b is done.
+* Migration **046** (`genre_taxonomy`) — applied and verified 2026-10-15.
+  This is the §H fix. 381/381 campaigns mapped, 0 unresolved terms, both RPCs
+  verified live through PostgREST.
 
-**Do not implement §H before the user answers the question below.**
+Migrations **023** and **024** are **deliberately not applied**. 023's
+genre-locked RPC was superseded by the later §35/§36 rewrite; 024 is
+orthogonal to the §H leak now that the resolver maps tiles by title. Both
+are recorded in §H5 — do not apply them without a reason.
 
-**The previous handover's §H root cause was wrong — read
-`handover/HANDOVER.md` §4 before touching §H.** Short version, both
-verified live:
+Use the **`POSTGRESQL`** secret (full `postgresql://` URI) for database work.
+`pip install pg8000`; `psql` and `psycopg2` are absent. `Velune/tools/db.py`
+wraps this. Two gotchas that have already cost time:
 
-1. The live queue RPC is **not** migration 023's genre-locked version.
-   It is the later §35/§36 rewrite: `p_genre text DEFAULT NULL`, returns
-   `id/source_url/resolved_song_id`, rotates on `last_served_at`.
-   Migration 023's required `p_genre` and its `last_queue_slot_at`
-   column **do not exist live**.
-2. The "falls through to the unscoped path" behaviour is **client-side**.
-   `MusicService.kt` sends
-   `GenreTileMappingCache.resolveGenreId(queue.genre)`, which returns
-   `null` when the tile has no reviewed row in
-   `campaign_genre_tile_mapping` — and **that table (migration 024) does
-   not exist live**. So the cache is always empty, every lookup returns
-   `null`, and `null` means "match any genre" to the live RPC.
+* `PGRST202` does **not** mean "function absent" — PostgREST also returns it
+  for a call missing a required argument. **Read the error body.**
+* In Postgres, `x = any((select arr))` is parsed as the **subquery** form and
+  compares `x` to the array's rows, not its elements. Use
+  `any(arr_column)` in a join, or `= any(array[...])`.
 
-True chain: missing table → empty cache → `null` genre → match-anything
-→ an R&B tile can be served Hip-Hop.
+## STEP 3 — §H is CLOSED. The next work is elsewhere.
 
-The 14-vs-136 vocabulary mismatch is still real (only **6 of 381**
-campaign rows match a canonical genre exactly) and still needs the
-canonical-taxonomy fix — but it is currently *unreachable*, because no
-non-null genre ever reaches the RPC. So the order is: **(a)** apply
-migration 024, **(b)** stop a null genre meaning "any genre", **(c)**
-*then* the taxonomy. Recorded as H5a0/H5b0/H5a/H5b in `TODO.md`.
+Do not re-open §H or re-litigate the genre design. It is done, and the
+product decision it needed was made: strict by default (fail closed), with a
+bounded `genre_adjacency` table declaring nearest-genre exceptions, shipped
+empty for R&B so "never show Hip-Hop to an R&B listener" holds literally.
+Widening a pair is a data INSERT, not a code change.
 
-**The question to ask the user (H4 — do not guess it):** when a
-listener's preferred genre has no live campaign, should the slot serve
-**nothing** (strict — honours "never show Hip-Hop to an R&B listener"
-literally, risks an empty slot) or serve a **declared nearest genre**
-(needs an explicit, bounded adjacency)? Note the product currently has
-"serve anything" behaviour *by accident*, so both options are a change
-from the status quo.
+Pick up the next open item in `TODO.md`'s ordered work queue. Known open
+threads, in the order the queue implies:
 
-Also flag: `get_trending_campaigns` (the home banner) has the same
-exact-match and same null-means-any behaviour, and `fetchActiveCampaigns`
-passes no genre at all — the banner is unscoped by construction.
+1. **§F — Spotify link semantics and seed-data repair.** Open product
+   questions. Note the handover's own finding: the remaining unresolved
+   campaign rows are partly **fabricated seed metadata**, not a resolver
+   weakness — for artists such as Anirudh Ravichander and Arthur Nery the
+   artist id is correct but the seed's `top_tracks` titles do not exist in
+   that artist's real discography. Do not lower the agreement threshold to
+   make these pass.
+2. **Optional, not blocking (H5e):** seed `campaign_genre_tile_mapping`
+   (migration 024's table, currently absent) with real YouTube Music
+   mood/genre tile titles, if a curated override is wanted. Verified
+   behaviour without it: genre tiles resolve and serve; mood tiles fail
+   closed rather than serving an arbitrary genre.
+3. **§H5d is now ongoing curation, not a code task.** New genre terms that
+   will not resolve land in `genre_resolution_queue`; `python
+   Velune/tools/genre_report.py` prints the worklist and the reviewed tile
+   titles. Clearing an entry is an INSERT into `genre_aliases` or
+   `public.genres`.
 
 ## Do not lose
 
-* Migrations 025/026/034 are applied and verified. Migration 045 is
-  applied and verified. Do not re-apply any of them.
-* The remaining unresolved campaign rows are **partly-fabricated seed
-  metadata**, not a resolver weakness (for artists such as Anirudh
-  Ravichander and Arthur Nery the artist id is correct but the seed's
-  `top_tracks` titles do not exist in that artist's real discography).
-  Do **not** lower the agreement threshold.
-* Push with `GITHUB_TOKEN`. `Gh_AUTH_TOKEN` is retired and absent.
-* Remotes are intentionally tokenless; `gh auth setup-git` supplies the
-  credential. Do **not** re-embed a token in the remote URL.
-* Repo convention: push directly to `main`; no branches or PRs (granted
-  in writing by the product owner — see TODO.md's standing instruction).
-  Never force-push.
+* Migrations 025/026/034/045/046 are applied and verified. Do not re-apply.
+* `Queue.genre` is `null` for queues with **no genre context** (search,
+  album, playlist, artist radio, autoplay) and that is **correct** — the RPC
+  reads null as "any eligible campaign", because campaign injection is a
+  monetization slot that belongs on every such queue (§33). It is **not** a
+  fail-closed signal. `GenreTileMappingCache.resolveTile` is the function
+  that keeps that distinction; an unresolved tile returns its raw title so
+  the server can resolve or fail closed.
+* The genre vocabulary is **data**. `genre_aliases`, `genre_adjacency`, and
+  `public.genres` are the extension points. Do not add a `case`/`when` or a
+  hardcoded list to resolve a genre term.
+* Push with `GH_AUTH_TOKEN`. `GITHUB_TOKEN` is read-only.
+* Remotes are intentionally tokenless; restore them after pushing. Do not
+  re-embed a token.
+* Repo convention: push directly to `main`; no branches or PRs. Never
+  force-push.
+* `Velune/tools/genre_report.py` and `Velune/tools/sqlsplit.py` are new
+  this session and are the supported way to inspect the taxonomy and to
+  split a migration file into statements for transactional application.
