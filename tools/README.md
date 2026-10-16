@@ -46,8 +46,17 @@ a rollback artifact always exists before anything changes.
    id already stored on the row (accepted only after confirming it
    exposes tracks; some stored ids are fabricated).
 2. **Track titles** — the Spotify artist embed (`__NEXT_DATA__`) plus
-   kworb's `<artist_id>_songs.html`.
+   kworb's `<artist_id>_songs.html`; then MusicBrainz recordings, for the
+   artists whose Spotify page exposes no track list at all (Dopebwoy's
+   embed is `isPlayable` yet its `trackList` is empty, and kworb has no
+   songs page for them). MusicBrainz entries carry no Spotify track id,
+   so the resolved row stores the verified YouTube link as its
+   `source_url` instead.
 3. **Match** — `users.metadata.top_tracks[].name` against those titles.
+   When the same title resolves to several releases (two Spotify track
+   ids, or the same song on an album and a single), the artist's own
+   embed list wins over the kworb scrape, and a tie that survives that
+   is still refused.
 4. **YouTube id** — search, score, then confirm with oEmbed.
 
 Requires `yt-dlp` for the YouTube search step (`pip install yt-dlp`);

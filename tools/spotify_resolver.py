@@ -292,6 +292,82 @@ def musicbrainz_spotify_id(artist_name: str) -> str | None:
     return _mb_spotify_by_alias(artist_name)
 
 
+def _mb_artist_mbid(artist_name: str) -> str | None:
+    """MusicBrainz's own artist id, matched on the normalised name.
+
+    The same identity bar as `musicbrainz_spotify_id`: an exact name, or
+    an exact alias. Score alone is never enough -- searching "Ivi Adamou"
+    also returns "Kat Adamou".
+    """
+    for query in (f'artist:"{artist_name}"', f'alias:"{artist_name}"'):
+        data = _mb_get_json(
+            f"https://musicbrainz.org/ws/2/artist/?query="
+            f"{urllib.parse.quote(query)}&fmt=json&limit=5")
+        if data is None:
+            continue
+        wanted = normalise(artist_name)
+        for artist in data.get("artists", []):
+            if normalise(artist.get("name", "")) == wanted:
+                return artist["id"]
+            full = _mb_get_json(
+                f"https://musicbrainz.org/ws/2/artist/{artist['id']}"
+                f"?inc=aliases&fmt=json")
+            if full and any(normalise(a.get("name", "")) == wanted
+                            for a in full.get("aliases", [])):
+                return artist["id"]
+    return None
+
+
+def musicbrainz_recordings(artist_name: str,
+                           limit: int = 100) -> list[dict]:
+    """The artist's recordings per MusicBrainz, as bare titles.
+
+    Last-resort title source for an artist whose Spotify page exposes no
+    track list at all -- kworb has no `<id>_songs.html` for them and the
+    embed returns an empty `trackList` (Dopebwoy's page is `isPlayable`
+    but lists nothing). Without this the artist can never be title
+    matched, because `artist_tracks` is empty and every candidate fails
+    the "no tracks for artist id" branch.
+
+    These entries deliberately carry `track_id = None`: MusicBrainz does
+    not know Spotify track ids, so there is no Spotify URL to build. The
+    caller falls back to the verified YouTube link instead.
+    """
+    mbid = _mb_artist_mbid(artist_name)
+    if not mbid:
+        return []
+    data = _mb_get_json(
+        f"https://musicbrainz.org/ws/2/recording/?query=arid:{mbid}"
+        f"&fmt=json&limit={limit}")
+    if data is None:
+        return []
+    artist = normalise(artist_name)
+    out = []
+    seen = set()
+    for rec in data.get("recordings", []):
+        title = rec.get("title")
+        if not title:
+            continue
+        # Only recordings the named artist is actually credited on, so a
+        # compilation or a guest appearance is not mistaken for theirs.
+        credits = [normalise(a.get("name", ""))
+                   for a in rec.get("artist-credit", []) if isinstance(a, dict)]
+        if artist not in credits:
+            continue
+        # MusicBrainz returns the same song as several recordings
+        # (album, single, compilation). With no track id to tell them
+        # apart the duplicates are literally identical entries, and
+        # `match_track` refuses an exact tie -- so "Cartier" matched
+        # nothing. Collapse them; the title is all this source offers.
+        key = normalise(title)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"title": title, "track_id": None,
+                    "subtitle": "", "source": "musicbrainz"})
+    return out
+
+
 def resolve_artist_id(artist_name: str, index: dict[str, str],
                       stored_id: str | None = None) -> tuple[str | None, str]:
     """(spotify_artist_id, source) for an artist.
@@ -422,9 +498,17 @@ def match_track(track_name: str, tracks: list[dict]) -> dict | None:
     # that is closest to the plain title -- fewest extra tokens, then no
     # variant marker -- which picks the canonical version. A tie that
     # survives both tiebreaks is still refused.
-    def rank(track: dict) -> tuple[int, int]:
+    #
+    # The final tiebreak is the *source*: the same title can carry two
+    # different Spotify track ids (album release and single), which
+    # `artist_tracks` cannot collapse because the ids differ. Spotify's
+    # own embed list is the artist's top-tracks order, so its entry is
+    # the canonical one; kworb is a third-party scrape. Without this
+    # "Pesan Terakhir" (Lyodra) stayed an unresolvable exact tie.
+    def rank(track: dict) -> tuple[int, int, int]:
         extra = len(set(normalise(track["title"]).split()) - wanted)
-        return (extra, 1 if variants(track["title"]) else 0)
+        return (extra, 1 if variants(track["title"]) else 0,
+                0 if track.get("source") == "embed" else 1)
 
     winners.sort(key=rank)
     if rank(winners[0]) == rank(winners[1]):

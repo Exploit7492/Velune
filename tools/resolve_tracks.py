@@ -32,6 +32,19 @@ import db
 import spotify_resolver as sr
 
 
+def _source_url_for(matched: dict, resolved: dict) -> str:
+    """The link to store alongside the verified video id.
+
+    A Spotify track page when the title source knew one; otherwise the
+    verified YouTube link itself. MusicBrainz-sourced titles have no
+    Spotify track id, and a null `source_url` would make
+    `update_tracks.apply_plan` skip the row as "not an improvement".
+    """
+    if matched.get("track_id"):
+        return "https://open.spotify.com/track/" + matched["track_id"]
+    return "https://www.youtube.com/watch?v=" + resolved["video_id"]
+
+
 def fetch_artists(conn, unresolved_only: bool):
     """Artists needing repair, with their top tracks and campaign ids."""
     where = ("where tc.resolved_song_id is null" if unresolved_only else "")
@@ -137,20 +150,27 @@ def main():
             artist_id, source = sr.resolve_artist_id(artist_name, index, cur_sid)
             if artist_id:
                 tracks = sr.artist_tracks(artist_id)
-                for title in titles:
-                    matched = sr.match_track(title, tracks)
-                    if not matched:
-                        continue
-                    resolved = sr.resolve_track(artist_name, matched["title"],
-                                                opts.min_score)
-                    if resolved:
-                        picked = {"track_title": matched["title"],
-                                  "spotify_track_id": matched["track_id"],
-                                  "source_url": ("https://open.spotify.com/track/"
-                                                 + matched["track_id"]),
-                                  "method": "title_match",
-                                  **resolved}
-                        break
+            # Some artists expose no track list anywhere Spotify-shaped --
+            # kworb has no page for them and the embed returns an empty
+            # trackList (Dopebwoy). Their titles live in MusicBrainz
+            # instead, so use that as a title source. Entries carry no
+            # Spotify track id; the URL is filled in from the verified
+            # YouTube pick below.
+            if not tracks:
+                tracks = sr.musicbrainz_recordings(artist_name)
+            for title in titles:
+                matched = sr.match_track(title, tracks)
+                if not matched:
+                    continue
+                resolved = sr.resolve_track(artist_name, matched["title"],
+                                            opts.min_score)
+                if resolved:
+                    picked = {"track_title": matched["title"],
+                              "spotify_track_id": matched["track_id"],
+                              "source_url": _source_url_for(matched, resolved),
+                              "method": "title_match",
+                              **resolved}
+                    break
 
         # Stage 2: the seed's own titles were fabricated (TODO B5f) but
         # the artist is real, and their *actual* discography is available.
@@ -165,8 +185,7 @@ def main():
                 if resolved:
                     picked = {"track_title": track["title"],
                               "spotify_track_id": track["track_id"],
-                              "source_url": ("https://open.spotify.com/track/"
-                                             + track["track_id"]),
+                              "source_url": _source_url_for(track, resolved),
                               "method": "real_top_track",
                               **resolved}
                     break

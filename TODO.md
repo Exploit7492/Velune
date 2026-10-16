@@ -43,9 +43,47 @@
 > 3. Credentials live in the registered-secret store, never pasted into
 >    the chat transcript.
 
-Last updated: 2026-10-15 (session that found the seed engine had never
-run end to end — three fatal defects, now fixed; see the session box
-below.)
+Last updated: 2026-10-16 (session that closed B5d/B5e/B5f — the last 10
+unplayable seed rows were four metadata defects, not resolver failures;
+now 381/381 playable. See the session box below.)
+
+---
+
+> **SESSION 2026-10-16 (eighth) — B5d/B5e/B5f done. The last 10 unplayable
+> campaign rows (4 artists) were never resolver failures: they were seed
+> metadata that named the wrong artist. Live audit, one cause each:**
+>
+> - **Carlas Dreams (3 rows)** — `artist_name` was missing the
+>   apostrophe. The real artist is *Carla's Dreams*. Neither kworb nor
+>   MusicBrainz can match the mangled form, and the stored
+>   `spotify_id` `55Aa4nQqYBBTJyNAHoGgaL` was fabricated.
+> - **Son Tung MTP (2 rows)** — name ASCII-stripped. The real name is
+>   *Sơn Tùng M-TP*, and MusicBrainz's alias index does not match the
+>   mangled form either. Stored id `2sU8FHNRqK2tJOVjaBLs93` fabricated.
+> - **Lyodra Ginting (4 rows)** — id was correct
+>   (`6Sv2jkzH9sWQjwghW5ArMG`, 48 tracks) but the name was
+>   non-canonical (she is credited as *Lyodra*) **and** the row had no
+>   `top_tracks` at all. The surname no release title carries made the
+>   strict artist-agreement rule impossible to satisfy.
+> - **Dopebwoy (1 row)** — the one genuine resolver gap. Name correct
+>   and MusicBrainz resolves a real id (`3kw9wqwYyvRCI6Q2rqsfNS`), but
+>   that artist's Spotify page exposes **zero** tracks (`isPlayable`
+>   true, `trackList` empty) and kworb has no songs page. New
+>   MusicBrainz-recordings title source covers it.
+>
+> **Fixed in:** `Velune:tools/spotify_resolver.py` (new
+> `musicbrainz_recordings`, dedup identical MB titles, embed-over-kworb
+> tiebreak in `match_track`), `Velune:tools/resolve_tracks.py`
+> (`_source_url_for`), and `mavins-web:supabase_migration_053_seed_artist_metadata_repair.sql`
+> (corrects the two misspelled names + three fabricated ids, renames
+> Lyodra, supplies her real `top_tracks`). Verified live:
+> **381/381 playable, 0 open artists, 0 fabricated artist-page URLs.**
+>
+> Note: `update_tracks.py --rollback` can no longer undo this repair —
+> the B5g guard refuses to restore a fabricated URL to a servable
+> campaign, so the rollback transaction aborts. That is the guard
+> working as intended; the fix is durable in migration 053, which is the
+> recovery path.
 
 ---
 
@@ -382,23 +420,20 @@ unresolved worklist and the reviewed tile titles.
 > | Phase | State | What is actually left |
 > |---|---|---|
 > | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 5 (tasks 39 and 41). |
-> | **2 — Finish the Spotify campaign work** | ⚠️ **PARTIAL — this is the next real work** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), **B5b ✅ B5c ✅ B5g ✅ (2026-10-15 seventh; migration 047 was live but the canonical CLI file was still defective — now fixed)**. **Open: B5d, B5e, B5f** (seed-data repair) and B4b/B4b-2/B4e, which are blocked on the §F product answer. |
+> | **2 — Finish the Spotify campaign work** | ✅ **SEED REPAIR COMPLETE — remaining items blocked on product** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), B5b ✅ B5c ✅ B5g ✅ (seventh), **B5d ✅ B5e ✅ B5f ✅ (2026-10-16 eighth; 381/381 rows playable, 0 open artists)**. Only B4b/B4b-2/B4e remain, and they are blocked on the §F product answer. |
 > | **3 — mavins-web wiring** | ⚠️ Open | C1a/C1b/C1c/C3a are pure web work. **C1d and C1e are now unblocked** — they depended on Phase 1, which is closed. |
 > | **4 — Pawns SDK** | ⚠️ Open | D1a/D1b need the product owner. D2a–D2d are agent-doable. |
 > | **5 — Inherited handover work** | ⚠️ Open | Tasks 31–41, plus the two relocated Phase 1 follow-ups. |
 
-**Next: Phase 2, task 12 (B5d/B5e/B5f)** — the seed-data repair passes.
-B5b, B5c and B5g are now closed (2026-10-15 seventh session). Note tasks
-12–14 are **data audits, not resolver work** — the seed metadata is partly
-fabricated, so start by auditing `users.metadata.top_tracks` against real
-discographies. The sixth session repaired four genuine resolver defects
-(see its box), so the MusicBrainz/alias path those passes depend on now
-actually returns results — worth re-running against the wider artist set.
+**Next: Phase 3 — mavins-web wiring (C1a/C1b/C1c/C3a)**, now that Phase 2's
+seed repair is closed. B5d/B5e/B5f finished 2026-10-16 (eighth session):
+the last 10 unplayable rows were four seed-metadata defects, not resolver
+failures, and both repos are now clean at **381/381 playable, 0 open
+artists**. The only Phase 2 items left (B4b/B4b-2/B4e) are blocked on the
+§F product answer, not on engineering.
 
-Ordered by dependency, not by appeal. Phases 1 and 2 unblock everything
-else; do not start Phase 3+ while Phase 1 is open, because a 500 caused
-by a missing RPC is indistinguishable from a 500 caused by bad code.
-Per the repo convention: one part-letter (a–e) per session.
+Ordered by dependency, not by appeal. Phase 1 is closed, so Phase 3+ may
+start. Per the repo convention: one part-letter (a–e) per session.
 
 **Four decisions are needed before several tasks can be scoped — see §F.**
 They are listed there, not here, so this list stays a work queue.
@@ -728,6 +763,14 @@ priority after the data work.
     artists under discussion here. Those 14 failed on the resolver, and
     the fixes took them to 4. Rows now **371/381 playable**;
     `verify_resolution.py` open artists **14 → 4**.
+    ✅ **DONE 2026-10-16 (eighth session).** The remaining 4 artists were
+    not a resolver problem: two seed names were misspelled
+    ("Carlas Dreams" → *Carla's Dreams*, "Son Tung MTP" → *Sơn Tùng
+    M-TP*), one name was non-canonical and had no `top_tracks`
+    ("Lyodra Ginting" → *Lyodra*), and three stored `spotify_id`s were
+    fabricated. Fixed in `mavins-web:supabase_migration_053_seed_artist_metadata_repair.sql`
+    (applied live) plus the resolver additions in task 13. Result:
+    **381/381 playable, 0 open artists.**
 13. **B5e** — Repair remaining rows, pass 2: MusicBrainz-only artists.
     Same caveat as task 12.
     **Progress 2026-10-15 (sixth session):** the MusicBrainz path itself
@@ -736,6 +779,10 @@ priority after the data work.
     what the "non-Latin scripts" arm of B5f actually needed. Net: this
     pass is now worth re-running against the wider artist set, since its
     source was previously returning nothing at all.
+    ✅ **DONE 2026-10-16 (eighth session).** Added
+    `musicbrainz_recordings()` — a title source for artists whose Spotify
+    page exposes no track list at all (Dopebwoy). It was the one genuine
+    resolver gap in the final 4.
 14. **B5f** — Repair remaining rows, pass 3: the ~53 hard artists
     (non-Latin scripts, common-word names). Expect manual review; do not
     loosen the artist-agreement rule to raise the count. **Confirmed
