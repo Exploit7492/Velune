@@ -81,6 +81,15 @@ def main():
                     help="also re-resolve spotify_id / spotify_url")
     ap.add_argument("--all", dest="unresolved_only", action="store_false",
                     help="process every artist, not just unresolved ones")
+    ap.add_argument("--artist-fallback", action="store_true",
+                    help="when no title match exists (fabricated seed "
+                         "metadata), fall back to a real video on the "
+                         "artist's own channel")
+    ap.add_argument("--real-track-fallback", action="store_true",
+                    help="when the seed's own titles are fabricated, resolve "
+                         "one of the artist's real top tracks instead")
+    ap.add_argument("--real-track-limit", type=int, default=5,
+                    help="how many real top tracks to try (default 5)")
     opts = ap.parse_args()
 
     conn = db.connect()
@@ -108,46 +117,79 @@ def main():
         (user_id, artist_name, cur_sid, cur_surl,
          yt_url, top_tracks, campaign_ids) = row
         titles = [t.get("name") for t in (top_tracks or []) if t.get("name")]
-        if not artist_name or not titles:
-            unresolved.append({"artist_name": artist_name,
-                               "reason": "no top_tracks metadata"})
-            continue
 
-        artist_id, source = sr.resolve_artist_id(artist_name, index, cur_sid)
-        if not artist_id:
-            unresolved.append({"artist_name": artist_name,
-                               "reason": "no spotify artist id"})
-            print(f"  [{n}/{len(artists)}] {artist_name}: no artist id")
-            continue
-
-        tracks = sr.artist_tracks(artist_id)
-        if not tracks:
-            unresolved.append({"artist_name": artist_name,
-                               "reason": "no tracks for artist id",
-                               "spotify_artist_id": artist_id,
-                               "artist_id_source": source})
-            print(f"  [{n}/{len(artists)}] {artist_name}: no tracks")
-            continue
         picked = None
-        for title in titles:
-            matched = sr.match_track(title, tracks)
-            if not matched:
-                continue
-            resolved = sr.resolve_track(artist_name, matched["title"],
-                                        opts.min_score)
-            if resolved:
-                picked = {"track_title": matched["title"],
-                          "spotify_track_id": matched["track_id"],
-                          "source_url": ("https://open.spotify.com/track/"
-                                         + matched["track_id"]),
-                          **resolved}
-                break
+        artist_id = None
+        source = "none"
+        tracks = []
+
+        # Priority: a verified title match beats the artist-channel
+        # fallback, so the Spotify path is tried first. The fallback then
+        # covers the seeds whose metadata is fabricated (TODO B5f) -- the
+        # artist id may not exist and the titles certainly do not -- which
+        # would otherwise stay unplayable forever.
+        if artist_name and titles:
+            artist_id, source = sr.resolve_artist_id(artist_name, index, cur_sid)
+            if artist_id:
+                tracks = sr.artist_tracks(artist_id)
+                for title in titles:
+                    matched = sr.match_track(title, tracks)
+                    if not matched:
+                        continue
+                    resolved = sr.resolve_track(artist_name, matched["title"],
+                                                opts.min_score)
+                    if resolved:
+                        picked = {"track_title": matched["title"],
+                                  "spotify_track_id": matched["track_id"],
+                                  "source_url": ("https://open.spotify.com/track/"
+                                                 + matched["track_id"]),
+                                  "method": "title_match",
+                                  **resolved}
+                        break
+
+        # Stage 2: the seed's own titles were fabricated (TODO B5f) but
+        # the artist is real, and their *actual* discography is available.
+        # Resolve one of the artist's real top tracks instead. This is
+        # still a verified title match -- a genuine recording by the
+        # correct artist -- so it is much stronger than the channel
+        # fallback below and is preferred to it.
+        if not picked and opts.real_track_fallback and tracks:
+            for track in tracks[:opts.real_track_limit]:
+                resolved = sr.resolve_track(artist_name, track["title"],
+                                            opts.min_score)
+                if resolved:
+                    picked = {"track_title": track["title"],
+                              "spotify_track_id": track["track_id"],
+                              "source_url": ("https://open.spotify.com/track/"
+                                             + track["track_id"]),
+                              "method": "real_top_track",
+                              **resolved}
+                    break
+
+        if not picked and opts.artist_fallback:
+            # Pass the real discography so a same-named channel is
+            # rejected: "fynn" the YouTuber's uploads match none of the
+            # singer Fynn's real tracks.
+            known = [t["title"] for t in tracks] if tracks else None
+            fallback = sr.resolve_artist_channel_track(
+                artist_name, known_titles=known)
+            if fallback:
+                picked = {"track_title": None, "spotify_track_id": None,
+                          # No Spotify track exists for a fabricated title,
+                          # so source_url carries the real playable link
+                          # instead of a dead Spotify page.
+                          "source_url": ("https://www.youtube.com/watch?v="
+                                         + fallback["video_id"]),
+                          **fallback}
 
         if not picked:
-            unresolved.append({"artist_name": artist_name,
-                               "reason": "no verified youtube match",
+            reason = ("no top_tracks metadata" if not titles
+                      else "no spotify artist id" if not artist_id
+                      else "no tracks for artist id" if not tracks
+                      else "no verified youtube match")
+            unresolved.append({"artist_name": artist_name, "reason": reason,
                                "tracks_available": len(tracks)})
-            print(f"  [{n}/{len(artists)}] {artist_name}: no verified match")
+            print(f"  [{n}/{len(artists)}] {artist_name}: {reason}")
             continue
 
         entry = {"user_id": user_id, "artist_name": artist_name,
@@ -158,8 +200,9 @@ def main():
                  **picked}
         plan.append(entry)
         print(f"  [{n}/{len(artists)}] {artist_name}: "
-              f"{picked['track_title']!r} -> {picked['video_id']} "
-              f"(score {picked['score']})")
+              f"{picked['track_title']!r} [{picked['method']}] -> "
+              f"{picked['video_id']} "
+              f"({picked['youtube_title'][:40]!r})")
 
     with open(opts.resolution, "w", encoding="utf-8") as fh:
         json.dump({"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

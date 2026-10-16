@@ -77,6 +77,24 @@ VARIANT_MARKERS = (
 )
 _BRACKET_RE = re.compile(r"[\(\[\{]([^\)\]\}]*)[\)\]\}]")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_DIGITS_RE = re.compile(r"^[0-9]+$")
+
+# Tokens that cannot identify a recording on their own. Spotify's titles
+# carry volume and credit markers that YouTube titles routinely drop
+# ("Vol. 52/" -> "Music Sessions #52"), so a *missing* token is tolerated
+# only when it is one of these or a bare single digit (emoticons and
+# punctuation produce those: "<3" -> "3", "Pt. 1" -> "1"). A missing
+# meaningful word still fails, which is what keeps precision.
+_ABBREV_TOKENS = frozenset({
+    "vol", "feat", "ft", "vs", "pt", "ep", "lp", "ost", "rmx", "prod",
+})
+
+
+def _is_low_info(token: str) -> bool:
+    """True when a title token carries no identifying information."""
+    if token in _ABBREV_TOKENS:
+        return True
+    return len(token) == 1 and bool(_DIGITS_RE.match(token))
 
 
 def normalise(value: str) -> str:
@@ -243,19 +261,59 @@ def artist_tracks(artist_id: str) -> list[dict]:
 def match_track(track_name: str, tracks: list[dict]) -> dict | None:
     """Match a metadata title against the artist's real tracks.
 
-    Exact normalised match wins; otherwise a unique whole-token
-    containment match. Ambiguity returns None rather than guessing.
+    Order-insensitive on purpose. The seed metadata reorders words
+    relative to the real release title -- "BZRP Music Sessions Vol. 53
+    (Shakira)" against the actual "Shakira: Bzrp Music Sessions, Vol.
+    53/" -- so a substring test alone missed matches that are obviously
+    the same recording. Comparison is therefore on token *sets*, with
+    low-information tokens ignored so "Vol." does not decide a match.
+
+    Ambiguity still returns None rather than guessing: a title that
+    matches two different real tracks equally well is not resolved.
     """
-    wanted = normalise(track_name)
+    wanted = set(t for t in normalise(track_name).split() if not _is_low_info(t))
     if not wanted:
         return None
+
+    scored: list[tuple[float, dict]] = []
     for track in tracks:
-        if normalise(track["title"]) == wanted:
-            return track
-    partial = [t for t in tracks if wanted in normalise(t["title"])]
-    if len(partial) == 1:
-        return partial[0]
-    return None
+        have = set(t for t in normalise(track["title"]).split()
+                   if not _is_low_info(t))
+        if not have:
+            continue
+        if have == wanted:
+            scored.append((1.0, track))
+            continue
+        # Every wanted token present is the strong signal; the reverse
+        # containment (candidate has extra words, e.g. a credit list) is
+        # weaker and scored below it.
+        if wanted <= have:
+            scored.append((0.9, track))
+        elif have <= wanted:
+            scored.append((0.8, track))
+
+    if not scored:
+        return None
+    best = max(s for s, _ in scored)
+    winners = [t for s, t in scored if s == best]
+    if len(winners) == 1:
+        return winners[0]
+
+    # Several real tracks match equally well. That is usually one song
+    # in multiple versions ("Why This Kolaveri Di? - The Soup of Love"
+    # vs "Why This Kolaveri Di? - Trending Version"), so refusing
+    # outright loses a genuinely resolvable artist. Prefer the release
+    # that is closest to the plain title -- fewest extra tokens, then no
+    # variant marker -- which picks the canonical version. A tie that
+    # survives both tiebreaks is still refused.
+    def rank(track: dict) -> tuple[int, int]:
+        extra = len(set(normalise(track["title"]).split()) - wanted)
+        return (extra, 1 if variants(track["title"]) else 0)
+
+    winners.sort(key=rank)
+    if rank(winners[0]) == rank(winners[1]):
+        return None
+    return winners[0]
 
 
 # --------------------------------------------------------------------
@@ -315,7 +373,20 @@ def score_candidate(artist_name: str, track_title: str, cand: dict) -> float:
     elif all(tok in cand_title.split() for tok in title_tokens):
         title_score = 0.3
     else:
-        return 0.0
+        # A token-for-token failure used to return 0.0 outright, which
+        # rejected correct matches on cosmetic differences: Spotify's
+        # "Quevedo: Bzrp Music Sessions, Vol. 52/" against YouTube's
+        # "QUEVEDO || BZRP Music Sessions #52" failed on the missing
+        # "vol". Require every *meaningful* token instead -- the missing
+        # ones must all be low-information -- and at least one real token
+        # must survive. A missing meaningful word still fails.
+        present = cand_title.split()
+        missing = [t for t in title_tokens if t not in present]
+        if not missing or not all(_is_low_info(t) for t in missing):
+            return 0.0
+        if not any(not _is_low_info(t) for t in title_tokens if t in present):
+            return 0.0
+        title_score = 0.2
 
     owns_channel = cand_channel == artist or cand_channel.endswith(" topic")
     if len(artist_tokens) == 1 and not (in_title or owns_channel):
@@ -364,4 +435,93 @@ def resolve_track(artist_name: str, track_title: str,
                 "youtube_title": oembed.get("title", cand["title"]),
                 "youtube_author": oembed.get("author_name", cand["channel"]),
                 "channel": cand["channel"], "duration": cand["duration"]}
+    return None
+
+
+# Suffix words that mark a channel as the artist's own rather than a
+# stranger's: "Soolking Officiel", "PLK TV", "Mora", "TruenoVEVO".
+_CHANNEL_SUFFIXES = frozenset({
+    "vevo", "topic", "official", "officiel", "music", "tv", "records",
+    "oficial", "channel", "band", "sound",
+})
+
+
+def _owns_channel(artist: str, channel: str) -> bool:
+    """True when `channel` is the artist's own channel, not a namesake.
+
+    Deliberately strict. An earlier, looser version accepted any channel
+    whose tokens contained the artist name, which pulled in a news
+    channel for "Luciano" (its title happened to read "... LUCIANO
+    CESA ...") and a YouTuber named "fynn" for the singer Fynn. A paid
+    campaign pointed at a stranger's video is worse than an unresolved
+    row, so only an exact name match, a name-plus-suffix match, or a
+    "- Topic" channel qualifies.
+    """
+    if not channel:
+        return False
+    if channel == artist:
+        return True
+    if channel.endswith(" topic"):
+        return True
+    tokens = channel.split()
+    if tokens and tokens[0] == artist:
+        return all(tok in _CHANNEL_SUFFIXES for tok in tokens[1:])
+    # "TruenoVEVO" and "PLKTV" normalise to one token, so the suffix is
+    # not separable by whitespace. Accept a concatenated suffix only when
+    # it is one of the known markers.
+    if channel.startswith(artist) and channel != artist:
+        remainder = channel[len(artist):].strip()
+        if remainder in _CHANNEL_SUFFIXES:
+            return True
+    return False
+
+
+def resolve_artist_channel_track(artist_name: str, limit: int = 8,
+                                 known_titles: list[str] | None = None
+                                 ) -> dict | None:
+    """A real, playable video the artist genuinely owns.
+
+    Last-resort fallback for seeds whose metadata titles are fabricated
+    (see TODO B5f): the named song does not exist, so no title match is
+    possible. This returns a different recording by the *correct* artist
+    instead, and only when the upload is on the artist's own channel
+    (see `_owns_channel`). Every pick is confirmed playable via oEmbed.
+
+    When `known_titles` (the artist's real discography) is supplied, the
+    video title must also match one of those titles. That is what rules
+    out a same-named channel: "fynn" the YouTuber and "Fynn" the singer
+    share a name, but only the singer's uploads match his real tracks.
+
+    It deliberately does not claim a title match: `matched_title` is None
+    and `method` records the weaker provenance, so a caller can decide
+    whether that is acceptable rather than being told a fabricated title
+    resolved.
+    """
+    artist = normalise(artist_name)
+    if not artist:
+        return None
+    for cand in youtube_search(artist_name, limit):
+        if not _owns_channel(artist, normalise(cand.get("channel") or "")):
+            continue
+        # The upload must name the artist. A bare name match on the
+        # channel alone is not enough when two different people share the
+        # name: the YouTuber "fynn" owns the channel "fynn", but none of
+        # his uploads mention the singer, so this rejects him.
+        cand_title = normalise(cand.get("title") or "")
+        if not all(tok in cand_title.split() for tok in artist.split()):
+            continue
+        if known_titles:
+            if not any(t and normalise(t) in cand_title for t in known_titles):
+                continue
+        oembed = verify_video(cand["video_id"])
+        if not oembed:
+            continue
+        return {"video_id": cand["video_id"],
+                "score": None,
+                "youtube_title": oembed.get("title", cand["title"]),
+                "youtube_author": oembed.get("author_name", cand["channel"]),
+                "channel": cand["channel"],
+                "duration": cand.get("duration"),
+                "matched_title": None,
+                "method": "artist_channel"}
     return None

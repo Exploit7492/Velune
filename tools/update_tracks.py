@@ -47,17 +47,28 @@ def apply_plan(conn, plan, dry_run: bool):
     for entry in plan["resolved"]:
         source_url = entry["source_url"]
         video_id = entry["video_id"]
+        if not source_url or not video_id:
+            # A row without a playable pair is not an improvement over the
+            # unplayable row it would replace; skip it rather than write a
+            # half-filled campaign.
+            continue
         for campaign_id in entry["campaign_ids"]:
             statements.append((
                 "update public.track_campaigns "
                 "set source_url = :url, resolved_song_id = :vid where id = :cid",
                 {"url": source_url, "vid": video_id, "cid": campaign_id}))
-        statements.append((
-            "update public.users set spotify_id = :sid, spotify_url = :surl "
-            "where id = :uid",
-            {"sid": entry["spotify_artist_id"],
-             "surl": "https://open.spotify.com/artist/" + entry["spotify_artist_id"],
-             "uid": entry["user_id"]}))
+        # The artist-channel fallback can resolve a campaign without ever
+        # finding a Spotify artist id. Writing anyway would null the row's
+        # spotify_id and store the literal string "artist/None", so the
+        # users row is left alone unless there is a real id to write.
+        if entry.get("spotify_artist_id"):
+            statements.append((
+                "update public.users set spotify_id = :sid, spotify_url = :surl "
+                "where id = :uid",
+                {"sid": entry["spotify_artist_id"],
+                 "surl": "https://open.spotify.com/artist/"
+                         + entry["spotify_artist_id"],
+                 "uid": entry["user_id"]}))
 
     print(f"{len(statements)} statements to apply")
     if dry_run:
