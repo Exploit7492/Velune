@@ -68,6 +68,39 @@ def _mb_throttle():
             time.sleep(wait)
         _mb_last[0] = time.monotonic()
 
+
+# MusicBrainz answers 503 (and occasionally 429) under load, even at one
+# request per second. Treating that as "artist not found" made the result
+# depend on luck: the same artist resolved on one run and not the next.
+# Retry the transient codes a few times with backoff before giving up.
+_MB_RETRY_CODES = (429, 500, 502, 503, 504)
+_MB_ATTEMPTS = 4
+
+
+def _mb_get_json(url: str):
+    """GET + parse JSON from MusicBrainz, retrying transient failures.
+
+    Returns None only when every attempt fails or the body is not JSON;
+    a definitive 404 returns None immediately.
+    """
+    last = None
+    for attempt in range(_MB_ATTEMPTS):
+        _mb_throttle()
+        try:
+            return _get_json(url)
+        except urllib.error.HTTPError as exc:
+            last = exc
+            if exc.code not in _MB_RETRY_CODES:
+                return None
+        except Exception as exc:
+            last = exc
+        if attempt < _MB_ATTEMPTS - 1:
+            time.sleep(_MB_INTERVAL * (2 ** attempt))
+    if last is not None:
+        print(f"  musicbrainz unavailable after {_MB_ATTEMPTS} attempts: "
+              f"{type(last).__name__} {getattr(last, 'code', '')}")
+    return None
+
 # Markers that make a bracketed suffix a genuine *variant* rather than a
 # credit list. "feat.", "with" and "prod." are credits, not variants.
 VARIANT_MARKERS = (
@@ -97,19 +130,41 @@ def _is_low_info(token: str) -> bool:
     return len(token) == 1 and bool(_DIGITS_RE.match(token))
 
 
+# NFKD decomposes most accented letters (é -> e + combining mark), but a
+# handful of Latin letters are *single* code points with no decomposition:
+# Polish ł, Danish/Norwegian ø, Croatian đ, Icelandic ð/æ, German ß.
+# NFKD leaves them intact, so the character class in `normalise` would
+# delete them outright -- "Podsiadło" became "podsiad o" and could never
+# equal the real channel name, which is why that artist stayed unresolved.
+# Lowercase keys only: this is applied after `.lower()`.
+_TRANSLITERATE = str.maketrans({
+    "ł": "l", "ø": "o", "đ": "d", "ð": "d", "þ": "th",
+    "æ": "ae", "œ": "oe", "ß": "ss", "ı": "i", "ŋ": "n", "ħ": "h",
+})
+
+
 def normalise(value: str) -> str:
     """Lowercase, strip accents, and collapse to space-separated tokens.
 
     Combining marks are removed *before* the character class replaces
     non-alphanumerics, so an accented letter loses its accent instead of
     becoming a word break.
+
+    Two cases NFKD alone does not cover, each found via an unresolved
+    artist rather than by inspection -- see `_TRANSLITERATE` and the "&"
+    note below.
     """
     if not value:
         return ""
     decomposed = unicodedata.normalize("NFKD", value)
     without_marks = "".join(
         ch for ch in decomposed if not unicodedata.combining(ch))
-    return _NON_ALNUM_RE.sub(" ", without_marks.lower()).strip()
+    # "&" -> "and" so "Marcus & Martinus" (the real channel) and "Marcus
+    # and Martinus" (the seed's spelling) collapse to the same string.
+    # Without this the two forms never compare equal and the artist is
+    # rejected as a namesake.
+    collapsed = without_marks.lower().replace("&", " and ")
+    return _NON_ALNUM_RE.sub(" ", collapsed.translate(_TRANSLITERATE)).strip()
 
 
 def variants(raw_title: str) -> list[str]:
@@ -148,32 +203,93 @@ def kworb_index() -> dict[str, str]:
     return {normalise(name): aid for aid, name in pairs}
 
 
-def musicbrainz_spotify_id(artist_name: str) -> str | None:
-    """Spotify artist id via MusicBrainz url-rels, or None."""
-    query = urllib.parse.quote(f'artist:"{artist_name}"')
-    url = f"https://musicbrainz.org/ws/2/artist/?query={query}&fmt=json&limit=5"
-    _mb_throttle()
-    try:
-        data = _get_json(url)
-    except Exception:
+def _mb_spotify_from_artist(artist_id: str) -> str | None:
+    """The Spotify artist URL on `artist_id`'s url-rels, if any."""
+    rels = _mb_get_json(
+        f"https://musicbrainz.org/ws/2/artist/{artist_id}"
+        f"?inc=url-rels&fmt=json")
+    if rels is None:
+        return None
+    for rel in rels.get("relations", []):
+        # MusicBrainz nests the target as {"url": {"id", "resource"}}.
+        # This read the flat rel["resource"], which is absent in the
+        # current API, so every relation yielded None and the whole
+        # MusicBrainz fallback was silently dead -- the reason nine
+        # artists reported "no spotify artist id". Accept the old flat
+        # shape too, so a payload change either way keeps working.
+        resource = ((rel.get("url") or {}).get("resource")
+                    or rel.get("resource") or "")
+        m = re.search(r"open\.spotify\.com/artist/([A-Za-z0-9]{22})", resource)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _mb_spotify_by_alias(artist_name: str) -> str | None:
+    """Spotify id via an artist *alias*, requiring an exact alias match.
+
+    MusicBrainz stores many artists only under their native script or
+    diacritic spelling -- Son Tung MTP as "Sơn Tùng M-TP", Lee Young Ji
+    as "이영지", Ivi Adamou as "Ήβη Αδάμου" -- so the exact-name search
+    above finds nothing for the ASCII name the seed carries. The alias
+    index does know them.
+
+    Accepting an alias hit on score alone would be unsafe (searching
+    "Ivi Adamou" also returns "Kat Adamou"). So the candidate is only
+    accepted when the exact normalised name appears among its aliases.
+    That is the same identity bar as the name path, just checked against
+    a different field.
+    """
+    query = urllib.parse.quote(f'alias:"{artist_name}"')
+    data = _mb_get_json(
+        f"https://musicbrainz.org/ws/2/artist/?query={query}&fmt=json&limit=5")
+    if data is None:
         return None
     wanted = normalise(artist_name)
     for artist in data.get("artists", []):
-        if normalise(artist.get("name", "")) != wanted:
+        full = _mb_get_json(
+            f"https://musicbrainz.org/ws/2/artist/{artist['id']}"
+            f"?inc=aliases+url-rels&fmt=json")
+        if full is None:
             continue
-        _mb_throttle()
-        try:
-            rels = _get_json(
-                f"https://musicbrainz.org/ws/2/artist/{artist['id']}"
-                f"?inc=url-rels&fmt=json")
-        except Exception:
+        if not any(normalise(a.get("name", "")) == wanted
+                   for a in full.get("aliases", [])):
             continue
-        for rel in rels.get("relations", []):
-            resource = rel.get("resource", "")
-            m = re.search(r"open\.spotify\.com/artist/([A-Za-z0-9]{22})", resource)
-            if m:
-                return m.group(1)
+        found = _mb_spotify_from_artist_id_payload(full)
+        if found:
+            return found
     return None
+
+
+def _mb_spotify_from_artist_id_payload(rels: dict) -> str | None:
+    """Spotify artist id from an already-fetched artist payload."""
+    for rel in rels.get("relations", []):
+        resource = ((rel.get("url") or {}).get("resource")
+                    or rel.get("resource") or "")
+        m = re.search(r"open\.spotify\.com/artist/([A-Za-z0-9]{22})", resource)
+        if m:
+            return m.group(1)
+    return None
+
+
+def musicbrainz_spotify_id(artist_name: str) -> str | None:
+    """Spotify artist id via MusicBrainz, or None.
+
+    Name match first; then an exact-alias match for artists MusicBrainz
+    holds only under their native spelling. See `_mb_spotify_by_alias`.
+    """
+    query = urllib.parse.quote(f'artist:"{artist_name}"')
+    url = f"https://musicbrainz.org/ws/2/artist/?query={query}&fmt=json&limit=5"
+    data = _mb_get_json(url)
+    if data is not None:
+        wanted = normalise(artist_name)
+        for artist in data.get("artists", []):
+            if normalise(artist.get("name", "")) != wanted:
+                continue
+            found = _mb_spotify_from_artist(artist["id"])
+            if found:
+                return found
+    return _mb_spotify_by_alias(artist_name)
 
 
 def resolve_artist_id(artist_name: str, index: dict[str, str],
@@ -320,8 +436,34 @@ def match_track(track_name: str, tracks: list[dict]) -> dict | None:
 # Source 3: YouTube search + scoring
 # --------------------------------------------------------------------
 
+def require_ytdlp() -> None:
+    """Fail loudly when the YouTube source is unavailable.
+
+    `youtube_search` returns [] on ImportError, which makes a missing
+    yt-dlp look exactly like "no candidate videos". Every artist then
+    reports "no verified youtube match" and the run looks like a data
+    problem. Callers that treat [] as a real answer should call this
+    first.
+    """
+    try:
+        import yt_dlp  # noqa: F401
+    except ImportError as exc:
+        raise SystemExit(
+            "yt-dlp is required for YouTube search but is not installed. "
+            "Without it every artist reports 'no verified youtube match'. "
+            "Install it with: pip install yt-dlp") from exc
+
+
 def youtube_search(query: str, limit: int = 6) -> list[dict]:
-    """Flat YouTube search via yt-dlp. Returns [] if yt-dlp is absent."""
+    """Flat YouTube search via yt-dlp.
+
+    Returns [] when yt-dlp is absent. That is intentional for callers, but
+    it also means a missing dependency is indistinguishable from "no
+    results" -- which is exactly how a missing yt-dlp presented: every
+    artist reported "no verified youtube match". `require_ytdlp()` exists
+    so a caller that cannot tolerate that can check up front; the
+    resolver's CLI calls it.
+    """
     try:
         import yt_dlp
     except ImportError:
@@ -420,11 +562,24 @@ def verify_video(video_id: str) -> dict | None:
 
 def resolve_track(artist_name: str, track_title: str,
                   min_score: float = 0.75) -> dict | None:
-    """Search YouTube for one track and return the verified best pick."""
+    """Search YouTube for one track and return the verified best pick.
+
+    Among candidates that clear `min_score`, one on the artist's own
+    channel outranks a higher-scoring upload on a stranger's. Ranking on
+    score alone picked lyric/fan re-uploads ("Roy Lyrics" over the
+    artist's own video) that also passed: for a paid campaign that risks
+    a takedown mid-flight and credits the wrong uploader. `_owns_channel`
+    is the same strict test the artist fallback uses, so a namesake
+    channel still cannot win.
+    """
     candidates = youtube_search(f"{artist_name} {track_title}")
     ranked = sorted(
         ((score_candidate(artist_name, track_title, c), c) for c in candidates),
-        key=lambda pair: pair[0], reverse=True)
+        key=lambda pair: (
+            _owns_channel(normalise(artist_name),
+                          normalise(pair[1].get("channel") or "")),
+            pair[0]),
+        reverse=True)
     for score, cand in ranked:
         if score < min_score:
             break

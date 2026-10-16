@@ -92,6 +92,11 @@ def main():
                     help="how many real top tracks to try (default 5)")
     opts = ap.parse_args()
 
+    # A missing yt-dlp would otherwise look like "no matches for any
+    # artist" (youtube_search swallows ImportError). Fail up front instead.
+    if opts.artist_fallback or opts.real_track_fallback or not opts.unresolved_only:
+        sr.require_ytdlp()
+
     conn = db.connect()
     artists = fetch_artists(conn, opts.unresolved_only)
     if opts.limit:
