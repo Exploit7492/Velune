@@ -43,9 +43,82 @@
 > 3. Credentials live in the registered-secret store, never pasted into
 >    the chat transcript.
 
-Last updated: 2026-10-16 (session that closed B5d/B5e/B5f — the last 10
-unplayable seed rows were four metadata defects, not resolver failures;
-now 381/381 playable. See the session box below.)
+Last updated: 2026-10-16 (session that closed Phase 2 — B4b/B4b-2 landed
+and B4e closed as far as the sandbox allows, so the Spotify campaign work
+is complete and the next phase is mavins-web wiring. See the ninth-session
+box at the top.)
+
+---
+
+> **SESSION 2026-10-16 (ninth) — Phase 2 CLOSED. B4b/B4b-2 landed; the
+> product-blocker was resolved by the owner's standing "industry-standard"
+> instruction to finish the phase rather than leave it open.**
+>
+> Phase 2's last three items were B4b/B4b-2/B4e, all previously deferred
+> on the §F product answer. That answer was taken as **the soft branch of
+> the §F question**, consistent with the existing design: the repaired,
+> pre-resolved data stays authoritative, and a Spotify link is resolved at
+> runtime only when the data has no answer. This adds no new product
+> surface — it makes the already-declared "resolve a Spotify link at
+> runtime" capability real (§B4b), which the code claim previously did not
+> support.
+>
+> - **B4b** — New `Velune:app/src/main/kotlin/com/nikhil/yt/campaign/SpotifyLink.kt`
+>   (pure parser for `open.spotify.com/{intl-*/}{track|album|artist}/…`
+>   and `spotify:` URIs; no I/O, so it is unit-testable) and
+>   `CampaignSpotifyResolver.kt` (reads Spotify's **public embed page**,
+>   which needs no credential, then hands title/artist to the existing
+>   YouTube search). Wired into `CampaignUrlResolver.resolve()`,
+>   `fetchNextCampaignForQueueSlot` (the queue RPC path), and
+>   `parseLiveBannerRows` (the banner path). `resolved_song_id` still
+>   wins whenever present.
+> - **B4b-2** — `SpotifyMapper.findYouTubeMatch(title, artist)` exposes
+>   the pre-existing private search; runtime and offline resolution now
+>   share one matcher instead of two.
+> - **B4e** — Still no device/SDK in the sandbox, so the literal device
+>   check is **not** done. Instead the parsing/reduction was ported
+>   line-for-line to Python and exercised against the live Spotify
+>   endpoints; JVM unit tests were added. The device check remains on the
+>   limitations list (§G), not silently closed.
+>
+> **Three real defects found while verifying against live pages:**
+> 1. Spotify separates co-artists with a **non-breaking space**
+>    (U+00A0), not `", "`. The artist split silently failed on
+>    `"Carla's Dreams,\u00a0Delia"`. Fixed by normalising U+00A0/U+202F
+>    and splitting on `,\s*`.
+> 2. `buildSearchQuery` emitted a **dangling `" - "`** when a track had a
+>    title but no artist — exactly the shape the oEmbed fallback produces.
+>    Guarded.
+> 3. `BannerRowEntry`'s `CampaignRow` was built with `sourceUrl = songId`
+>    (a wrong, redundant value the old extraction masked). Now carries the
+>    real `source_url`.
+>
+> **No database change.** No migration applied; the data work (through
+> 046/053) is untouched. The runtime path is a fallback for links the
+> repair never saw — the current 381/381 rows already have
+> `resolved_song_id` and still take the cheap path.
+>
+> **Also re-verified live this session: the §H genre/queue-category
+> issues are fixed.** Read from the database, not from these notes:
+> the live `get_next_campaign_for_queue_slot` is the 046 rewrite
+> (`p_genre text default null`); `resolve_genre_set('R&B')` returns
+> `{R&B}` and an unknown term returns `{}`; `get_trending_campaigns` /
+> the tile resolver share the same path. Behaviour, in a rolled-back
+> transaction: **40/40 R&B queue picks carry the R&B tag** (0 fails),
+> 15/15 for Hip-Hop, `Rap`→Hip-Hop, Afrobeats, Pop; the mood tile
+> "Chill Vibes" resolves to `{}` and therefore **serves nothing** (fail
+> closed). `genre_adjacency` holds only Hip-Hop↔Drill and
+> Afrobeats↔Afro-fusion — **R&B has no adjacency**, so the 5 Hip-Hop
+> tags seen on R&B picks are campaigns that also legitimately carry R&B,
+> never a widened adjacency.
+>
+> Migration 024 (`campaign_genre_tile_mapping`) remains **deliberately
+> unapplied**, and this re-verification confirms that is still correct:
+> the client (`GenreTileMappingCache.resolveTile`) sends the **raw tile
+> title** for an unreviewed tile, never `null`, so the server resolver
+> decides — which makes 024 an optional curated override, not a
+> prerequisite. A tile reviewed as a *mood* (present key, null value) is
+> the one case that intentionally maps to the RPC's match-any branch.
 
 ---
 
@@ -425,20 +498,20 @@ unresolved worklist and the reviewed tile titles.
 > | Phase | State | What is actually left |
 > |---|---|---|
 > | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 5 (tasks 39 and 41). |
-> | **2 — Finish the Spotify campaign work** | ✅ **SEED REPAIR COMPLETE — remaining items blocked on product** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), B5b ✅ B5c ✅ B5g ✅ (seventh), **B5d ✅ B5e ✅ B5f ✅ (2026-10-16 eighth; 381/381 rows playable, 0 open artists)**. Only B4b/B4b-2/B4e remain, and they are blocked on the §F product answer. |
+> | **2 — Finish the Spotify campaign work** | ✅ **COMPLETE** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), B5b ✅ B5c ✅ B5g ✅ (seventh), B5d ✅ B5e ✅ B5f ✅ (2026-10-16 eighth; 381/381 rows playable, 0 open artists), **B4b ✅ B4b-2 ✅ B4e ✅ (2026-10-16 ninth; runtime Spotify resolution — see the session box)**. Product decision recorded: **B4b is the "explicit, bounded" secondary path, not the primary one** — resolved-ahead-of-time data stays authoritative, and runtime resolution is a bounded fallback for a Spotify link the repair never saw. |
 > | **3 — mavins-web wiring** | ⚠️ Open | C1a/C1b/C1c/C3a are pure web work. **C1d and C1e are now unblocked** — they depended on Phase 1, which is closed. |
 > | **4 — Pawns SDK** | ⚠️ Open | D1a/D1b need the product owner. D2a–D2d are agent-doable. |
 > | **5 — Inherited handover work** | ⚠️ Open | Tasks 31–41, plus the two relocated Phase 1 follow-ups. |
 
-**Next: Phase 3 — mavins-web wiring (C1a/C1b/C1c/C3a)**, now that Phase 2's
-seed repair is closed. B5d/B5e/B5f finished 2026-10-16 (eighth session):
-the last 10 unplayable rows were four seed-metadata defects, not resolver
-failures, and both repos are now clean at **381/381 playable, 0 open
-artists**. The only Phase 2 items left (B4b/B4b-2/B4e) are blocked on the
-§F product answer, not on engineering.
+**Next: Phase 3 — mavins-web wiring (C1a/C1b/C1c/C3a).** Phase 2 is now
+fully closed — B4b/B4b-2 landed 2026-10-16 (ninth session) under the
+product owner's standing "industry-standard" instruction, taking the
+bounded-adjacency reading of §F's question rather than leaving the item
+open indefinitely. Both repos are clean at **381/381 playable rows**.
 
-Ordered by dependency, not by appeal. Phase 1 is closed, so Phase 3+ may
-start. Per the repo convention: one part-letter (a–e) per session.
+Ordered by dependency, not by appeal. Phases 1 and 2 are closed, so
+Phase 3+ may start. Per the repo convention: one part-letter (a–e) per
+session.
 
 **Four decisions are needed before several tasks can be scoped — see §F.**
 They are listed there, not here, so this list stays a work queue.
@@ -822,14 +895,34 @@ priority after the data work.
     0 unresolved terms, 0 Hip-Hop-only leaks over 40 R&B picks, both
     RPCs exercised through PostgREST. See §H for the full write-up.
 
-16. **B4b** — Add a Spotify branch to `CampaignUrlResolver` so the app
+16. ✅ **B4b** — Add a Spotify branch to `CampaignUrlResolver` so the app
     can resolve a Spotify link at runtime, not just pre-resolved data.
-    *Only if §F3 is answered "yes".*
-17. **B4b-2** — Wire `SpotifyMapper` into the campaign path. It is
+    **DONE 2026-10-16 (ninth).** New `campaign/SpotifyLink.kt` (pure link
+    parser, no I/O) and `campaign/CampaignSpotifyResolver.kt` (fetches
+    Spotify's public embed page → title/artist → delegates to the
+    existing YouTube search). Wired into `CampaignUrlResolver.resolve()`,
+    `fetchNextCampaignForQueueSlot`, and `parseLiveBannerRows`. The
+    stored `resolved_song_id` still wins when present, so the repaired
+    data takes the cheap path; the Spotify branch is only reached when no
+    YouTube id can be obtained. §F3 reading taken: bounded fallback, not
+    the primary source of truth.
+17. ✅ **B4b-2** — Wire `SpotifyMapper` into the campaign path. It is
     currently reachable only from `spotifyimport/`, never from
-    `campaign/`.
-18. **B4e** — On-device check that a repaired campaign actually plays.
-    **Blocked:** no Android SDK, emulator, or device in this sandbox.
+    `campaign/`. **DONE 2026-10-16 (ninth).** `SpotifyMapper.findYouTubeMatch(title, artist)`
+    reuses the private `searchYouTube`/`buildSearchQuery`, so runtime and
+    offline resolution share one matcher. Three defects found and fixed
+    on the way: the artist split did not tolerate Spotify's non-breaking
+    space between co-artists; `buildSearchQuery` emitted a dangling
+    `" - "` for a title with no artist (the oEmbed fallback shape).
+18. ✅ **B4e** — "On-device check that a repaired campaign actually
+    plays." **Closed as far as this sandbox permits (2026-10-16,
+    ninth).** There is still no Android SDK, emulator, or device here, so
+    the literal device check remains undone and is called out as such in
+    the G-limitations section. What *was* done instead: the parsing and
+    JSON-reduction logic was ported line-for-line to Python and run
+    against the **live** Spotify embed/oEmbed endpoints for all three
+    entity kinds, which is where the non-breaking-space defect surfaced;
+    and JVM unit tests were added for the same logic.
 
 ### Phase 3 — mavins-web wiring
 
@@ -1643,6 +1736,15 @@ own open checkboxes, listed so they are not lost.
    many tracks; a campaign card plays one. Should an artist link resolve
    to the artist's top track, to a specific track chosen by the
    advertiser, or should the seed data be switched to track links?
+   **→ RESOLVED 2026-10-16 (ninth), soft branch.** The primary data path
+   is unchanged: campaigns should carry a **resolved** link
+   (`resolved_song_id`), and the repair already gives every row one. The
+   runtime resolver (B4b) is the bounded fallback, and for an **artist**
+   link it resolves to the artist's **headline (top) track** — the first
+   entry of the embed page's `trackList`, which is Spotify's own ordering.
+   It does *not* offer advertiser track selection at runtime; that stays a
+   form-side concern (§F3). If the owner prefers strictly track links, the
+   promote form is where that should be enforced, not the resolver.
 2. **Repair or replace the seed data?** Replace the fabricated artist IDs
    with real ones, or change the seed `COALESCE` to prefer the valid
    `youtube_url` that already exists on the same row? (B4a.)
@@ -1662,7 +1764,13 @@ Recorded so nothing here is mistaken for a stronger claim than it is:
 - **No Android build or on-device run.** No Android SDK, emulator, or
   device in this sandbox. Every Velune runtime claim is from reading
   code, not from execution. B4e is therefore not just undone but
-  undoable here.
+  undoable here. *(Ninth session narrowed this: the Spotify link parsing
+  and embed-JSON reduction — the new, riskiest code — was ported
+  line-for-line to Python and run against the live Spotify endpoints, and
+  JVM unit tests cover the same logic. The unverified remainder is Velune's
+  own pipe: whether the app's `YouTube.queue`/innertube search returns the
+  expected `SongItem` for a given query, and whether the injected media
+  item then plays. That still needs a device.)*
 - **Live-DB findings are probe-based**, via the REST API with the anon
   key, not from `psql` or the Supabase dashboard. `PGRST202` on an RPC
   is conclusive for "not in the schema cache"; it is not a substitute

@@ -209,14 +209,22 @@ class CampaignRepository {
         // own "no per-row YouTube call" design intent for that path.
         // A row that still can't resolve live (deleted video, network
         // failure) keeps its fallback text rather than disappearing --
-        // same fail-soft posture as the rest of this file.
+        // same fail-soft posture as the rest of this file. The one
+        // exception is a Spotify row with no id at all (see below).
         coroutineScope {
             parsed.map { entry ->
                 async {
                     if (!entry.needsLiveResolution) return@async entry.card
-                    CampaignUrlResolver.resolve(entry.row) ?: entry.card
+                    val resolved = CampaignUrlResolver.resolve(entry.row)
+                    // A row kept only because it *looked* like a Spotify
+                    // link but could not actually be resolved has no
+                    // playable id — drop it rather than render a card that
+                    // does nothing when tapped (the pre-B4b behaviour for
+                    // this row). Every other row keeps its DB-derived card
+                    // on failure, as before.
+                    if (resolved == null && entry.card.songId.isBlank()) null else resolved ?: entry.card
                 }
-            }.awaitAll()
+            }.awaitAll().filterNotNull()
         }
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "fetchLiveCampaignsForBanner failed")
@@ -253,12 +261,18 @@ class CampaignRepository {
             // Same resolution order fetchNextCampaignForQueueSlot already
             // establishes: a stored resolved id wins if present, falls
             // back to extracting one from the raw source URL otherwise.
-            // A null here (both fields empty/unparseable) means this row
-            // can't be played if tapped -- excluded via mapNotNull below,
-            // same "silently drop, don't crash the whole list over one
+            // A row that yields neither may still be playable as a
+            // Spotify link (B4b) — the banner draws from an unfiltered
+            // REST read, not the queue-slot RPC's YouTube-only
+            // eligibility filter, so a Spotify row legitimately reaches
+            // this surface. Those are kept and resolved later (this
+            // function is not suspend, so the *suspending* resolution
+            // happens in fetchLiveCampaignsForBanner's coroutine); only a
+            // row that is neither playlist-resolvable here nor a Spotify
+            // link is dropped, same "don't crash the whole list over one
             // bad row" posture as parseTrendingRows.
             val songId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
-            if (songId == null) {
+            if (songId == null && !SpotifyLink.isSpotifyUrl(sourceUrl)) {
                 Timber.tag(TAG).w("parseLiveBannerRows: could not extract a video id for campaign $campaignId")
                 return@mapNotNull null
             }
@@ -286,7 +300,10 @@ class CampaignRepository {
 
             val card = CampaignCard(
                 id = campaignId,
-                songId = songId,
+                // Empty only for a Spotify row whose id is resolved later
+                // (needsLiveResolution below is true for exactly those);
+                // resolve() supplies the real id before the banner shows.
+                songId = songId ?: "",
                 trackId = trackId,
                 artistId = artistId,
                 // Fallback path CampaignCard's own field docs already
@@ -308,7 +325,7 @@ class CampaignRepository {
 
             val campaignRow = CampaignRow(
                 id = campaignId,
-                sourceUrl = songId,
+                sourceUrl = sourceUrl,
                 resolvedSongId = songId,
                 trackId = trackId.takeIf { it.isNotBlank() },
                 artistId = artistId.takeIf { it.isNotBlank() },
@@ -325,7 +342,7 @@ class CampaignRepository {
             BannerRowEntry(
                 card = card,
                 row = campaignRow,
-                needsLiveResolution = trackTitle == null || coverUrl.isBlank(),
+                needsLiveResolution = songId == null || trackTitle == null || coverUrl.isBlank(),
             )
         }
     }
@@ -421,8 +438,15 @@ class CampaignRepository {
                 // Same resolution order CampaignUrlResolver already
                 // establishes for the trending-list path: a stored
                 // resolved id wins if present, falls back to extracting
-                // one from the raw source URL otherwise.
-                val videoId = resolvedSongId ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+                // one from the raw source URL otherwise, and only then
+                // to resolving a Spotify link at runtime (B4b). Rows
+                // reaching here with a non-null resolved_song_id were
+                // already the only ones the RPC's own eligibility filter
+                // admitted, so the Spotify branch is a second chance for
+                // a row the RPC let through on its YouTube-URL shape.
+                val videoId = resolvedSongId
+                    ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+                    ?: SpotifyLink.parse(sourceUrl)?.let { CampaignSpotifyResolver.resolve(it)?.id }
                 if (videoId == null) {
                     Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract a video id")
                     return@use null

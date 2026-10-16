@@ -61,10 +61,18 @@ object CampaignUrlResolver {
     /**
      * Resolves one campaign row into a playable [CampaignCard]. Returns
      * null if the URL can't be parsed or the video can't be resolved.
+     *
+     * Two kinds of stored link reach here: a YouTube URL (the common,
+     * fully-repaired case — the stored `resolved_song_id` usually makes
+     * this a single `YouTube.queue` call), and a Spotify URL (an
+     * advertiser-supplied link that was never resolved ahead of time).
+     * The Spotify branch is tried only when no YouTube video id can be
+     * obtained, so the repaired data always takes the cheap path.
      */
     suspend fun resolve(row: CampaignRow): CampaignCard? {
         val videoId = row.resolvedSongId?.takeIf { it.isNotBlank() }
             ?: extractVideoId(row.sourceUrl)
+            ?: resolveSpotifyVideoId(row.sourceUrl)
         if (videoId == null) {
             Timber.tag(TAG).w("Could not extract video id from campaign ${'$'}{row.id}'s source_url")
             return null
@@ -98,6 +106,22 @@ object CampaignUrlResolver {
             Timber.tag(TAG).e(e, "Failed to resolve campaign ${'$'}{row.id} (video $videoId)")
             null
         }
+    }
+
+    /**
+     * The Spotify branch of [resolve]: turns a Spotify link into a
+     * YouTube video id, or null if it is not a Spotify link or nothing
+     * confident could be matched. Kept separate so [resolve] reads as
+     * the same two-step it always did, and so the Spotify path is
+     * exercisable on its own.
+     */
+    private suspend fun resolveSpotifyVideoId(sourceUrl: String): String? {
+        val target = SpotifyLink.parse(sourceUrl) ?: return null
+        val match = CampaignSpotifyResolver.resolve(target) ?: run {
+            Timber.tag(TAG).w("Spotify campaign link ${'$'}{target.kind} ${'$'}{target.id} had no confident YouTube match")
+            return null
+        }
+        return match.id
     }
 
     private const val TAG = "CampaignUrlResolver"

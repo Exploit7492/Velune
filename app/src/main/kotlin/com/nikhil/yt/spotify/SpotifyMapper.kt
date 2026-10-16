@@ -6,6 +6,7 @@ import com.nikhil.yt.innertube.YouTube.SearchFilter
 import com.nikhil.yt.spotify.models.SpotifyPlaylist
 import com.nikhil.yt.spotify.models.SpotifyPlaylistTrack
 import com.nikhil.yt.spotify.models.SpotifySavedTrack
+import com.nikhil.yt.spotify.models.SpotifySimpleArtist
 import com.nikhil.yt.spotify.models.SpotifyTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -80,6 +81,26 @@ object SpotifyMapper {
     }
 
     /**
+     * Finds the YouTube match for a bare title/artist pair — the entry
+     * point campaign resolution uses (a campaign link carries only a
+     * title and an artist, not a parsed Spotify track object). Shares
+     * [searchYouTube]/[buildSearchQuery] with the Spotify-import path so
+     * the two can never drift in how they turn a title into a search.
+     */
+    suspend fun findYouTubeMatch(title: String, artist: String): SongItem? =
+        searchYouTube(
+            SpotifyTrack(
+                name = title,
+                // Split on any comma-plus-whitespace, including the
+                // non-breaking space Spotify uses between co-artists.
+                artists = artist.split(Regex(",\\s*"))
+                    .map { it.replace('\u00A0', ' ').trim() }
+                    .filter { it.isNotBlank() }
+                    .map { SpotifySimpleArtist(name = it) },
+            ),
+        )
+
+    /**
      * Builds a YouTube search query from a Spotify track.
      * Prefers: "artist - title" format with album context.
      */
@@ -89,8 +110,13 @@ object SpotifyMapper {
         val album = track.album?.name
 
         return buildString {
-            append(artistNames)
-            append(" - ")
+            // A campaign link resolved from Spotify's oEmbed fallback
+            // carries a title but no artist; without this guard the query
+            // would start with a dangling " - ".
+            if (artistNames.isNotBlank()) {
+                append(artistNames)
+                append(" - ")
+            }
             append(title)
             if (!album.isNullOrBlank() && album != title) {
                 append(" ")

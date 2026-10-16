@@ -409,6 +409,10 @@ dependencies {
     implementation(libs.ffmpeg.kit)
     implementation(libs.documentfile)
     testImplementation(libs.junit)
+    // org.json is part of the Android platform at runtime, but the JVM
+    // unit-test classpath has only a stub that throws. The real
+    // implementation is needed to test the Spotify link/embed parsing.
+    testImplementation(libs.json)
     // Ensure ProcessLifecycleOwner is available for the presence manager and CI unit tests
     implementation("com.github.therealbush:translator:1.1.1")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
