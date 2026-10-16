@@ -170,6 +170,23 @@ unresolved worklist and the reviewed tile titles.
 
 ## NEXT 40 TASKS — ordered work queue
 
+> **PHASE STATUS (2026-10-15, fourth session).** Where each phase stands.
+> This is the summary; the task entries below are authoritative.
+>
+> | Phase | State | What is actually left |
+> |---|---|---|
+> | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 5 (tasks 39 and 41). |
+> | **2 — Finish the Spotify campaign work** | ⚠️ **PARTIAL — this is the next real work** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046). **Open: B5b, B5c, B5d, B5e, B5f, B5g** (seed-data repair + a DB-level guard) and B4b/B4b-2/B4e, which are blocked on the §F product answer. |
+> | **3 — mavins-web wiring** | ⚠️ Open | C1a/C1b/C1c/C3a are pure web work. **C1d and C1e are now unblocked** — they depended on Phase 1, which is closed. |
+> | **4 — Pawns SDK** | ⚠️ Open | D1a/D1b need the product owner. D2a–D2d are agent-doable. |
+> | **5 — Inherited handover work** | ⚠️ Open | Tasks 31–41, plus the two relocated Phase 1 follow-ups. |
+
+**Start at Phase 2, task 10 (B5b)** unless the user says otherwise: it is
+self-contained, needs no product decision, and closes the hole that lets the
+fabricated Spotify rows be re-created. Note tasks 12–14 are **data audits,
+not resolver work** — the seed metadata is partly fabricated, so start by
+auditing `users.metadata.top_tracks` against real discographies.
+
 Ordered by dependency, not by appeal. Phases 1 and 2 unblock everything
 else; do not start Phase 3+ while Phase 1 is open, because a 500 caused
 by a missing RPC is indistinguishable from a 500 caused by bad code.
@@ -457,13 +474,15 @@ priority after the data work.
     *Note:* the plan JSON and backup are **generated artifacts**, not
     committed — regenerate them with `resolve_tracks.py`. Only the
     scripts are committed, which is what makes them durable.
-9. **B4c** — Relax the queue-slot RPC filter to gate on
-    `resolved_song_id is not null` rather than on URL shape, preserving
-    §36's intent (never hand the app something unplayable) while removing
-    the blanket Spotify exclusion. *Note:* the current filter already
-    accepts `resolved_song_id`, so this is hardening, not a blocker.
-    **Now folds into §H5b** — the genre fix rewrites this same filter,
-    so do them together rather than editing the function twice.
+9. **B4c** — ✅ **DONE 2026-10-15 (fourth session), as this task itself
+    directed** ("folds into §H5b — the genre fix rewrites this same
+    filter, so do them together rather than editing the function
+    twice"). Migration 046 rewrote
+    `get_next_campaign_for_queue_slot` and preserved the
+    `resolved_song_id is not null OR source_url ilike '%youtube.com/watch%'`
+    eligibility condition **verbatim** — §36's "never hand the app
+    something it cannot play" intent is intact, and the blanket
+    Spotify-by-URL-shape exclusion is gone.
 10. **B5b** — Harden the seed migration: `20260831000024_seed_user_campaigns.sql:91`
     still fabricates `'https://open.spotify.com/artist/' || id::TEXT` as
     its last-resort `COALESCE` fallback. Make it fail loudly instead of
@@ -498,14 +517,21 @@ priority after the data work.
     this and exits non-zero, so it is usable as the check now. What
     remains is enforcing it in the database itself (a constraint or a
     scheduled assertion), not just in a script.
-15b. **H-genre (new, 2026-10-15 second session)** — **Fix genre-targeted
-    queue slots.** Confirmed live defect: `p_genre = any(target_genres)`
-    is an exact string comparison between two disjoint vocabularies (136
-    compound campaign strings vs 14 canonical genres), so a genre-scoped
-    lookup always misses and falls back to the unscoped path — which is
-    how an R&B listener is served Hip-Hop. Full root cause, the
-    industry-standard mapping design, and the one product decision
-    needed are in **§H**. Tasks H5a–H5d.
+15b. **H-genre (new, 2026-10-15 second session)** — ✅ **DONE
+    2026-10-15 (fourth session).** Closed by **migration 046**
+    (`mavins-web/supabase_migration_046_genre_taxonomy.sql`), applied and
+    verified live. The root cause turned out to be **two** defects, and
+    the second one is why nothing worked: the RPC's
+    `p_genre = any(target_genres)` exact-match across two disjoint
+    vocabularies, **and** the fact that `Queue.genre` is `get() = null`
+    with `YouTubeQueue` defaulting to null, so *every* queue sent
+    `p_genre = null` and hit the RPC's match-any branch. Fixed
+    data-driven (canonical taxonomy + alias table + bounded adjacency,
+    resolved at query time — adding a genre or synonym is an INSERT, not
+    a code change) plus a client fix so a genre-scoped slot can never
+    widen to the whole catalogue. Verified: 381/381 campaigns mapped,
+    0 unresolved terms, 0 Hip-Hop-only leaks over 40 R&B picks, both
+    RPCs exercised through PostgREST. See §H for the full write-up.
 
 16. **B4b** — Add a Spotify branch to `CampaignUrlResolver` so the app
     can resolve a Spotify link at runtime, not just pre-resolved data.
