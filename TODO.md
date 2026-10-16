@@ -43,10 +43,216 @@
 > 3. Credentials live in the registered-secret store, never pasted into
 >    the chat transcript.
 
-Last updated: 2026-10-15 (session that began Phase 1 and found §A1's
-diagnosis to be largely **incorrect** — see the correction box under
-§A1. Phase 1 shrank from "apply 025→044" to "apply a handful of
-genuinely-missing migrations".)
+Last updated: 2026-10-15 (session that found the seed engine had never
+run end to end — three fatal defects, now fixed; see the session box
+below.)
+
+---
+
+> **SESSION 2026-10-15 (seventh) — B5b/B5c/B5g were marked done but the
+> canonical migration file still carried the defect. Fixed.**
+>
+> Migration 047 corrected the *live* `ensure_seed_campaigns()` and added
+> the playability guard — verified live this session
+> (`trg_enforce_campaign_playability` present, definition free of the
+> fabricated URL, guard matches ANY campaign, sources `youtube_url`).
+> But the **canonical CLI migration file**
+> `supabase/migrations/20260831000024_seed_user_campaigns.sql` had been
+> "fixed" with a **comment only**: its header claimed 047 had amended it
+> while the SQL body still wrote
+> `COALESCE(..., 'https://open.spotify.com/artist/' || id::TEXT)` and
+> still guarded on `is_active = true`. It is the file a
+> `supabase db push` / clean-environment replay would execute, so the
+> defect was one replay away from returning.
+>
+> The body now mirrors 047 exactly. Verified **executable-identical** to
+> the live definition (apply in a rolled-back transaction, strip
+> comments, compare `pg_get_functiondef` output). Functionally tested in
+> rolled-back transactions:
+> - idempotent — returns `(0, 151)`, no rows created;
+> - a seed with **no** playable link (no sibling `resolved_song_id`, no
+>   youtube watch URL) is **skipped**, not given a fabricated URL —
+>   `(2, 152)` with the two throwaways, 0 rows for the no-link seed;
+> - a seed with a real youtube watch URL gets that URL, `resolved_song_id`
+>   null, to be resolved later;
+> - the fabricated-row count is unchanged (10) in every case.
+>
+> Also corrected the stale "migration 024 … already have an active
+> campaign" doc comment in `seed-campaigns/route.ts`. `tsc --noEmit`
+> clean.
+>
+> **B5b, B5c, B5g: ✅ DONE** — and now actually durable, not just live.
+
+---
+
+> **SESSION 2026-10-15 (sixth) — the 14 unresolved artists were four
+> code defects, not bad data. All findings verified live against the DB.**
+>
+> Goal 4 ("replace fabricated campaign metadata with real working
+> links") was blocked because the resolver could not place 31 rows
+> across 14 artists. Chasing those artists found four defects, each of
+> which silently disabled a whole source instead of failing:
+>
+> - **`normalise()` dropped letters NFKD cannot decompose** — Polish
+>   `ł`, Danish/Norwegian `ø`, Croatian `đ`, Icelandic `ð`/`æ`, German
+>   `ß`. These are single code points with no decomposition, so the
+>   `[^a-z0-9]+` class deleted them: `"Dawid Podsiadło"` became
+>   `"dawid podsiad o"` and could never equal the real channel name.
+>   Fixed with an explicit transliteration table.
+> - **`normalise()` did not fold `&` to `and`** — the seed spells the
+>   artist `"Marcus and Martinus"` but the real channel is
+>   `"Marcus & Martinus"`, so the two never compared equal and the
+>   artist was rejected as a namesake.
+> - **`musicbrainz_spotify_id()` read the wrong field.** It read the
+>   flat `rel["resource"]`, but the MusicBrainz API nests it at
+>   `rel["url"]["resource"]`. Every relation yielded `None`, so **the
+>   entire MusicBrainz source had been dead** — this was the actual
+>   cause of nine artists reporting "no spotify artist id". Accepts both
+>   shapes now.
+> - **A transient MusicBrainz 503 read as "artist not found."** Even at
+>   one request per second MusicBrainz intermittently 503s, so the same
+>   artist resolved on one run and not the next. Added retry with
+>   exponential backoff.
+>
+> Also improved:
+> - **Exact-alias resolution.** MusicBrainz holds many artists only
+>   under their native spelling — Lee Young Ji as `이영지`, Ivi Adamou as
+>   `Ήβη Αδάμου` — so the ASCII seed name found nothing. The alias index
+>   does know them. A hit is accepted **only** when the exact normalised
+>   name is among the candidate's aliases; score alone is unsafe (the
+>   `"Ivi Adamou"` query also returns `"Kat Adamou"`).
+> - **`resolve_track()` now prefers an artist-owned upload** among
+>   candidates that clear the score bar. Ranking on score alone picked
+>   lyric/fan re-uploads over the artist's own video.
+> - **`youtube_search()` swallowed `ImportError`**, so a missing `yt-dlp`
+>   looked exactly like "no matches" — this is how the previous session
+>   spent time on a phantom data problem. Added `require_ytdlp()`, called
+>   from the CLI, so it fails loudly.
+>
+> **Live effect: 350 → 371 of 381 rows playable; open artists 14 → 4.**
+> Remaining 10 rows / 4 artists (Lyodra Ginting 4, Carlas Dreams 3,
+> Son Tung MTP 2, Dopebwoy 1) are genuine seed-name defects — the seed
+> carries `"Carlas Dreams"` for **Carla's Dreams** and
+> `"Son Tung MTP"` for **Sơn Tùng M-TP** — plus one artist
+> (Dopebwoj→Dopebwoy id resolves but exposes no tracks). Their real
+> Spotify ids are known (`Carla's Dreams` `1n5LD9Ar3D6RK2X2ewGvXb`,
+> `Sơn Tùng M-TP` `5dfZ5uSmzR7VQK0udbAVpf`); fixing them is a **seed
+> rename**, not a resolver change, and is left as B5f follow-up.
+> **No threshold was lowered.**
+>
+> **Push note:** `gh auth setup-git` wires the *read-only* `GITHUB_TOKEN`
+> into git's credential helper and then the push 403s. Push with the
+> writable PAT in the `GH_TOKEN` variable, which `gh auth
+> git-credential` prefers — no token in the remote URL:
+> `GH_TOKEN="$GH_AUTH_TOKEN" git push origin main`.
+
+---
+
+> **SESSION 2026-10-15 (fifth) — the seed pipeline had never completed a
+> single run. All findings verified live; migrations 048–052 applied.**
+>
+> The task was "fill in the empty DB seed tables". Auditing what the
+> seeding stack actually does turned up three defects that each stopped
+> it dead, plus two that made campaign targeting narrower or wider than
+> anyone believed. The empty tables were largely a *symptom*: nothing
+> could write them.
+>
+> - **The seed engine crashed on every invocation.**
+>   `seedEngine.getActiveCampaigns()` used
+>   `.lt('spent_cents', 'total_budget_cents')`, which reads as a
+>   column-to-column comparison but is parsed by PostgREST as a literal.
+>   Every run died with `invalid input syntax for type bigint:
+>   "total_budget_cents"` before ingesting anything, so the daily 03:00
+>   cron had never delivered an interaction. Removed; the budget test
+>   already exists in `processCampaign`, which pauses the campaign when
+>   nothing is affordable.
+> - **`seed_interaction_log` was un-writable — migration 049.** Both
+>   writers copy `track_campaigns.track_id`, which is NULL on all 381
+>   campaigns, and the column was `NOT NULL`, so every play/save/share
+>   insert failed `23502`. The constraint was the wrong model: a campaign
+>   identifies its recording by `source_url`/`resolved_song_id`, and
+>   nothing maps a campaign onto a `tracks` row, so there is no correct
+>   value to backfill. `NOT NULL` dropped, FK kept.
+> - **Genre targeting matched nothing — migration 051.** The engine
+>   filtered `.in('primary_genre', campaign.target_genres)`, comparing a
+>   campaign tag like `'Afrobeats'` against a seed label like
+>   `'Afrobeats/Afropop'`. Exact `=` matched **0** seeds for every
+>   single-tag campaign. The taxonomy already solved this:
+>   `sync_user_genres()` resolves each user's fragments onto canonical
+>   ids in `user_genres` (populated for all 151 seeds), exactly as
+>   `sync_campaign_genres()` does for campaigns. Selection now runs
+>   through new `select_seed_audience()`, a SECURITY DEFINER RPC, so it
+>   also works on the anon key without widening `user_genres`' RLS
+>   policy. The Afrobeats campaign 2b14f512 went from 0 eligible seeds
+>   to 10.
+> - **Two campaigns used ISO country codes — migration 050.** Both belong
+>   to the real `Admin` user and stored `['US','NG','GB','GH']` where
+>   every other campaign and every seed uses full names, so
+>   `.in('country', ...)` matched nobody and the engine reported "No
+>   eligible seeds found" while the campaign stayed active and servable.
+>   Normalised via `public.countries`, not a hardcoded list.
+> - **§H1 correction — the playability invariant did not hold.**
+>   Migration 047's `enforce_campaign_playability()` required
+>   `scheduled_for is not null and scheduled_for <= now()`, but the live
+>   queue RPC tests `(scheduled_for is null or scheduled_for <= now())`.
+>   A NULL start time means "due now" everywhere except in the guard, so
+>   the guard skipped exactly those rows. **The earlier
+>   "0 servable-but-unplayable" measurement was a false negative** — it
+>   used the guard's predicate instead of the queue's. There are **31
+>   rows** active, unpaused, not completed, `scheduled_for IS NULL`,
+>   `resolved_song_id IS NULL`, with an artist-page `source_url` that the
+>   queue will select and the app cannot play. Fixed in migration 052;
+>   the 31 rows are deliberately **not** repaired (that is data
+>   curating, and inventing a link is what 047 removed).
+> - **Migration 048** fills the genuinely empty, genuinely read columns:
+>   `users.city`/`timezone`/`cooldown_until` (1/151, 0/151, 0/151 filled),
+>   `track_campaigns.campaign_name` (0/381) and `target_cities`.
+> - **The `leaderboard` / `leaderboard_record` tables were empty and are
+>   read by `withdrawal/stats`**, which computes rank by ordering
+>   `leaderboard_record` — so with the table empty every user ranked 1.
+>   Populated with three scopes (matching the ids
+>   `/api/setup-leaderboard` registers) scored from real campaign
+>   streams at the same 0.4 rate `get_leaderboard` uses. That route also
+>   queried without `leaderboard_id`, so once three scopes exist each
+>   user appears three times and the rank triples; the query is now
+>   scoped. **Note `get_leaderboard` does not read these tables** — it
+>   aggregates `track_campaigns`, which is why the public leaderboard
+>   looked fine while this one was broken.
+> - **Verified end to end**, three campaigns driven through the real
+>   `POST /api/seed-engine/run` on a dev server: 16 interactions, 32
+>   cents, `seed_interaction_log` 0→22 rows (`play`/`save`),
+>   `campaign_daily_metrics` written, `total_streams`/`seeded_streams`/
+>   `spent_cents` all advanced. `tsc --noEmit` clean, `next build`
+>   clean.
+> - **Not a defect, left alone:** the one remaining "No eligible seeds
+>   found" is the availability gate working correctly — that campaign's
+>   only audience member had just posted and sits inside its 30–120 min
+>   `next_due_at` jitter. Also left alone: `seedEngine.updateSeedSchedule()`
+>   sets `posts_today = 1` with a comment claiming an RPC increments it
+>   (none exists), and never writes `pool_id`, which
+>   `selectSeeds`/POSTs disagree with. Both are real and documented, not
+>   yet fixed.
+> - **Not backfilled, on purpose:** `artist_growth_milestones`,
+>   `campaign_daily_metrics` and `seed_interaction_log` are runtime logs.
+>   Pre-seeding them would forge an audit trail and double-count against
+>   `total_streams`.
+> - **Pushed, and the token blocker is gone.** `GH_AUTH_TOKEN` is now
+>   registered in this environment (40 chars, classic PAT, `repo` scope)
+>   and returns **201** on a write probe — it is the writable credential
+>   the previous handover said had to be supplied and the latest
+>   `NEXT_SESSION_PROMPT.md` already names. `GITHUB_TOKEN` is still the
+>   read-only `ghu_` App token (403, empty `x-oauth-scopes`). Both repos
+>   pushed to `main`: Velune `ea83c34`, mavins-web `d511ada`; both then
+>   `0 ahead / 0 behind`, clean trees.
+> - **C4a — ✅ FIXED.** The Dockerfile is used (by
+>   `docker-compose.yml`), and the Compose path was broken three times
+>   over: the reported missing build-time `NEXT_PUBLIC_*`; a
+>   `npm ci --only=production` deps stage that starved `next build` of
+>   `typescript`/`tailwindcss`/`postcss`/`autoprefixer`, all
+>   devDependencies; and a `runner` COPY of `.next/standalone` that
+>   `next.config.mjs` never produced. All three fixed, `output:
+>   'standalone'` gated behind `BUILD_STANDALONE=1` so Vercel is
+>   untouched. Verified both build paths plus a build-failing guard.
 
 ---
 
@@ -176,16 +382,18 @@ unresolved worklist and the reviewed tile titles.
 > | Phase | State | What is actually left |
 > |---|---|---|
 > | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 5 (tasks 39 and 41). |
-> | **2 — Finish the Spotify campaign work** | ⚠️ **PARTIAL — this is the next real work** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046). **Open: B5b, B5c, B5d, B5e, B5f, B5g** (seed-data repair + a DB-level guard) and B4b/B4b-2/B4e, which are blocked on the §F product answer. |
+> | **2 — Finish the Spotify campaign work** | ⚠️ **PARTIAL — this is the next real work** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), **B5b ✅ B5c ✅ B5g ✅ (2026-10-15 seventh; migration 047 was live but the canonical CLI file was still defective — now fixed)**. **Open: B5d, B5e, B5f** (seed-data repair) and B4b/B4b-2/B4e, which are blocked on the §F product answer. |
 > | **3 — mavins-web wiring** | ⚠️ Open | C1a/C1b/C1c/C3a are pure web work. **C1d and C1e are now unblocked** — they depended on Phase 1, which is closed. |
 > | **4 — Pawns SDK** | ⚠️ Open | D1a/D1b need the product owner. D2a–D2d are agent-doable. |
 > | **5 — Inherited handover work** | ⚠️ Open | Tasks 31–41, plus the two relocated Phase 1 follow-ups. |
 
-**Start at Phase 2, task 10 (B5b)** unless the user says otherwise: it is
-self-contained, needs no product decision, and closes the hole that lets the
-fabricated Spotify rows be re-created. Note tasks 12–14 are **data audits,
-not resolver work** — the seed metadata is partly fabricated, so start by
-auditing `users.metadata.top_tracks` against real discographies.
+**Next: Phase 2, task 12 (B5d/B5e/B5f)** — the seed-data repair passes.
+B5b, B5c and B5g are now closed (2026-10-15 seventh session). Note tasks
+12–14 are **data audits, not resolver work** — the seed metadata is partly
+fabricated, so start by auditing `users.metadata.top_tracks` against real
+discographies. The sixth session repaired four genuine resolver defects
+(see its box), so the MusicBrainz/alias path those passes depend on now
+actually returns results — worth re-running against the wider artist set.
 
 Ordered by dependency, not by appeal. Phases 1 and 2 unblock everything
 else; do not start Phase 3+ while Phase 1 is open, because a 500 caused
@@ -487,10 +695,21 @@ priority after the data work.
     still fabricates `'https://open.spotify.com/artist/' || id::TEXT` as
     its last-resort `COALESCE` fallback. Make it fail loudly instead of
     inventing a URL.
+    ✅ **DONE 2026-10-15 (seventh session).** Migration 047 fixed the
+    *live* function but only a **comment** was ever added to this
+    canonical CLI file — its body still fabricated the URL, so a
+    `supabase db push` would have reintroduced it. The body now mirrors
+    047 exactly, verified executable-identical to the live definition and
+    functionally tested in a rolled-back transaction: a seed with no
+    playable link is skipped, one with a youtube watch URL gets that URL,
+    and the fabricated-row count never moves.
 11. **B5c** — Close the recurrence hole: `ensure_seed_campaigns()` skips
     a seed only while it has an **active** campaign. If a repaired
     campaign is ever deactivated or completed and the function re-runs, a
     fresh row is created with the fabricated URL. Guard against it.
+    ✅ **DONE 2026-10-15 (seventh session), same fix as B5b.** The guard
+    now matches ANY campaign for the seed, in both the live function and
+    the canonical file.
 12. **B5d** — Repair the remaining rows, pass 1: artists kworb covers.
     **Partly done** — the rebuilt pipeline already ran the full pass.
     ⚠️ **Re-scoped by a finding, see §H and the RESUME block:** the
@@ -502,8 +721,21 @@ priority after the data work.
     can fix a title that the artist never recorded, so this pass must
     start by auditing `users.metadata.top_tracks` against real
     discographies, not by re-running the matcher.
+    **Progress 2026-10-15 (sixth session):** four *real* resolver defects
+    found and fixed (see the sixth session box) — the
+    `top_tracks`-versus-discography finding above is **still true** for
+    the buckets it named, but it was **not** the reason for the 14
+    artists under discussion here. Those 14 failed on the resolver, and
+    the fixes took them to 4. Rows now **371/381 playable**;
+    `verify_resolution.py` open artists **14 → 4**.
 13. **B5e** — Repair remaining rows, pass 2: MusicBrainz-only artists.
     Same caveat as task 12.
+    **Progress 2026-10-15 (sixth session):** the MusicBrainz path itself
+    was **broken** and is now fixed (wrong JSON field + no retry on 503,
+    see the sixth session box). Alias-based lookup was added, which is
+    what the "non-Latin scripts" arm of B5f actually needed. Net: this
+    pass is now worth re-running against the wider artist set, since its
+    source was previously returning nothing at all.
 14. **B5f** — Repair remaining rows, pass 3: the ~53 hard artists
     (non-Latin scripts, common-word names). Expect manual review; do not
     loosen the artist-agreement rule to raise the count. **Confirmed
@@ -517,6 +749,11 @@ priority after the data work.
     this and exits non-zero, so it is usable as the check now. What
     remains is enforcing it in the database itself (a constraint or a
     scheduled assertion), not just in a script.
+    ✅ **DONE — the DB-level half landed in migration 047** as
+    `enforce_campaign_playability()` + `trg_enforce_campaign_playability`,
+    verified live this session (seventh): the trigger is present and the
+    function carries 052's NULL-scheduled fix. `verify_resolution.py`
+    remains the CI-side check; the trigger is the write-time guard.
 15b. **H-genre (new, 2026-10-15 second session)** — ✅ **DONE
     2026-10-15 (fourth session).** Closed by **migration 046**
     (`mavins-web/supabase_migration_046_genre_taxonomy.sql`), applied and
@@ -594,13 +831,32 @@ priority after the data work.
 40. **A6** — After 025/026/034 land: re-verify the whole listener payout
     chain end-to-end (stream → earnings → request → disburse → B-Pay
     ledger), since it has never been confirmed working as a whole.
-41. **C4a (new)** — `mavins-web/Dockerfile:15` runs `npm run build` with
-    no `ARG`/`ENV` for `NEXT_PUBLIC_SUPABASE_URL` or
-    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, so a Docker build inlines
-    `undefined` silently and the image fails at runtime with no build
-    error. Either pass them as build args or confirm the Dockerfile is
-    unused and delete it. Found while verifying §A3. Vercel is
-    unaffected — `vercel-deploy.yml:31` pulls env from the project.
+41. **C4a — ✅ FIXED (2026-10-15, fifth session).** The Dockerfile is
+    **used** — `docker-compose.yml:8` builds it — so deleting it was not
+    an option, and the Compose path was broken three times over, not
+    once. All three fixed together:
+    - the missing build-time `NEXT_PUBLIC_*` (the reported bug): they are
+      now `ARG`s fed from `docker-compose.yml` `build.args`, moved out of
+      `environment`, where setting them at runtime did nothing for the
+      already-inlined client bundle. A guard step now **fails the build**
+      if either required value is empty, so this can never regress to a
+      silent `undefined` again.
+    - `deps` ran `npm ci --only=production`, but `typescript`,
+      `tailwindcss`, `postcss` and `autoprefixer` are all
+      **devDependencies** and `next build` needs every one of them. The
+      build stage now installs the full tree. (Found while checking C4a;
+      not previously recorded.)
+    - the `runner` stage copied `/app/.next/standalone`, but
+      `next.config.mjs` never set `output: 'standalone'`, so that COPY
+      had no source and the image never built. Now gated on
+      `BUILD_STANDALONE=1` (set only in the Dockerfile) so **Vercel's
+      build output is unchanged** — verified both ways.
+    Verified: `docker compose config` clean; `BUILD_STANDALONE=1 next
+    build` exits 0 and emits `.next/standalone/server.js`; a plain build
+    exits 0 and does not emit it; the guard exits 1 on missing vars and 0
+    on present ones. Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`,
+    `CRON_SECRET`, …) are deliberately **not** build args — they stay in
+    `environment` so they never land in an image layer.
 
 ---
 
