@@ -2202,33 +2202,55 @@ production `next build` succeeds):**
 - `src/lib/campaign/genreClassifier.ts` — canonical classifier over
   `genres`/`genre_aliases`; the DB `normalize_genre_term`/`genre_slug`
   semantics mirrored in TS.
-- `src/lib/campaign/youtubeTopics.ts` — **no imports**, so Node can test it
-  directly. Parses Data API topic URLs + tags into terms.
-- `src/lib/campaign/youtubeGenreApi.ts` — the credentialed fetch. Layered
-  **first**; returns no signal (not an error) when the key is absent.
+- `src/lib/campaign/invidiousParse.ts` — **no imports**, so Node can test it
+  directly. Parses Invidious topics/keywords into terms; instance selection.
+- `src/lib/campaign/invidiousGenreApi.ts` — the keyless Invidious fetch
+  (instance fallback + cooldown). Layered **first**.
 - `src/lib/campaign/genreResolution.ts` — the orchestrator. Source order:
-  `youtube_api` → `artist_history` → `text`; reports which fired.
+  `invidious` → `artist_history` → `text`; reports which fired.
 - `src/app/api/campaigns/preview/route.ts` — read-only preview endpoint.
 - `src/app/promote/page.tsx` — "Detected track" card replaces `GenreChips`.
 
-**The one open item — a credential, not code.** `YOUTUBE_API_KEY` is
-**absent, verified** (an unkeyed Data API call returns 403). Therefore the
-`youtube_api` branch **has never executed once**. Its parsing half is
-unit-tested; its network half is not. This is stated in the module header
-and asserted in `youtubeTopics.test.ts` so that adding a key later *fails
-that test loudly* and forces the missing coverage. **Do not describe the
-YouTube API path as working until a key exists and a real call succeeds.**
+**Keyless by decision, not by default.** The owner directed that this run
+**without a YouTube Data API key**, using **Invidious** (an open-source,
+keyless YouTube front end) instead — it "does almost the same thing YouTube
+does". So the credentialed `videos?part=topicDetails` path was **removed**,
+not merely left inert: `youtubeGenreApi.ts`, `youtubeTopics.ts` and its test
+are deleted. Invidious returns the video's own `keywords` (the same signal
+the Data API calls `snippet.tags`) plus a coarse `genre` string; the coarse
+string is deliberately dropped (`isCoarseCategory`) because tagging every
+song "Music" is worse than nothing.
 
-**Measured, honestly — the keyless path is weak.** Against 45 real
+**Verified live, keyless — this is the difference from the old path.**
+Against real public instances (`invidious.f5.si` served it):
+
+```
+/api/v1/videos/dQw4w9WgXcQ
+  -> keywords ["rick astley","never gonna give you up","nggyu", …]  (music signal)
+/api/v1/search?q=Michael Jackson - Billie Jean&type=video
+  -> first videoId Zi_XLOBDo_Y
+```
+
+The Spotify hop now uses Invidious search first (structured JSON) and the
+YouTube results-page scrape only as a fall-back, so the previously-fragile
+search step is far less brittle.
+
+**Honest limits.** (a) Public instances are unreliable — verified:
+`yewtu.be` 403s, `inv.nadeko.net` returns "Endpoint disabled",
+`invidious.privacyredirect.com` 404s. The client walks a list, skips
+instances that fail (10-minute cooldown), and returns null if all fail. A
+self-hosted instance via `INVIDIOUS_INSTANCES` is strongly preferred in
+production. (b) `keywords` is the artist's own tagging, so a video with no
+tags or generic tags resolves nothing — the same class of gap the text path
+has, which is why `genre_resolution_queue` remains the designed fallback.
+
+**Measured, honestly — the keyless text path is weak.** Against 45 real
 `resolved_song_id`s from `track_campaigns`, fetching each title+author via
 oEmbed and running the classifier: **1 of 45 matched a genre (about 2%)**.
 Separately, **152/152** distinct campaign artists have a genre-tagged
-campaign, so `artist_history` covers every *returning* artist. Reading:
-artist history carries established artists; the keyless text path barely
-helps; the 2% is precisely the brand-new-song case the owner described.
-This is why `youtube_api` is layered first — with a key it becomes the real
-source; without one the feature cannot reliably place new songs, and the
-`genre_resolution_queue` (curation ledger) is the designed fallback.
+campaign, so `artist_history` covers every *returning* artist. Invidious is
+layered first because it is per-video ground truth (the video's own tags);
+without it, new songs fall to the weak text path and the curation ledger.
 
 **Not yet done (carried forward):**
 - Task 46 integration test for `resolveGenreFromLink` end-to-end.
@@ -2278,14 +2300,116 @@ YouTube oEmbed -> "Michael Jackson - Billie Jean (Official Video)"
 
 That is the whole chain working with **no key at all**. So the owner's
 "Spotify link maps to YouTube, YouTube resolves it fully" is real for
-identity (name, artist, thumbnail) today. The genre half still carries the
-§I.7 caveat: identity now needs no key, but genre for a *new* song still
-wants `YOUTUBE_API_KEY`.
+identity (name, artist, thumbnail) today. Genre now comes from the same
+keyless Invidious source as a YouTube submission (see §I above) — no
+`YOUTUBE_API_KEY` is used anywhere in this feature by the owner's direction.
 
-Two honest limits: (a) the search step scrapes YouTube's results page — the
-closest keyless equivalent to NewPipe's `YouTube.search` — so it is the
-fragile part; if YouTube changes that page the first-result match breaks,
+Two honest limits: (a) the search step now prefers Invidious' search API
+(structured JSON) and falls back to scraping YouTube's results page — the
+scrape is the fragile part; if YouTube changes that page the first-result
+match breaks,
 which is why every failure returns null and the caller falls through, never
 throws; (b) a Spotify **album/artist** link resolves its headline track, not
 a whole set. Tests for the parsing half are in `spotifyLink.test.ts`
-(21 cases; suite now 55).
+(21 cases; suite now 63).
+
+## J. Drip-feed purchase wiring audit (2026-10-16, tenth session)
+
+Raised by the owner: "the website must not be able to play any track — it
+feeds the player app; the website is only a preview card showing what will be
+submitted and the estimated impressions, and geography impressions come back
+to the website via the API webhooks used to purchase the drip feed. Check the
+wiring — it is not looking or behaving as though the correct planned method
+(the SMM panel) is followed."
+
+Audited by reading the code, not assumed. Findings below; **the owner's
+suspicion is correct.**
+
+### J1. The website cannot play — CORRECT today, no action
+
+Verified: no `<video>`, `<audio>`, `new Audio()`, `.play()`, or YouTube
+iframe/player anywhere under `src/` (grep returned nothing outside a test
+file's text). The promote page renders a read-only preview card
+(thumbnail + title + artist + genre badges) from
+`/api/campaigns/preview`. Playback is Velune's job. Requirement holds.
+
+### J2. Nothing is purchased from the SMM panel — THIS IS THE BREAK
+
+`src/services/freshconnect/freshconnect.service.ts` implements the whole SMM
+panel client (`addOrder`, `getOrderStatus`, `getBalance`,
+`findYouTubeViewService`, `calculateFreshConnectQuantity`) against
+`https://freshconnectpanel.com/api/v2`. **It has zero callers.**
+`addOrder()` is never invoked, so `fresh_connect_order_id` is never written
+on any campaign. Consequently the webhook
+(`src/app/api/webhooks/freshconnect/route.ts`), whose only lookup is
+`track_campaigns.eq('fresh_connect_order_id', order)`, **can never match a
+row** — it is dead by construction, not merely untriggered.
+
+A **second, competing** SMM-panel client exists:
+`src/lib/growth/purchaseMetrics.ts` (`growth-metrics-provider.com`,
+`action: add`/`status`, `GROWTH_METRICS_API_KEY`) — also **zero callers**.
+So there are two panel integrations and neither is wired.
+
+Net: on campaign creation the code debits the wallet, inserts the campaign,
+records the platform fee — and then **stops**. No order is placed with any
+panel, no `fresh_connect_order_id` is stored, so no status/impression webhook
+can ever correspond to a real campaign. "Purchase the drip feed" is not
+happening.
+
+### J3. What "drip feed" means today — and it is not the panel
+
+Drip today is **simulated**, entirely in-repo: `record_campaign_stream`
+(`seedEngine.service.ts`, called once per simulated play) increments
+`spent_cents`/`total_streams`; the rate comes from
+`duration_slots.max_daily_drip`. The panel would be the *real* external
+delivery channel. The two are unbridged: nothing hands a live campaign to the
+panel, and nothing reconciles panel-delivered counts back into
+`spent_cents`. The planned split — website estimates/diverts, panel delivers,
+webhook reports impressions back — is therefore only half-built (the webhook
+half exists; the order half does not).
+
+### J4. Bugs in the webhook, to fix when it is wired (not now — it is dead code)
+
+- **Refunds bypass the wallet RPC.** On `Partial`/`Canceled` it inserts
+  directly into `wallet_ledger` with `type: 'bonus'`; it never updates
+  `users.wallet.balance`, mislabels a refund as a bonus, and is **not
+  idempotent** — a retried webhook double-refunds. It should call
+  `credit_wallet_refund` (migration 008) with an idempotency reference, the
+  way `campaigns/create` already refunds a failed insert.
+- **No signature verification.** Neither `freshconnect` nor `nakama` webhook
+  verifies a signing secret — the body is trusted as-is. Once the refund path
+  is live, anyone who can POST the endpoint can forge `Canceled` and trigger a
+  real payout. This must be fixed *before* the order path is wired, not after.
+- The `Partial` refund divides by `delivered + remaining`, treating
+  `start_count` as delivered; that is only correct if the panel's
+  `start_count` is per-order, not per-link-lifetime. Unverified — needs the
+  chosen panel's semantics.
+
+### J5. Gating decision (do not guess)
+
+Which panel is canonical — **Fresh Connect** (`freshconnect.service.ts`) or
+the **growth-metrics provider** (`purchaseMetrics.ts`)? The audit cannot
+proceed to implementation without this: they are different hosts, different
+auth, different response shapes. Also needed: the exact service id for
+"YouTube views" (there is no way to derive it — `findYouTubeViewService`
+guesses by name, which is not safe for real money), and confirmation that
+`FRESH_CONNECT_API_KEY` (and/or `GROWTH_METRICS_API_KEY`) is registered, and
+whether the chosen panel can deliver to a *Spotify*-sourced campaign (it
+resolves to a YouTube id, so this likely means "order against the resolved
+YouTube URL" — confirm).
+
+### J6. Suggested order once J5 is answered
+
+1. Wire order placement into campaign creation (after the insert succeeds,
+   before/with the `pending`→live transition): resolve the service id, call
+   `addOrder`, persist `fresh_connect_order_id`. Never place an order for a
+   campaign whose insert failed.
+2. Add webhook signature verification (J4).
+3. Repoint the webhook's refunds through `credit_wallet_refund`, idempotent
+   on `order`+`status` (J4).
+4. Reconcile panel-delivered counts into `spent_cents`/`total_streams` so the
+   cancellation proration stays accurate for panel-delivered campaigns (its
+   current "real-time" claim holds only for the simulated path).
+5. Surface estimated impressions + geography-on-submit in the preview card
+   (currently preview shows identity + genre only; "estimated impressions"
+   is chosen later via the geo panel + slider, not shown as an estimate).
