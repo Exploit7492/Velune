@@ -2183,3 +2183,88 @@ submission paths and drop `body.genre`/`GenreChips`; (3) add the resolver
 tests in task 46; (4) print a dry-run before/after of the existing rows'
 `target_genres` for review. No migration is strictly required — the
 mapping table and trigger from 046 already carry the write.
+
+> NOTE (2026-10-16, tenth session): the recommendation above was adopted as
+> the standing "pick the industry-standard approach" instruction, and the
+> layered resolver was **implemented** rather than left gated on §I.4 — see
+> §I.7. The trade-off it names still holds: nothing here guesses when no
+> source resolves.
+
+### I.7 STATUS (2026-10-16, tenth session) — IMPLEMENTED, one credential open
+
+`resolveGenreFromLink` is written and wired into **both** submission paths.
+The manual chip is gone. Committed and pushed to `main` as `e369049`.
+
+**What is real code (verified: `tsc` clean, 34 `node:test` cases pass,
+production `next build` succeeds):**
+
+- `src/lib/campaign/trackLink.ts` — YouTube URL parse + oEmbed identity.
+- `src/lib/campaign/genreClassifier.ts` — canonical classifier over
+  `genres`/`genre_aliases`; the DB `normalize_genre_term`/`genre_slug`
+  semantics mirrored in TS.
+- `src/lib/campaign/youtubeTopics.ts` — **no imports**, so Node can test it
+  directly. Parses Data API topic URLs + tags into terms.
+- `src/lib/campaign/youtubeGenreApi.ts` — the credentialed fetch. Layered
+  **first**; returns no signal (not an error) when the key is absent.
+- `src/lib/campaign/genreResolution.ts` — the orchestrator. Source order:
+  `youtube_api` → `artist_history` → `text`; reports which fired.
+- `src/app/api/campaigns/preview/route.ts` — read-only preview endpoint.
+- `src/app/promote/page.tsx` — "Detected track" card replaces `GenreChips`.
+
+**The one open item — a credential, not code.** `YOUTUBE_API_KEY` is
+**absent, verified** (an unkeyed Data API call returns 403). Therefore the
+`youtube_api` branch **has never executed once**. Its parsing half is
+unit-tested; its network half is not. This is stated in the module header
+and asserted in `youtubeTopics.test.ts` so that adding a key later *fails
+that test loudly* and forces the missing coverage. **Do not describe the
+YouTube API path as working until a key exists and a real call succeeds.**
+
+**Measured, honestly — the keyless path is weak.** Against 45 real
+`resolved_song_id`s from `track_campaigns`, fetching each title+author via
+oEmbed and running the classifier: **1 of 45 matched a genre (about 2%)**.
+Separately, **152/152** distinct campaign artists have a genre-tagged
+campaign, so `artist_history` covers every *returning* artist. Reading:
+artist history carries established artists; the keyless text path barely
+helps; the 2% is precisely the brand-new-song case the owner described.
+This is why `youtube_api` is layered first — with a key it becomes the real
+source; without one the feature cannot reliably place new songs, and the
+`genre_resolution_queue` (curation ledger) is the designed fallback.
+
+**Not yet done (carried forward):**
+- Task 46 integration test for `resolveGenreFromLink` end-to-end.
+- Dry-run before/after of existing rows' `target_genres`.
+- Migration 024 (`campaign_genre_tile_mapping`) remains optional/unapplied
+  — relevant to §H, not to this feature (the queue reads `target_genres`).
+- §I.5's "up to 100" reading is still a product question; unchanged here.
+
+### I.8 The full chain, and the Spotify-input case (tenth session)
+
+The owner's requirement restated: a link is submitted on the website; the
+website resolves song name, artist, thumbnail and genre **from that link**;
+once the campaign is live, Velune picks it up and injects it into the queue
+for that genre of listener, dynamically, with nothing inserted by hand.
+
+Mapped to code, end to end:
+
+1. **Website submission** (`/promote`) sends only the pasted link.
+2. `resolveCampaignGenre` resolves identity + genre and the campaign row is
+   written with `target_genres` (the genre), `coverart` (the thumbnail) and
+   `resolved_song_id`.
+3. The campaign is "live" once eligible; **no manual queue insert exists or
+   is needed** — placement is a read.
+4. **Velune consumes it**: `MusicService` asks
+   `get_next_campaign_for_queue_slot(p_genre = <listener's genre>)`, which
+   joins through the campaign's genre tag and returns the next fair-rotation
+   campaign. Velune's Kotlin was **not changed** for this feature and does
+   not need to be — it already reads live campaigns by genre.
+
+**Spotify-input note.** A Spotify submission is the same flow with one extra
+hop *before* step 2: the link is mapped to its YouTube counterpart (the
+existing runtime Spotify->YouTube resolution, B4b, already shipped), and
+**YouTube then resolves the details and genre exactly as it does for a
+YouTube link.** So "reads a Spotify link, maps it to YouTube, YouTube
+resolves it fully with its details and genre" is the intended behaviour and
+is what the code does — with the single caveat in §I.7: the genre half of
+that resolution depends on `YOUTUBE_API_KEY`, which is currently absent. The
+identity half (title/artist/thumbnail) works keylessly today; the genre half
+does not reliably, for new songs, until the key exists.
