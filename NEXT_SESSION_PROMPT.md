@@ -85,6 +85,36 @@ wraps this. Two gotchas that have already cost time:
   compares `x` to the array's rows, not its elements. Use
   `any(arr_column)` in a join, or `= any(array[...])`.
 
+### Secret names — keep the two concerns separate
+
+Do not conflate these, and do not "fix" the mismatch by editing code:
+
+* **In code**, each repo reads its own conventional names, and that is
+  correct. Leave it alone — no aliasing, no `env:` block in
+  `next.config.mjs`.
+  * Velune (`app/build.gradle.kts:121-129`): `SUPABASE_URL`,
+    `SUPABASE_ANON_KEY` — read from `local.properties`, falling back to the
+    environment. `build-tenant.yml:126-127` supplies them from Actions
+    secrets.
+  * mavins-web: `NEXT_PUBLIC_SUPABASE_URL` (26×),
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY` (21×), `SUPABASE_SERVICE_ROLE_KEY` (7×,
+    all server-side).
+* **In the agent secret store**, keep the **minimum**. `SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_URL` are the *same value*; reuse the stored
+  `SUPABASE_URL` whenever a `NEXT_PUBLIC_` value is needed. Same for the
+  anon key. **Do not register prefix-duplicates.**
+
+The literal `NEXT_PUBLIC_` names still have to exist in the **build**
+environments, because `NEXT_PUBLIC_*` is inlined at build time:
+`vercel-deploy.yml:31` pulls them from the Vercel project env for
+mavins-web. The value is copied from the agent store into each build
+environment under the name that environment's code expects.
+
+`SUPABASE_SECRETE_KEY` is misspelled *and* read by no code in either repo —
+it only ever worked for manual REST probing. `SUPABASE_SERVICE_ROLE_KEY` is
+the name that actually matters, and it must stay server-side (it bypasses
+RLS).
+
 ## STEP 3 — §H is CLOSED. The next work is elsewhere.
 
 Do not re-open §H or re-litigate the genre design. It is done, and the
