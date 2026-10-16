@@ -2259,12 +2259,33 @@ Mapped to code, end to end:
    not need to be — it already reads live campaigns by genre.
 
 **Spotify-input note.** A Spotify submission is the same flow with one extra
-hop *before* step 2: the link is mapped to its YouTube counterpart (the
-existing runtime Spotify->YouTube resolution, B4b, already shipped), and
+hop *before* step 2: the link is mapped to its YouTube counterpart, and
 **YouTube then resolves the details and genre exactly as it does for a
-YouTube link.** So "reads a Spotify link, maps it to YouTube, YouTube
-resolves it fully with its details and genre" is the intended behaviour and
-is what the code does — with the single caveat in §I.7: the genre half of
-that resolution depends on `YOUTUBE_API_KEY`, which is currently absent. The
-identity half (title/artist/thumbnail) works keylessly today; the genre half
-does not reliably, for new songs, until the key exists.
+YouTube link.**
+
+**IMPLEMENTED AND VERIFIED LIVE (commit `3722ddf`).** The hop mirrors
+Velune's shipped B4b method and is entirely credential-free:
+`spotifyToYouTube.ts` parses the link (`spotifyLink.ts`, same grammar as
+Velune's `SpotifyLink.kt`), reads title+artist from Spotify's public embed,
+searches YouTube for `"artist - title"`, and resolves the found video's
+identity via YouTube oEmbed. Run live in the sandbox:
+
+```
+Spotify embed  -> {"title":"Billie Jean","artist":"Michael Jackson"}
+search         -> first id Zi_XLOBDo_Y
+YouTube oEmbed -> "Michael Jackson - Billie Jean (Official Video)"
+```
+
+That is the whole chain working with **no key at all**. So the owner's
+"Spotify link maps to YouTube, YouTube resolves it fully" is real for
+identity (name, artist, thumbnail) today. The genre half still carries the
+§I.7 caveat: identity now needs no key, but genre for a *new* song still
+wants `YOUTUBE_API_KEY`.
+
+Two honest limits: (a) the search step scrapes YouTube's results page — the
+closest keyless equivalent to NewPipe's `YouTube.search` — so it is the
+fragile part; if YouTube changes that page the first-result match breaks,
+which is why every failure returns null and the caller falls through, never
+throws; (b) a Spotify **album/artist** link resolves its headline track, not
+a whole set. Tests for the parsing half are in `spotifyLink.test.ts`
+(21 cases; suite now 55).
