@@ -84,6 +84,11 @@ now 381/381 playable. See the session box below.)
 > campaign, so the rollback transaction aborts. That is the guard
 > working as intended; the fix is durable in migration 053, which is the
 > recovery path.
+>
+> **Pushed with `GH_AUTH_TOKEN`** (still the writable `ghp_` classic PAT;
+> `GITHUB_TOKEN` remains the read-only `ghu_` App token, 403 on write).
+> Velune `d90369e` -> `37c6f19`, mavins-web `f0a7ac6` -> `d869d99`; both
+> `main`, both `0 ahead / 0 behind` after push, remotes left tokenless.
 
 ---
 
