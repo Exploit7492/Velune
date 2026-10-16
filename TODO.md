@@ -594,6 +594,13 @@ priority after the data work.
 40. **A6** — After 025/026/034 land: re-verify the whole listener payout
     chain end-to-end (stream → earnings → request → disburse → B-Pay
     ledger), since it has never been confirmed working as a whole.
+41. **C4a (new)** — `mavins-web/Dockerfile:15` runs `npm run build` with
+    no `ARG`/`ENV` for `NEXT_PUBLIC_SUPABASE_URL` or
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, so a Docker build inlines
+    `undefined` silently and the image fails at runtime with no build
+    error. Either pass them as build args or confirm the Dockerfile is
+    unused and delete it. Found while verifying §A3. Vercel is
+    unaffected — `vercel-deploy.yml:31` pulls env from the project.
 
 ---
 
@@ -779,12 +786,19 @@ correct key will keep looking like a broken one.
 
 #### A3 RESOLVED (2026-10-15) — the exact names to register
 
-**Root cause of the mismatch: the registered names do not match what
-either codebase reads.** There are two independent problems — a typo,
-and a naming convention clash — and neither codebase is at fault.
+**Two separate concerns, and conflating them is what caused the
+mismatch. Keep them apart:**
 
-What the code actually reads (verified by grepping both repos, not from
-memory):
+- **In code:** each repo reads its own conventional names, and that is
+  correct. Do **not** add aliasing or an `env:` block to make them agree
+  — the code is not the problem and should not be touched.
+- **In the agent secret store:** keep the **minimum** set. `SUPABASE_URL`
+  and `NEXT_PUBLIC_SUPABASE_URL` are the *same value*, so the store needs
+  only one entry; whenever a `NEXT_PUBLIC_` value is needed, reuse the
+  stored `SUPABASE_URL`. Same for the anon key. Do not register duplicate
+  entries that differ only by prefix.
+
+What the code reads (verified by grepping both repos, not from memory):
 
 | Read by | Variable | Count |
 |---|---|---|
@@ -794,51 +808,40 @@ memory):
 | mavins-web | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 21 |
 | mavins-web | `SUPABASE_SERVICE_ROLE_KEY` | 7 |
 
-What is currently registered, and why it fails:
+**Agent secret store — the minimal set:**
 
-| Registered | Problem |
-|---|---|
-| `SUPABASE_URL` | **Correct.** Matches Velune. mavins-web still needs the `NEXT_PUBLIC_` twin. |
-| `SUPABASE_PUBLIC_KEY` | **No code reads this.** Velune wants `SUPABASE_ANON_KEY`; mavins-web wants `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
-| `SUPABASE_SECRETE_KEY` | **Two problems.** Misspelled (`SECRETE` → `SECRET`), *and* no code reads this name — mavins-web wants `SUPABASE_SERVICE_ROLE_KEY`. |
-
-**Register these six names.** The values are the same two keys repeated
-under each name the code expects — that redundancy is what makes both
-repos work without editing either one:
-
-| Name to register | Value | Needed by |
+| Name | Value | Serves |
 |---|---|---|
-| `SUPABASE_URL` | project URL | Velune |
-| `NEXT_PUBLIC_SUPABASE_URL` | **same** project URL | mavins-web |
-| `SUPABASE_ANON_KEY` | anon / publishable key | Velune |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **same** anon key | mavins-web |
-| `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key | mavins-web (server only) |
-| `NEXT_PUBLIC_APP_URL` | site origin, e.g. `http://localhost:3000` | mavins-web |
+| `SUPABASE_URL` | project URL | Velune directly; reused for `NEXT_PUBLIC_SUPABASE_URL` |
+| `SUPABASE_ANON_KEY` | anon key | Velune directly; reused for `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role key | mavins-web server-side only |
+| *(the PostgreSQL connection secret)* | password or `postgresql://` URI | §A4 migrations |
 
-Plus, to unblock §A4 (migrations) — **one** of these, whichever you
-prefer; the next session will look for both:
+**Where the literal `NEXT_PUBLIC_` name must still exist — and this is
+not the agent store.** `NEXT_PUBLIC_*` is inlined into the client bundle
+at **build** time, so the exact name has to be present wherever the
+build runs:
 
-| Name to register | Value |
-|---|---|
-| `SUPABASE_DB_PASSWORD` | the Postgres password, or a full `postgresql://` URI |
+| Build environment | Needs | Where it is set |
+|---|---|---|
+| Vercel (mavins-web prod) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel project env — `vercel-deploy.yml:31` pulls from there |
+| GitHub Actions (Velune APK) | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | repo Actions secrets — `build-tenant.yml:126-127` |
+
+So the value lives in one place in the agent store and is *copied* into
+each build environment under the name that environment's code expects.
+That is the reuse model, and it is why the agent store stays minimal
+while the build environments still carry the prefixed names.
+
+**Latent bug found while checking this — worth fixing.** The mavins-web
+`Dockerfile` runs `RUN npm run build` at **line 15** with no
+`ARG`/`ENV` for any `NEXT_PUBLIC_*` before it. A Docker build would
+therefore inline `undefined` for `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` — silently, and the resulting image would
+fail at runtime with no build error. Vercel is unaffected (it pulls env
+separately). Either add build args to the Dockerfile or confirm the
+Dockerfile is unused.
 
 **Notes that matter:**
-- **The `NEXT_PUBLIC_` twins cannot be skipped, even though the values
-  are identical.** `NEXT_PUBLIC_*` is a Next.js *build-time* convention:
-  the literal value is inlined into the client bundle at build, and a
-  reference to a name that did not exist at build time is inlined as
-  `undefined` — with no error. So `NEXT_PUBLIC_SUPABASE_URL` must be set
-  under that exact name *at build time*, independently of
-  `SUPABASE_URL`. `next.config.mjs` does **not** define an `env:` block,
-  so there is no alias in place. Two options:
-  (a) register both names — two entries, zero risk, **preferred**; or
-  (b) add `env: { NEXT_PUBLIC_SUPABASE_URL: process.env.SUPABASE_URL, … }`
-  to `next.config.mjs` and register only the unprefixed names. (b) is a
-  code change that must be done *before* the next build, and is not worth
-  the risk purely to avoid two duplicate entries.
-  Note the asymmetry: `SUPABASE_SERVICE_ROLE_KEY` is read only
-  server-side and is **not** a `NEXT_PUBLIC_` variable, so it genuinely
-  needs only one name.
 - `SUPABASE_SECRETE_KEY` is misspelled. Fix it to `SUPABASE_SECRET_KEY`
   *or* delete it — but note that **neither spelling is read by any
   code**. It only ever worked for manual REST probing. Renaming it to
