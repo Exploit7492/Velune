@@ -119,6 +119,17 @@ box at the top.)
 > decides — which makes 024 an optional curated override, not a
 > prerequisite. A tile reviewed as a *mood* (present key, null value) is
 > the one case that intentionally maps to the RPC's match-any branch.
+>
+> **Also this session: scoped the owner's request for automatic,
+> link-derived genre detection — as a design, not a build.** §I records
+> the proposed flow (one shared `resolveGenreFromLink` called from *both*
+> submission paths) and the one decision that gates it: where a song's
+> genre comes from. Verified live: YouTube's only real genre signal
+> (`topicDetails`) needs a `YOUTUBE_API_KEY` that is absent; oEmbed works
+> keyless but carries no genre; and our own resolver already covers
+> 136/136 live terms. Recommended curated-primary with a credential source
+> layered behind — awaiting the owner's call (task 43/G1b). Nothing was
+> implemented; tasks 42–46 are the plan.
 
 ---
 
@@ -1002,6 +1013,35 @@ priority after the data work.
     on present ones. Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`,
     `CRON_SECRET`, …) are deliberately **not** build args — they stay in
     `environment` so they never land in an image layer.
+
+42. **G1a** — **PLAN ONLY, not implemented.** Automatic, link-derived
+    genre detection, replacing the promote page's manual chip. Design in
+    §I: one shared `resolveGenreFromLink(sourceUrl)` called from *both*
+    submission paths (`/api/campaigns/create` and the guest direct-pay
+    route, so a guest cannot bypass it), returning canonical
+    `target_genres` terms the existing 046 resolver already understands.
+    **Blocked on G1b** — do not pick the resolver's source before the
+    owner answers.
+43. **G1b** — **Product decision, gating G1a.** Where does a submitted
+    song's genre come from? YouTube's own label needs a
+    `YOUTUBE_API_KEY`, which is **absent today, verified** (an unkeyed
+    Data API call returns 403). Our curated catalogue resolves 100% of
+    the live vocabulary today with no credential. Recommendation and the
+    full comparison are in §I.4 — confirm before implementing.
+44. **G1c** — Taxonomy: decide the canonical dimension's size. Live data
+    has **136** distinct compound terms collapsing to ~20–30 head
+    genres, not the 100 the request assumes. Extend `public.genres` to
+    the head genres the catalogue actually uses (adding regional
+    granularity as first-class rows only where the browse UI needs a
+    tile); the mapping layer absorbs the rest. Do not pad to 100 blindly.
+45. **G1d** — Once G1a lands, remove the now-unused manual surface:
+    `GenreChips` and `body.genre` on the create route, rather than leave
+    two paths that can disagree.
+46. **G1e** — Adversarial tests for the resolver: a link with no
+    parseable id, a title matching nothing (must record the raw term,
+    never guess a genre), a term present in both `genre_aliases` and the
+    slug/token fallback, and a Spotify/other link reaching the
+    YouTube-only path.
 
 ---
 
@@ -1994,3 +2034,152 @@ mechanical once that is decided.
   the server resolver. Verified behaviour either way: genre tiles resolve and
   serve, mood tiles fail closed.
 
+
+---
+
+## I. Automatic, link-derived genre detection — DESIGN PROPOSAL (2026-10-16, ninth session)
+
+> **Status: proposed, not implemented.** This section is a design and a
+> feasibility check, deliberately written *before* any code, because the
+> flow depends on a decision only the product owner can make (§I.4). The
+> numbers below were verified live against the database and the YouTube
+> endpoints; the implementation has **not** been written. Do not read this
+> section as an as-built record.
+
+**Request, in the owner's words:** up to ~100 genre categories; when a user
+submits a link the resolver also resolves the song's genre from YouTube so
+it can be placed in the queue correctly; the genre is **not entered by
+hand** — it is derived dynamically from the submitted link.
+
+### I.1 What already exists, and why this is smaller than it looks
+
+Two things make this a wiring job rather than a new subsystem:
+
+1. **The queue is already genre-addressed in canonical terms.**
+   `campaign_genres(campaign_id, genre_id)` maps every campaign onto
+   `public.genres`, and both RPCs join through it (§H, migration 046).
+   Detection therefore does **not** need to invent a genre vocabulary — it
+   needs to produce `target_genres` terms the existing resolver already
+   understands. It already understands all 136 live terms.
+2. **The manual entry was a client-side illusion.** The promote page's
+   `GenreChips` sends `genre: selectedGenre` (a **display label**), the
+   route writes `target_genres = [body.genre]`, and the server's
+   `resolve_genre_terms` then splits/maps it like any other term. The
+   server already treats it as a resolvable string, not a key. The change
+   is to stop taking it from the client, not to change the schema.
+
+### I.2 Proposed flow
+
+```
+promote form: sourceUrl only  (GenreChips removed)
+        │
+        ▼
+POST /api/campaigns/create              (authenticated)
+POST /api/payments/initialize-campaign  (guest direct-pay)
+        │
+        ▼
+lib/campaign/genreDetection.ts :: resolveGenreFromLink(sourceUrl)
+        │  1. parse the video id (youtube.com/watch?v=, youtu.be/, /shorts/)
+        │  2. fetch the real title/artist from YouTube oEmbed (no key)
+        │  3. match against the canonical vocabulary:
+        │       exact slug  →  genre_aliases  →  whole-word fragments
+        │  4. if nothing resolves, record the raw term for curation —
+        │     never guess a genre
+        ▼
+target_genres = resolved canonical label(s)   →  campaign_genres (trigger)
+        │
+        ▼
+get_next_campaign_for_queue_slot(genre)  →  only matching campaigns
+```
+
+Both submission paths must call it. Wiring only `/api/campaigns/create`
+would leave the guest direct-pay route (the one the create route itself
+redirects guests to) as a bypass that writes an untagged campaign — that is
+the specific mistake to avoid, and it is why this is one task, not two.
+
+The resolver should be the **server-side twin** of the database's own
+`resolve_genre_terms`/`resolve_genre_set` (§H/H5): match once, in one place,
+so the client and the RPC cannot disagree about what a term means.
+`genre_aliases` is read at request time, so adding an alias takes effect
+without a code deploy — the same "the decision is data" property §H
+established. Where it cannot resolve, it must record the raw term (the
+existing `genre_resolution_queue` is exactly this ledger) rather than
+invent a nearest genre. §H's H4 decision was strict-by-default; guessing a
+genre here would silently undo that.
+
+### I.3 Verified facts this design rests on
+
+- **`topicDetails` is the only real YouTube genre signal**, and it needs a
+  key: an unkeyed `youtube/v3/videos` call for `topicDetails,snippet`
+  returns `403 "method doesn't allow unregistered callers"`. **No
+  `YOUTUBE_API_KEY` exists in this environment** (checked the whole repo
+  and the secret list).
+- **oEmbed needs no key and works**, and returns `title` + `author_name` —
+  but **no genre field at all**. So oEmbed is usable as the *identity*
+  (what song is this) and never as the *genre*.
+- **Our own resolver already places the whole live catalogue**: 136
+  distinct terms in `track_campaigns.target_genres`, 136 in
+  `users.primary_genre`, all resolving today (0 in
+  `genre_resolution_queue`).
+- **Spotify exposes artist/track `genres`** and would be the richest
+  source, but needs a client credential, and the request is specifically
+  about a YouTube link.
+
+### I.4 The one gating decision — where does a song's genre come from?
+
+| Source | Needs | Coverage | Verdict |
+|---|---|---|---|
+| **YouTube Data API `topicDetails`** | `YOUTUBE_API_KEY` — **absent, verified** | Wikipedia topic URLs, coarse | The literal request; the key is the blocker |
+| **YouTube oEmbed title + author** | nothing (works today) | identity only, **no genre** | Use as the search key, not the genre |
+| **Spotify `genres`** | a Spotify client credential | richest for music | Strong, but a different platform than the request |
+| **Curated catalogue + inference** | nothing (works today) | **136/136 terms resolve** | Works now; already the campaign ledger |
+
+**Honest asymmetry:** the campaigns a new submission competes with come
+from the same catalogue our resolver already covers completely — so the
+curated path is not a fallback, it is the only source consistent with how
+the queue is keyed today. A YouTube/Spotify label is higher-fidelity only
+for a *brand-new* song absent from our data, which is exactly what title
+text alone cannot place. That is the real trade-off, and it is a product
+call, not an engineering one.
+
+**Recommendation (industry-standard):** curated catalogue **primary**, a
+search/credential source layered behind it **only** to disambiguate a
+submission the catalogue cannot place. If the owner wants the true YouTube
+label, the cheaper and already-designed route is to curate
+`campaign_genre_tile_mapping` (migration 024, currently unapplied — see
+§H) rather than to call the Data API on every submission.
+
+### I.5 The "100 genres" requirement, measured against the catalogue
+
+The owner asked for **up to ~100** categories; the catalogue does not need
+100 — it needs a number derived from the data, or the extras are dead UI.
+It has **136** distinct compound terms collapsing to roughly 20–30 head
+genres (Pop, Hip-Hop, R&B, Afrobeats, Electronic, Dancehall, Rock, Drill,
+Jazz, Reggae, Highlife, Gospel, … plus regional modifiers like K-Pop,
+J-Pop, Bollywood, Reggaeton, Amapiano, Afro-fusion).
+
+Two honest readings of the request — the owner should say which:
+
+- **(a) Up to 100 rows in `public.genres`.** Achievable, but every extra
+  row is either an unused tile or a category no campaign is tagged with;
+  it buys UI surface, not placement accuracy.
+- **(b) Up to 100 *recognised* genres** (the request's likely intent).
+  Already effectively true and needs no schema change: `genre_aliases`
+  recognises far more than 14 terms and maps each onto one of the
+  canonical ones, which is exactly how Spotify/Apple Music/YouTube Music
+  keep a small canonical surface over a large mapping layer (§H3).
+
+The recommendation is **(b) plus targeted growth of (a)** — extend
+`public.genres` to the head genres the catalogue genuinely uses, add
+regional granularity as first-class rows only where the browse UI needs a
+tile, and let the mapping layer absorb the long tail. Adding rows is safe
+(mapping is many-to-one); the only cost is curation, so grow it toward a
+measured count rather than a round 100.
+
+### I.6 What the next session does, once §I.4 is answered
+
+Only then: (1) write `resolveGenreFromLink`; (2) call it from both
+submission paths and drop `body.genre`/`GenreChips`; (3) add the resolver
+tests in task 46; (4) print a dry-run before/after of the existing rows'
+`target_genres` for review. No migration is strictly required — the
+mapping table and trigger from 046 already carry the write.
