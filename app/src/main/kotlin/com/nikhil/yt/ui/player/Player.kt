@@ -295,14 +295,28 @@ fun BottomSheetPlayer(
     // MediaInfo (already used elsewhere for the "Song Info" bottom sheet,
     // see ShowMediaInfo.kt) per track, since the player screen doesn't
     // otherwise have view-count data at all.
-    var viewCountTarget by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal) {
+    var viewCountTarget by remember { mutableStateOf<Long?>(null) }
+    // The campaign currently playing, if the track came from a promoted
+    // card. While one is playing the pill shows the campaign's own
+    // gathered stream total — the number the product asks for — instead
+    // of the underlying video's YouTube view count, which says nothing
+    // about the campaign. Re-read when the tracked campaign changes, so
+    // the total is current rather than whatever it was when the track
+    // started.
+    val trackedCampaignForCount by
+        com.nikhil.yt.campaign.CampaignPlaybackTracker.current.collectAsState()
+    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal, trackedCampaignForCount?.id) {
         viewCountTarget = null
         if (isCurrentSongLocal) return@LaunchedEffect
+        val campaign = trackedCampaignForCount?.takeIf { it.songId == mediaMetadata?.id }
+        if (campaign != null && campaign.totalStreams > 0L) {
+            viewCountTarget = campaign.totalStreams
+            return@LaunchedEffect
+        }
         val videoId = mediaMetadata?.id ?: return@LaunchedEffect
         val count = runCatching { YouTube.getMediaInfo(videoId).getOrNull()?.viewCount }
             .getOrNull()
-        if (count != null && count > 0) viewCountTarget = count
+        if (count != null && count > 0) viewCountTarget = count.toLong()
     }
 
     suspend fun loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode: Boolean) {

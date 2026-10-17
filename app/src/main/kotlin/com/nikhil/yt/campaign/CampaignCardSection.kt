@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nikhil.yt.R
+import com.nikhil.yt.ui.utils.formatCompactCount
 
 /**
  * The home screen's promoted-content banner — Task 59 Part 3b-b
@@ -313,6 +314,21 @@ private fun CampaignBanner(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // The campaign's gathered stream total. Rendered only once
+                // it is non-zero, so a campaign that has genuinely
+                // gathered nothing shows nothing rather than a "0" that
+                // reads as a broken figure. The count is the same blended
+                // real + seeded total the player screen shows while this
+                // campaign is playing, not a separate number.
+                if (campaign.totalStreams > 0L) {
+                    Text(
+                        text = formatCompactCount(campaign.totalStreams) + " streams",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             // HANDOVER_CAMPAIGN.md §33: the trailing glass "play" CTA
             // chip is removed outright, not just hidden — the whole

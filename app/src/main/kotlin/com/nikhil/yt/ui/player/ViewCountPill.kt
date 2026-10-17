@@ -51,7 +51,7 @@ private const val COUNT_UP_DURATION_MS = 3500
 
 @Composable
 fun ViewCountPill(
-    target: Int?,
+    target: Long?,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -95,11 +95,11 @@ fun ViewCountPill(
  * track.
  */
 @Composable
-private fun AnimatedCountText(target: Int) {
+private fun AnimatedCountText(target: Long) {
     val progress = remember(target) { Animatable(0f) }
 
     LaunchedEffect(target) {
-        if (target <= 0) return@LaunchedEffect
+        if (target <= 0L) return@LaunchedEffect
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,
@@ -108,10 +108,10 @@ private fun AnimatedCountText(target: Int) {
     }
 
     // max(1, floor(eased * target)) — matches mavins' Math.max(1, Math.floor(...)) exactly.
-    val displayed = if (target <= 0) 1 else max(1, (progress.value * target).toInt())
+    val displayed = if (target <= 0L) 1L else max(1L, (progress.value * target).toLong())
 
     Text(
-        text = formatCompactCount(displayed.toLong()),
+        text = formatCompactCount(displayed),
         color = Color.White.copy(alpha = 0.85f),
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,

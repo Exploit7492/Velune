@@ -117,13 +117,18 @@ class CampaignRepository {
      * [CampaignCard.songId] is still computed here either way (needed
      * for actual playback once a card is tapped).
      *
-     * `totalStreams`/`trendingScore`/`playCount` are always `0` here —
-     * not omitted by accident: the underlying RPC doesn't return them
-     * at all (by design, per that migration's own comment — this
-     * surface must never expose a competitive/ranking signal). Part 3b
-     * (Velune UI rebuild, not started) must not render these fields
-     * for a banner card, matching the already-resolved "never reveal
-     * the live count or any per-card competitive number" rule.
+     * `totalStreams` is the campaign's gathered stream total, read from
+     * the `total_streams` column this query already selects — the home
+     * banner and the player screen both surface it (the player shows it
+     * in place of the track's YouTube view count while a campaign is
+     * playing). It was previously hardcoded to `0L` here on the
+     * reasoning that the banner must never expose a competitive/ranking
+     * signal; the product now explicitly shows a campaign's total, so
+     * the field is populated rather than blanked. `trendingScore` stays
+     * `0.0`: that is a genuine ranking signal and nothing renders it.
+     * `playCount` mirrors `totalStreams`, matching its own documented
+     * "alias for totalStreams (UI compatibility)" contract — the two
+     * used to disagree (a real total beside a hardcoded zero).
      * `ctaLabel` is left at its data-class default ("Play") rather
      * than the stage-based Discover/Trending/Hot/Viral/Charting
      * ladder [parseTrendingRows] below computes — Part 3's own spec
@@ -297,6 +302,9 @@ class CampaignRepository {
             val trackTitle = tracksObj?.optString("title", "")?.takeIf { it.isNotBlank() }
             val artistName = usersObj?.optString("artist_name", "")?.takeIf { it.isNotBlank() }
             val coverUrl = tracksObj?.optString("cover_url", "") ?: ""
+            // The campaign's gathered stream total. This query selects
+            // total_streams, so read it rather than reporting zero.
+            val totalStreams = row.optLong("total_streams", 0L)
 
             val card = CampaignCard(
                 id = campaignId,
@@ -313,13 +321,13 @@ class CampaignRepository {
                 title = trackTitle ?: "Untitled",
                 artist = artistName ?: "Unknown Artist",
                 thumbnailUrl = coverUrl,
-                totalStreams = 0L,
+                totalStreams = totalStreams,
                 trendingScore = 0.0,
                 geographicTier = "local",
                 currentStage = currentStage,
                 certified = certified,
                 isLive = true, // the RPC's own WHERE clause guarantees this
-                playCount = 0L,
+                playCount = totalStreams,
                 ctaLabel = "Play",
             )
 
@@ -329,13 +337,13 @@ class CampaignRepository {
                 resolvedSongId = songId,
                 trackId = trackId.takeIf { it.isNotBlank() },
                 artistId = artistId.takeIf { it.isNotBlank() },
-                totalStreams = 0L,
+                totalStreams = totalStreams,
                 trendingScore = 0.0,
                 geographicTier = "local",
                 currentStage = currentStage,
                 certified = certified,
                 isLive = true,
-                playCount = 0L,
+                playCount = totalStreams,
                 ctaLabel = "Play",
             )
 
