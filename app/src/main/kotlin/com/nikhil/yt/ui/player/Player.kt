@@ -175,6 +175,12 @@ private const val SOFT_SYNC_MAX_RATE = 0.06f
 // frame lands on tap.
 private const val VIDEO_TOGGLE_SEEK_LEAD_MS = 800L
 
+// How often the player re-reads the playing campaign's gathered stream
+// total. The total moves on a schedule (simulated engagement) rather than
+// per second, so this is about staying visibly current without polling
+// hard: 15s keeps it moving on screen without a request per second.
+private const val CAMPAIGN_TOTAL_REFRESH_MS = 15_000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -300,23 +306,35 @@ fun BottomSheetPlayer(
     // card. While one is playing the pill shows the campaign's own
     // gathered stream total — the number the product asks for — instead
     // of the underlying video's YouTube view count, which says nothing
-    // about the campaign. Re-read when the tracked campaign changes, so
-    // the total is current rather than whatever it was when the track
-    // started.
+    // about the campaign.
     val trackedCampaignForCount by
         com.nikhil.yt.campaign.CampaignPlaybackTracker.current.collectAsState()
+    // Held across recompositions: CampaignRepository owns an OkHttpClient,
+    // so building one per poll tick would leak a connection pool every 15s.
+    val campaignRepository = remember { com.nikhil.yt.campaign.CampaignRepository() }
     LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal, trackedCampaignForCount?.id) {
         viewCountTarget = null
         if (isCurrentSongLocal) return@LaunchedEffect
         val campaign = trackedCampaignForCount?.takeIf { it.songId == mediaMetadata?.id }
-        if (campaign != null && campaign.totalStreams > 0L) {
-            viewCountTarget = campaign.totalStreams
-            return@LaunchedEffect
+        if (campaign != null) {
+            // Seed from the card so something is on screen immediately,
+            // then keep the total live: the campaign's total keeps moving
+            // while it plays, and the card is only a snapshot from when
+            // the banner loaded. Polled only while this campaign is the
+            // tracked one — the effect is cancelled the moment it stops
+            // being, so no request outlives the screen showing it.
+            if (campaign.totalStreams > 0L) viewCountTarget = campaign.totalStreams
+            while (true) {
+                val live = campaignRepository.fetchCampaignTotalStreams(campaign.id)
+                if (live != null && live > 0L) viewCountTarget = live
+                delay(CAMPAIGN_TOTAL_REFRESH_MS)
+            }
+        } else {
+            val videoId = mediaMetadata?.id ?: return@LaunchedEffect
+            val count = runCatching { YouTube.getMediaInfo(videoId).getOrNull()?.viewCount }
+                .getOrNull()
+            if (count != null && count > 0) viewCountTarget = count.toLong()
         }
-        val videoId = mediaMetadata?.id ?: return@LaunchedEffect
-        val count = runCatching { YouTube.getMediaInfo(videoId).getOrNull()?.viewCount }
-            .getOrNull()
-        if (count != null && count > 0) viewCountTarget = count.toLong()
     }
 
     suspend fun loadVideoForCurrentTrack(autoPlayIfAlreadyInVideoMode: Boolean) {

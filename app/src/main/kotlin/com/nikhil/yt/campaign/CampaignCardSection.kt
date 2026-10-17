@@ -46,6 +46,13 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nikhil.yt.R
 import com.nikhil.yt.ui.utils.formatCompactCount
+import kotlinx.coroutines.delay
+
+// How often a visible campaign card re-reads its gathered stream total.
+// Matches the player screen's own cadence (Player.kt's
+// CAMPAIGN_TOTAL_REFRESH_MS) so the two surfaces never disagree about the
+// same campaign's number for long.
+private const val CARD_TOTAL_REFRESH_MS = 15_000L
 
 /**
  * The home screen's promoted-content banner — Task 59 Part 3b-b
@@ -197,6 +204,24 @@ private fun CampaignBanner(
     val premiumGold = Color(0xFFD4AF37)
     val cardShape = RoundedCornerShape(22.dp)
 
+    // The card's total, kept live. [campaign] is a snapshot from when the
+    // banner last loaded, so its `totalStreams` is stale by the time a
+    // card is on screen — and this one is on screen for a full rotation.
+    // Seed from the snapshot so the figure is there immediately, then
+    // re-read while this card is the visible one; the effect is keyed on
+    // the campaign id, so it restarts for the next card and stops for a
+    // card that has rotated away.
+    var liveTotal by remember(campaign.id) { mutableStateOf(campaign.totalStreams) }
+    // Held across recompositions — CampaignRepository owns an OkHttpClient.
+    val campaignRepository = remember { CampaignRepository() }
+    LaunchedEffect(campaign.id) {
+        while (true) {
+            val live = campaignRepository.fetchCampaignTotalStreams(campaign.id)
+            if (live != null && live > 0L) liveTotal = live
+            delay(CARD_TOTAL_REFRESH_MS)
+        }
+    }
+
     Box(
         modifier = modifier
             .width(320.dp)
@@ -320,9 +345,9 @@ private fun CampaignBanner(
                 // reads as a broken figure. The count is the same blended
                 // real + seeded total the player screen shows while this
                 // campaign is playing, not a separate number.
-                if (campaign.totalStreams > 0L) {
+                if (liveTotal > 0L) {
                     Text(
-                        text = formatCompactCount(campaign.totalStreams) + " streams",
+                        text = formatCompactCount(liveTotal) + " streams",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.6f),
                         maxLines = 1,

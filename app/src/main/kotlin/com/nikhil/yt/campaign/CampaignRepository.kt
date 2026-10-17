@@ -743,6 +743,56 @@ class CampaignRepository {
     }
 
     /**
+     * Read a single campaign's current gathered stream total straight from
+     * `track_campaigns`. This exists because a [CampaignCard] is a
+     * snapshot taken when the banner last loaded — its `totalStreams` is
+     * whatever the total was at that moment, not now. While a campaign is
+     * actually playing, the total keeps moving (simulated engagement is
+     * generated on a schedule), so a screen showing "the campaign's
+     * total" has to re-read it rather than trust the tap-time copy.
+     *
+     * Reads the column directly rather than summing
+     * `listener_play_events`: `total_streams` is the blended real +
+     * seeded figure the product shows, and it is the same number the
+     * banner and the admin surfaces already use, so the player agrees
+     * with them by construction.
+     *
+     * @return the current total, or `null` if it could not be read (any
+     *   network/parse failure) — callers keep showing whatever they last
+     *   had rather than blanking the count over a transient error.
+     */
+    suspend fun fetchCampaignTotalStreams(campaignId: String): Long? = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext null
+        try {
+            val request = Request.Builder()
+                .url("$url/rest/v1/track_campaigns?select=total_streams&id=eq.$campaignId")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchCampaignTotalStreams: HTTP ${response.code}")
+                    return@use null
+                }
+                val body = response.body?.string().orEmpty()
+                val array = try {
+                    JSONArray(body)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Malformed total_streams response")
+                    return@use null
+                }
+                if (array.length() == 0) return@use null
+                array.optJSONObject(0)?.optLong("total_streams", 0L)
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchCampaignTotalStreams failed for $campaignId")
+            null
+        }
+    }
+
+    /**
      * Legacy increment wrapper — redirects to the new RPC.
      *
      * Task 60 (handover.md) — no longer has any call sites as of this
