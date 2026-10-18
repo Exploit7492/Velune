@@ -793,6 +793,113 @@ class CampaignRepository {
     }
 
     /**
+     * The campaign's own inputs to the estimate: the target it was sold,
+     * how long it runs, and when it started.
+     *
+     * Fetched as one row because the three are only meaningful together —
+     * a target without a duration has no curve, and a duration without a
+     * start date has no position on it. `estimated_duration_days` is the
+     * same field the server's plan uses (`seed_daily_stream_plan` falls
+     * back to 30 when it is null or zero, and [CampaignDeliveryEstimate]
+     * applies the same fallback).
+     *
+     * @return the row, or `null` on any failure, so callers fall back to
+     *   the plain gathered total rather than showing a fabricated curve.
+     */
+    suspend fun fetchCampaignEstimateInputs(campaignId: String): CampaignEstimateInputs? =
+        withContext(Dispatchers.IO) {
+            val (url, anonKey) = config() ?: return@withContext null
+            try {
+                val request = Request.Builder()
+                    .url(
+                        "$url/rest/v1/track_campaigns" +
+                            "?select=target_view_count,estimated_duration_days,created_at,scheduled_for" +
+                            "&id=eq.$campaignId"
+                    )
+                    .header("apikey", anonKey)
+                    .header("Authorization", "Bearer $anonKey")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Timber.tag(TAG).w("fetchCampaignEstimateInputs: HTTP ${response.code}")
+                        return@use null
+                    }
+                    val array = try {
+                        JSONArray(response.body?.string().orEmpty())
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Malformed campaign estimate response")
+                        return@use null
+                    }
+                    val row = array.optJSONObject(0) ?: return@use null
+                    val target = row.optLong("target_view_count", 0L)
+                    if (target <= 0L) return@use null
+                    CampaignEstimateInputs(
+                        targetViews = target,
+                        durationDays = row.optInt("estimated_duration_days", 0),
+                        startIso = row.optString("created_at").ifBlank {
+                            row.optString("scheduled_for")
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "fetchCampaignEstimateInputs failed for $campaignId")
+                null
+            }
+        }
+
+    /**
+     * The delivery curve's own configuration, from `simulation_engine_config`.
+     *
+     * Read rather than hardcoded because it is the same row the server's
+     * plan reads, and it is publicly readable. If this fails the caller
+     * uses [CampaignDeliveryCurve.DEFAULT], which is the config's own
+     * seeded values — so a failure degrades to today's shape rather than to
+     * no estimate at all.
+     */
+    suspend fun fetchDeliveryCurve(): CampaignDeliveryCurve? = withContext(Dispatchers.IO) {
+        val (url, anonKey) = config() ?: return@withContext null
+        try {
+            val request = Request.Builder()
+                .url(
+                    "$url/rest/v1/simulation_engine_config" +
+                        "?select=curve_peak_position,curve_tail_fraction,curve_wobble_depth," +
+                        "curve_wobble_frequency,plan_daily_min,total_fill_ratio&limit=1"
+                )
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $anonKey")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag(TAG).w("fetchDeliveryCurve: HTTP ${response.code}")
+                    return@use null
+                }
+                val array = try {
+                    JSONArray(response.body?.string().orEmpty())
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Malformed delivery curve response")
+                    return@use null
+                }
+                val row = array.optJSONObject(0) ?: return@use null
+                CampaignDeliveryCurve(
+                    peakPosition = row.optDouble("curve_peak_position", 0.35),
+                    tailFraction = row.optDouble("curve_tail_fraction", 0.15),
+                    wobbleDepth = row.optDouble("curve_wobble_depth", 0.30),
+                    wobbleFrequency = row.optDouble("curve_wobble_frequency", 0.7),
+                    planDailyMin = row.optLong("plan_daily_min", 1L),
+                    totalFillRatio = row.optDouble("total_fill_ratio", 1.0),
+                )
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchDeliveryCurve failed")
+            null
+        }
+    }
+
+    /**
      * Legacy increment wrapper — redirects to the new RPC.
      *
      * Task 60 (handover.md) — no longer has any call sites as of this

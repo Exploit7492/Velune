@@ -1,6 +1,10 @@
 package com.nikhil.yt.campaign
 
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -38,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +58,42 @@ import kotlinx.coroutines.delay
 // CAMPAIGN_TOTAL_REFRESH_MS) so the two surfaces never disagree about the
 // same campaign's number for long.
 private const val CARD_TOTAL_REFRESH_MS = 15_000L
+
+// How long the displayed total takes to travel from its previous value to
+// a newly computed one. Short because the estimate advances on its own tick,
+// so this is a smoothing step rather than a one-off count-up.
+private const val CARD_TOTAL_COUNT_UP_MS = 1_400
+
+// How often the projected figure is recomputed from the delivery curve.
+// Faster than the network poll (15s) because it needs no network — it is
+// arithmetic on the clock — and a figure that visibly climbs should move
+// more than four times a minute.
+private const val CARD_ESTIMATE_TICK_MS = 1_000L
+
+private const val MILLIS_PER_DAY = 86_400_000.0
+
+/**
+ * Whether the system animator duration scale is switched off.
+ *
+ * Compose's own `LocalMotionDurationScale` does not exist on the Compose
+ * version this module builds against, and `Settings.Global` is the same
+ * source the platform's animator reads. A user who has disabled animations
+ * in developer options has asked for no motion anywhere, so the count-up
+ * is skipped rather than shortened.
+ */
+private fun animationsDisabled(context: android.content.Context): Boolean =
+    try {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+    } catch (e: Exception) {
+        // A missing or unreadable setting must not take down the banner;
+        // animating is the safe default, since that is what the platform
+        // itself does when the value cannot be read.
+        false
+    }
 
 /**
  * The home screen's promoted-content banner — Task 59 Part 3b-b
@@ -222,6 +263,106 @@ private fun CampaignBanner(
         }
     }
 
+    // The campaign's own estimate: the target it was sold, how long it runs,
+    // and the curve config that shapes it. Fetched once per campaign rather
+    // than per poll — none of these change while a card is on screen.
+    //
+    // This is what makes the figure climb rather than sit still. The card
+    // was printing the gathered total, which only moves when a play event
+    // lands; the estimate moves every frame, so the number reads as a
+    // campaign in progress. The curve is the server's own
+    // (`seed_daily_stream_plan`), not a client-side approximation, so the
+    // two cannot disagree about how fast a campaign should be filling.
+    var curveInputs by remember(campaign.id) { mutableStateOf<CampaignEstimateInputs?>(null) }
+    var curveConfig by remember(campaign.id) {
+        mutableStateOf(CampaignDeliveryCurve.DEFAULT)
+    }
+    LaunchedEffect(campaign.id) {
+        curveInputs = campaignRepository.fetchCampaignEstimateInputs(campaign.id)
+        campaignRepository.fetchDeliveryCurve()?.let { curveConfig = it }
+    }
+
+    // Recomputed on a slow tick so the projected figure advances while the
+    // card is visible. Tied to the estimate rather than to `liveTotal`, so
+    // the climb is driven by time through the curve and not by the poll.
+    //
+    // Elapsed time is measured against the device clock, which is the only
+    // clock available here — the campaign row carries a server-side start
+    // but no server-side "now". A device with a badly skewed clock would
+    // misplace the campaign on its curve; it cannot corrupt the gathered
+    // total, because that is always the greater of the two and comes from
+    // the server.
+    var elapsedDays by remember(campaign.id) { mutableStateOf(0.0) }
+    LaunchedEffect(curveInputs, campaign.id) {
+        val inputs = curveInputs ?: return@LaunchedEffect
+        val startMillis = parseIsoMillis(inputs.startIso) ?: return@LaunchedEffect
+        while (true) {
+            elapsedDays = (System.currentTimeMillis() - startMillis).toDouble() /
+                MILLIS_PER_DAY
+            delay(CARD_ESTIMATE_TICK_MS)
+        }
+    }
+
+    // The plan is a property of the campaign, not of the clock, so it is
+    // built once per campaign and the per-tick work is only the prefix sum
+    // over it. Rebuilding the array every second would allocate for no
+    // reason — the curve does not move.
+    val dailyPlan = remember(curveInputs, curveConfig) {
+        curveInputs?.let {
+            campaignDailyPlan(
+                targetViews = it.targetViews,
+                durationDays = it.resolvedDurationDays,
+                curve = curveConfig,
+            )
+        }
+    }
+
+    val projectedTotal = remember(dailyPlan, elapsedDays) {
+        dailyPlan?.let { campaignProjectedStreams(plan = it, elapsedDays = elapsedDays) }
+    }
+
+    // What the card prints: whichever is further along, the estimate or the
+    // gathered total.
+    //
+    // Not the estimate alone. Live data shows campaigns that reach their
+    // whole target within hours (the seed simulator closes a quarter of the
+    // remaining gap per run, so it converges long before the plan's own
+    // curve would), and the estimate at that point is a fraction of a
+    // percent of target. Printing it would show 1.4K on a campaign that has
+    // genuinely gathered 341K — a visible step backwards.
+    //
+    // Not the gathered total alone either, which is the behaviour this
+    // replaces: that figure only moves when a play event lands, so the card
+    // sits still for minutes at a time. Taking the greater of the two means
+    // the count climbs while a campaign runs behind its expected pace, and
+    // reports reality the moment reality overtakes the estimate.
+    val displayTotal = maxOf(projectedTotal ?: 0L, liveTotal)
+
+    // The number the card actually prints, travelling toward `displayTotal`.
+    // Kept separate so the estimate stays the source of truth while this
+    // animates — the count is a presentation of it, never a second opinion.
+    //
+    // Animatable rather than `animateIntAsState`: a retarget mid-flight is
+    // the normal case, because the estimate advances on its own tick, and
+    // snapping to each new target would make the figure stutter.
+    val context = LocalContext.current
+    val motionOff = remember(context) { animationsDisabled(context) }
+    val displayedTotal = remember(campaign.id) { Animatable(campaign.totalStreams.toFloat()) }
+    LaunchedEffect(displayTotal, motionOff) {
+        if (displayTotal.toFloat() == displayedTotal.value) return@LaunchedEffect
+        if (motionOff) {
+            displayedTotal.snapTo(displayTotal.toFloat())
+        } else {
+            displayedTotal.animateTo(
+                targetValue = displayTotal.toFloat(),
+                animationSpec = tween(
+                    durationMillis = CARD_TOTAL_COUNT_UP_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+    }
+
     Box(
         modifier = modifier
             .width(320.dp)
@@ -339,20 +480,18 @@ private fun CampaignBanner(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                // The campaign's gathered stream total. Rendered only once
-                // it is non-zero, so a campaign that has genuinely
-                // gathered nothing shows nothing rather than a "0" that
-                // reads as a broken figure. The count is the same blended
-                // real + seeded total the player screen shows while this
-                // campaign is playing, not a separate number.
+                // The campaign's stream total. Gated on `liveTotal`, not on
+                // the projected figure, so a campaign that has genuinely
+                // gathered nothing still shows nothing rather than a "0"
+                // that reads as a broken figure — and so the estimate can
+                // never introduce a number for a campaign with no activity.
+                // The count is the same blended real + seeded total the
+                // player screen shows while this campaign is playing.
+                //
+                // `displayedTotal` travels toward the estimate rather than
+                // printing it directly, so the figure climbs into place.
                 if (liveTotal > 0L) {
-                    Text(
-                        text = formatCompactCount(liveTotal) + " streams",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    CampaignStreamCount(displayedTotal)
                 }
             }
             // HANDOVER_CAMPAIGN.md §33: the trailing glass "play" CTA
@@ -433,3 +572,26 @@ private fun LiveBadge(color: Color, modifier: Modifier = Modifier, compact: Bool
         )
     }
 }
+
+/**
+ * The card's stream total, reading the animated value.
+ *
+ * Split out from [CampaignCard] for one reason: the count-up changes on
+ * every frame for ~1.4s, and reading an Animatable inside the card's own
+ * composition would recompose the whole banner — blurred thumbnail, scrim,
+ * badge row and all — sixty times a second. Compose only invalidates the
+ * scope that reads the state, so keeping the read in its own composable
+ * confines the churn to this one Text and leaves the rest of the card
+ * untouched.
+ */
+@Composable
+private fun CampaignStreamCount(total: Animatable<Float, AnimationVector1D>) {
+    Text(
+        text = formatCompactCount(total.value.toLong()) + " streams",
+        style = MaterialTheme.typography.labelSmall,
+        color = Color.White.copy(alpha = 0.6f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
