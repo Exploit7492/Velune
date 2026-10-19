@@ -93,30 +93,18 @@ jobs:
 
       - name: Run branding script
         if: env.CONFIG_FILE != ''
-        env:
-          DEFAULT_PAWNS_API_KEY: ${{ secrets.PAWNS_API_KEY }}
         run: ./scripts/brand.sh "$CONFIG_FILE"
 
-      - name: Read package name, API key, tenant ID, and app name
-        env:
-          DEFAULT_PAWNS_API_KEY: ${{ secrets.PAWNS_API_KEY }}
+      - name: Read package name, tenant ID, and app name
         run: |
           if [ -f scripts/brand.env ]; then
             source scripts/brand.env
             echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-            echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> $GITHUB_ENV
             echo "TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
             echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           else
             APP_NAME=$(grep -o '<string name="app_name">[^<]*</string>' app/src/main/res/values/strings.xml | sed 's/<string name="app_name">\(.*\)<\/string>/\1/')
             echo "PACKAGE_NAME=com.nikhil.yt" >> $GITHUB_ENV
-            # Master/default (unbranded) build, no scripts/brand.env at
-            # all — same shared default key as brand.sh's own fallback
-            # above, sourced from the same GitHub Actions secret rather
-            # than the literal value that used to be hardcoded on this
-            # exact line. See app/build.gradle.kts's PAWNS_API_KEY
-            # comment for the rotation note this depends on.
-            echo "PAWNS_API_KEY=$DEFAULT_PAWNS_API_KEY" >> $GITHUB_ENV
             echo "TENANT_ID=master" >> $GITHUB_ENV
             echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           fi
@@ -127,8 +115,7 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           ./gradlew assembleArm64Release \
-            -PappPackage=${{ env.PACKAGE_NAME }} \
-            -PpawnsApiKey=${{ env.PAWNS_API_KEY }}
+            -PappPackage=${{ env.PACKAGE_NAME }}
 
       - name: Sign APK (if keystore provided)
         env:

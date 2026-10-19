@@ -6,7 +6,6 @@
 
 package com.nikhil.yt.ui.screens.settings
 
-import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
@@ -22,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,20 +29,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.nikhil.yt.LocalDatabase
-import com.nikhil.yt.LocalPlayerAwareWindowInsets
-import com.nikhil.yt.PawnsManager
 import com.nikhil.yt.R
 import com.nikhil.yt.constants.DisableScreenshotKey
 import com.nikhil.yt.constants.PauseListenHistoryKey
 import com.nikhil.yt.constants.PauseSearchHistoryKey
 import com.nikhil.yt.ui.component.DefaultDialog
 import com.nikhil.yt.ui.component.PreferenceEntry
-import com.nikhil.yt.ui.component.PreferenceGroupTitle
 import com.nikhil.yt.ui.component.SwitchPreference
 import com.nikhil.yt.utils.rememberPreference
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -52,8 +44,6 @@ fun PrivacySettings(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val database = LocalDatabase.current
     val colors = MaterialTheme.colorScheme
 
@@ -79,71 +69,6 @@ fun PrivacySettings(
     var privacySettingsExpanded by remember { mutableStateOf(false) }
     var securityExpanded by remember { mutableStateOf(false) }
     var dataProtectionExpanded by remember { mutableStateOf(false) }
-    var dataSharingExpanded by remember { mutableStateOf(false) }
-
-    // ─── Bandwidth sharing state ───────────────────────────────────────────────
-    val pawnsManager = PawnsManager.getInstance(context)
-    var uiToggleOn by remember { mutableStateOf(false) }
-    var isToggling by remember { mutableStateOf(false) }
-    var showAlert by remember { mutableStateOf<AlertDialogConfig?>(null) }
-    var showDestructiveAlert by remember { mutableStateOf<DestructiveAlertConfig?>(null) }
-
-    // Check actual consent status on mount
-    LaunchedEffect(Unit) {
-        try {
-            val consentGiven = withContext(Dispatchers.IO) {
-                context.getSharedPreferences("pawns_prefs", Context.MODE_PRIVATE)
-                    .getBoolean("consent_given", false)
-            }
-            uiToggleOn = consentGiven
-        } catch (e: Exception) {
-            uiToggleOn = false
-        }
-    }
-
-    // ─── Alert dialogs ──────────────────────────────────────────────────────────
-    if (showAlert != null) {
-        AlertDialog(
-            onDismissRequest = { showAlert = null },
-            title = { Text(showAlert!!.title) },
-            text = { Text(showAlert!!.message) },
-            confirmButton = {
-                TextButton(onClick = { showAlert = null }) {
-                    Text("OK")
-                }
-            },
-            containerColor = colors.surface,
-            titleContentColor = colors.onSurface,
-            textContentColor = colors.onSurface.copy(alpha = 0.7f)
-        )
-    }
-
-    if (showDestructiveAlert != null) {
-        AlertDialog(
-            onDismissRequest = { showDestructiveAlert = null },
-            title = { Text(showDestructiveAlert!!.title) },
-            text = { Text(showDestructiveAlert!!.message) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDestructiveAlert!!.onConfirm()
-                        showDestructiveAlert = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                ) {
-                    Text(showDestructiveAlert!!.confirmText)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDestructiveAlert = null }) {
-                    Text("Cancel")
-                }
-            },
-            containerColor = colors.surface,
-            titleContentColor = colors.onSurface,
-            textContentColor = colors.onSurface.copy(alpha = 0.7f)
-        )
-    }
 
     // ─── Clear history dialogs ──────────────────────────────────────────────────
     if (showClearListenHistoryDialog) {
@@ -196,71 +121,6 @@ fun PrivacySettings(
                 }
             },
         )
-    }
-
-    // ─── Bandwidth sharing toggle handler ──────────────────────────────────────
-    val handleBandwidthSharingToggle = { value: Boolean ->
-        if (value) {
-            if (!isToggling) {
-            scope.launch {
-                isToggling = true
-                try {
-                    val apiKey = pawnsManager.getStoredApiKey() ?: ""
-                    pawnsManager.initialize(apiKey)
-                    pawnsManager.optIn()
-                    withContext(Dispatchers.IO) {
-                        context.getSharedPreferences("pawns_prefs", Context.MODE_PRIVATE)
-                            .edit().putBoolean("consent_given", true).apply()
-                    }
-                    uiToggleOn = true
-                    showAlert = AlertDialogConfig(
-                        title = "Bandwidth Sharing Enabled",
-                        message = "Your device is now sharing idle bandwidth. You can disable this at any time."
-                    )
-                } catch (e: Exception) {
-                    showAlert = AlertDialogConfig(
-                        title = "Error",
-                        message = "Failed to enable bandwidth sharing. Please try again later."
-                    )
-                    uiToggleOn = false
-                } finally {
-                    isToggling = false
-                }
-            }
-            }
-        } else {
-            showDestructiveAlert = DestructiveAlertConfig(
-                title = "Withdraw Consent?",
-                message = "⚠️ IMPORTANT NOTICE\n\nIf you turn off this feature:\n\n• Some SDK functions will stop working\n• The background service will stop immediately\n\nYou can re-enable this feature at any time.",
-                confirmText = "Turn Off",
-                onConfirm = {
-                    scope.launch {
-                        if (isToggling) return@launch
-                        isToggling = true
-                        try {
-                            pawnsManager.optOut()
-                            withContext(Dispatchers.IO) {
-                                context.getSharedPreferences("pawns_prefs", Context.MODE_PRIVATE)
-                                    .edit().putBoolean("consent_given", false).apply()
-                            }
-                            uiToggleOn = false
-                            showAlert = AlertDialogConfig(
-                                title = "Bandwidth Sharing Disabled",
-                                message = "The service has been stopped and your consent has been withdrawn."
-                            )
-                        } catch (e: Exception) {
-                            showAlert = AlertDialogConfig(
-                                title = "Error",
-                                message = "Failed to disable bandwidth sharing. Please try again."
-                            )
-                            uiToggleOn = true
-                        } finally {
-                            isToggling = false
-                        }
-                    }
-                }
-            )
-        }
     }
 
     // ─── Main UI ──────────────────────────────────────────────────────────────────
@@ -363,7 +223,8 @@ fun PrivacySettings(
                     icon = R.drawable.security,
                     expanded = dataProtectionExpanded,
                     onToggle = { dataProtectionExpanded = !dataProtectionExpanded },
-                    colors = colors
+                    colors = colors,
+                    isLast = true
                 ) {
                     SettingNavRow(
                         label = "Encryption & Security",
@@ -376,25 +237,6 @@ fun PrivacySettings(
                         sub = "Access, correct, or delete your data",
                         icon = R.drawable.storage,
                         onClick = { /* Open data rights */ }
-                    )
-                }
-
-                // ─── Data Sharing Accordion ──────────────────────────────────────
-                PrivacyAccordionSection(
-                    title = "Data Sharing",
-                    icon = R.drawable.share,
-                    expanded = dataSharingExpanded,
-                    onToggle = { dataSharingExpanded = !dataSharingExpanded },
-                    colors = colors,
-                    isLast = true
-                ) {
-                    BandwidthSharingRow(
-                        label = if (uiToggleOn) "Bandwidth Sharing (ON)" else "Bandwidth Sharing (OFF)",
-                        sub = if (uiToggleOn) "Tap to disable bandwidth sharing" else "Tap to enable bandwidth sharing and earn rewards",
-                        icon = R.drawable.wifi_proxy,
-                        value = uiToggleOn,
-                        onToggle = handleBandwidthSharingToggle,
-                        isLoading = isToggling
                     )
                 }
             }
@@ -505,85 +347,6 @@ fun PrivacyAccordionSection(
     }
 }
 
-// ─── Bandwidth Sharing Row ────────────────────────────────────────────────────
-
-@Composable
-fun BandwidthSharingRow(
-    label: String,
-    sub: String? = null,
-    icon: Int,
-    value: Boolean,
-    onToggle: (Boolean) -> Unit,
-    isLoading: Boolean = false
-) {
-    val colors = MaterialTheme.colorScheme
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.primary.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(icon),
-                    contentDescription = null,
-                    tint = colors.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = label,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.onSurface
-                )
-                if (sub != null) {
-                    Text(
-                        text = sub,
-                        fontSize = 11.sp,
-                        color = colors.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = colors.primary,
-                strokeWidth = 2.dp
-            )
-        } else {
-            Switch(
-                checked = value,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedTrackColor = colors.primary.copy(alpha = 0.5f),
-                    uncheckedTrackColor = colors.onSurface.copy(alpha = 0.2f),
-                    checkedThumbColor = colors.primary,
-                    uncheckedThumbColor = colors.onSurface.copy(alpha = 0.4f)
-                )
-            )
-        }
-    }
-}
-
 // ─── Setting Navigation Row ──────────────────────────────────────────────────
 
 @Composable
@@ -649,17 +412,3 @@ fun SettingNavRow(
         )
     }
 }
-
-// ─── Data classes for alerts ─────────────────────────────────────────────────
-
-data class AlertDialogConfig(
-    val title: String,
-    val message: String
-)
-
-data class DestructiveAlertConfig(
-    val title: String,
-    val message: String,
-    val confirmText: String,
-    val onConfirm: () -> Unit
-)

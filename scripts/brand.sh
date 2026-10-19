@@ -16,19 +16,6 @@ PRIMARY_COLOR=$(jq -r '.primary_color' "$CONFIG_FILE")
 ACCENT_COLOR=$(jq -r '.accent_color' "$CONFIG_FILE")
 LOGO_URL=$(jq -r '.logo_url' "$CONFIG_FILE")
 CONSENT_TEXT=$(jq -r '.consent_text' "$CONFIG_FILE")
-PAWNS_API_KEY=$(jq -r '.pawns_api_key // ""' "$CONFIG_FILE")
-
-if [ -z "$PAWNS_API_KEY" ]; then
-    # No per-tenant key in the config JSON — fall back to the shared
-    # default, passed in by the caller as DEFAULT_PAWNS_API_KEY (the
-    # workflow sources this from a GitHub Actions secret). This used to
-    # be a live key hardcoded directly here, committed to this public
-    # repo's git history — moved out for the same reason every other
-    # credential in this repo is build-time-sourced now, not committed.
-    # See app/build.gradle.kts's own PAWNS_API_KEY comment for the fuller
-    # explanation and the rotation note.
-    PAWNS_API_KEY="${DEFAULT_PAWNS_API_KEY:-}"
-fi
 
 echo "Branding tenant: $TENANT_ID ($APP_NAME)"
 
@@ -62,7 +49,6 @@ fi
 
 # 5. Output environment variables for the build
 echo "PACKAGE_NAME=$PACKAGE_NAME" > scripts/brand.env
-echo "PAWNS_API_KEY=$PAWNS_API_KEY" >> scripts/brand.env
 echo "TENANT_ID=$TENANT_ID" >> scripts/brand.env
 echo "APP_NAME=$APP_NAME" >> scripts/brand.env
 

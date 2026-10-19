@@ -28,8 +28,6 @@ import com.nikhil.yt.constants.LiquidGlassTextColorKey
 import com.nikhil.yt.constants.LiquidGlassVibrancyKey
 import android.annotation.SuppressLint
 import android.Manifest
-import android.app.ActivityManager
-import android.app.ForegroundServiceStartNotAllowedException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -274,10 +272,6 @@ class MainActivity : ComponentActivity() {
     private var playerConnection by mutableStateOf<PlayerConnection?>(null)
     private var isMusicServiceBound = false
 
-    // ─── Consent state ────────────────────────────────────────────────────────────
-    private var consentManager: ConsentManager? = null
-    private var pawnsManager: PawnsManager? = null
-
     private val serviceConnection =
         object : ServiceConnection {
             override fun onServiceConnected(
@@ -330,7 +324,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        startMusicServiceSafely()
         isMusicServiceBound =
             bindService(
                 Intent(this, MusicService::class.java),
@@ -349,51 +342,6 @@ class MainActivity : ComponentActivity() {
             reportException(e)
         } finally {
             isMusicServiceBound = false
-        }
-    }
-
-    private fun isAppInForeground(): Boolean {
-        val activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
-        val appProcesses = activityManager.runningAppProcesses ?: return false
-        val packageName = packageName
-        return appProcesses.any { processInfo ->
-            processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-                    processInfo.processName == packageName
-        }
-    }
-
-    private fun startMusicServiceSafely() {
-        val startIntent = Intent(this, MusicService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            try {
-                if (isAppInForeground()) {
-                    startService(startIntent)
-                }
-            } catch (e: ForegroundServiceStartNotAllowedException) {
-                reportException(e)
-            } catch (e: IllegalStateException) {
-                reportException(e)
-            } catch (e: SecurityException) {
-                reportException(e)
-            } catch (e: Exception) {
-                reportException(e)
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                startService(startIntent)
-            } catch (e: IllegalStateException) {
-                reportException(e)
-            } catch (e: SecurityException) {
-                reportException(e)
-            } catch (e: Exception) {
-                reportException(e)
-            }
-        } else {
-            try {
-                startService(startIntent)
-            } catch (e: Exception) {
-                reportException(e)
-            }
         }
     }
 
@@ -436,13 +384,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // ─── Initialize ConsentManager and PawnsManager ─────────────────────────
-        consentManager = ConsentManager(this)
-        pawnsManager = PawnsManager.getInstance(this)
-
-        // If consent is already given, the SDK will be initialized by MusicService
-        // If not, we'll show the consent modal.
 
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -515,22 +456,6 @@ class MainActivity : ComponentActivity() {
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
-
-            // ─── Consent state ──────────────────────────────────────────────────────
-            val consentManagerLocal = consentManager ?: return@setContent
-            val pawnsManagerLocal = pawnsManager ?: return@setContent
-
-            var consentGiven by remember { mutableStateOf(false) }
-            var isLoadingConsent by remember { mutableStateOf(true) }
-            var showConsentModal by remember { mutableStateOf(false) }
-
-            LaunchedEffect(Unit) {
-                consentManagerLocal.isConsentGiven().collect { given ->
-                    consentGiven = given
-                    isLoadingConsent = false
-                    showConsentModal = !given
                 }
             }
 
@@ -1610,47 +1535,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
-                    // ─── Consent Modal — overlays the main UI above; non-blocking ─────
-                    if (showConsentModal && !isLoadingConsent) {
-                        val apiKey = try {
-                            // Get the API key from PawnsManager (it was stored in prefs)
-                            pawnsManagerLocal.getStoredApiKey() ?: ""
-                        } catch (e: Exception) {
-                            ""
-                        }
-
-                        ConsentModal(
-                            visible = true,
-                            apiKey = apiKey,
-                            onAccept = {
-                                // Accept flow: initialize -> optIn -> start service -> close modal
-                                try {
-                                    val pawnsKey = apiKey.takeIf { it.isNotBlank() } ?: PawnsManager.DEFAULT_API_KEY
-                                    pawnsManagerLocal.initialize(pawnsKey)
-                                    pawnsManagerLocal.optIn()
-                                    // Start the music service
-                                    startMusicServiceSafely()
-                                    // Store consent in ConsentManager as well
-                                    consentManagerLocal.setConsentGiven(true)
-                                    showConsentModal = false
-                                } catch (e: Throwable) {
-                                    reportException(e)
-                                }
-                            },
-                            onDismiss = {
-                                // User chose to go to settings — close the modal so the
-                                // (already-rendered) home screen underneath is immediately
-                                // interactive while navigation to Settings happens.
-                                showConsentModal = false
-                                navController.navigate("settings")
-                            },
-                            onOpenSettings = {
-                                showConsentModal = false
-                                navController.navigate("settings")
-                            }
-                        )
-                    }
                 }
             }
         }
@@ -1668,7 +1552,6 @@ class MainActivity : ComponentActivity() {
         val authority = uri.authority?.lowercase()
         if (uri.scheme.equals("velune", ignoreCase = true) && authority == "together") {
             pendingTogetherJoinLink = uri.toString()
-            startMusicServiceSafely()
             joinPendingTogetherIfReady()
             return
         }
@@ -1792,7 +1675,6 @@ class MainActivity : ComponentActivity() {
                                 PendingDeepLinkSong(
                                     mediaItem = mediaItem,
                                 )
-                            startMusicServiceSafely()
                             playPendingDeepLinkSongIfReady()
                         }.onFailure {
                             reportException(it)
