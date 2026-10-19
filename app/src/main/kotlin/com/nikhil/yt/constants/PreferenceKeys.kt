@@ -804,6 +804,17 @@ val EqStereoWidthKey = floatPreferencesKey("eq_stereo_width")
 val EqTempoKey = floatPreferencesKey("eq_tempo_ratio")
 val EqPitchSemitonesKey = floatPreferencesKey("eq_pitch_semitones")
 
+// EQ Simple tab — flanger effect (a modulated short delay summed with the
+// dry signal; see Flanger). Six keys because the effect exposes an on/off
+// toggle plus five shaping values, and a chosen preset has to survive a
+// restart the same way every other master-bus control does.
+val EqFlangerEnabledKey = booleanPreferencesKey("eq_flanger_enabled")
+val EqFlangerBaseDelayKey = floatPreferencesKey("eq_flanger_base_delay_ms")
+val EqFlangerDepthKey = floatPreferencesKey("eq_flanger_depth_ms")
+val EqFlangerRateKey = floatPreferencesKey("eq_flanger_rate_hz")
+val EqFlangerFeedbackKey = floatPreferencesKey("eq_flanger_feedback")
+val EqFlangerMixKey = floatPreferencesKey("eq_flanger_mix")
+
 // EQ Master tab — convolution-based tone shaping (impulse response
 // correction, see ConvolutionAudioProcessor/EqualizerService). The picked
 // IR is copied into app-private storage at import time rather than kept as

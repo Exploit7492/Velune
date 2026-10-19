@@ -11,6 +11,12 @@ import com.nikhil.yt.constants.EqBandQPrefix
 import com.nikhil.yt.constants.EqConvolutionEnabledKey
 import com.nikhil.yt.constants.EqConvolutionIrNameKey
 import com.nikhil.yt.constants.EqConvolutionIrPathKey
+import com.nikhil.yt.constants.EqFlangerBaseDelayKey
+import com.nikhil.yt.constants.EqFlangerDepthKey
+import com.nikhil.yt.constants.EqFlangerEnabledKey
+import com.nikhil.yt.constants.EqFlangerFeedbackKey
+import com.nikhil.yt.constants.EqFlangerMixKey
+import com.nikhil.yt.constants.EqFlangerRateKey
 import com.nikhil.yt.constants.EqLimiterCeilingKey
 import com.nikhil.yt.constants.EqLimiterEnabledKey
 import com.nikhil.yt.constants.EqStereoWidthKey
@@ -135,6 +141,30 @@ class AxionEqViewModel @Inject constructor(
     private val _limiterCeilingDb = MutableStateFlow(-0.3f)
     val limiterCeilingDb = _limiterCeilingDb.asStateFlow()
 
+    // Flanger — the Simple tab's "whoosh" effect (a modulated short delay
+    // summed with the dry signal; see Flanger's own DSP doc). Six values
+    // rather than one because the effect exposes a preset plus the usual
+    // depth/rate/feedback controls; all six persist through DataStore so a
+    // preset choice survives a restart, same as every other master-bus
+    // control above.
+    private val _flangerEnabled = MutableStateFlow(false)
+    val flangerEnabled = _flangerEnabled.asStateFlow()
+
+    private val _flangerBaseDelayMs = MutableStateFlow(2f)
+    val flangerBaseDelayMs = _flangerBaseDelayMs.asStateFlow()
+
+    private val _flangerDepthMs = MutableStateFlow(3f)
+    val flangerDepthMs = _flangerDepthMs.asStateFlow()
+
+    private val _flangerRateHz = MutableStateFlow(0.25f)
+    val flangerRateHz = _flangerRateHz.asStateFlow()
+
+    private val _flangerFeedback = MutableStateFlow(0.5f)
+    val flangerFeedback = _flangerFeedback.asStateFlow()
+
+    private val _flangerMix = MutableStateFlow(0.5f)
+    val flangerMix = _flangerMix.asStateFlow()
+
     // Pro-level independent tempo/pitch (WSOLA time-stretch + resampler,
     // see TempoPitchAudioProcessor) — replaces the old Sonic-backed dialog
     // in the player menu, which now reads/writes the same EqTempoKey/
@@ -235,12 +265,26 @@ class AxionEqViewModel @Inject constructor(
             _limiterCeilingDb.value = prefsSnapshot[EqLimiterCeilingKey] ?: -0.3f
             _tempoRatio.value = prefsSnapshot[EqTempoKey] ?: 1f
             _pitchSemitones.value = prefsSnapshot[EqPitchSemitonesKey] ?: 0f
+            _flangerEnabled.value = prefsSnapshot[EqFlangerEnabledKey] ?: false
+            _flangerBaseDelayMs.value = prefsSnapshot[EqFlangerBaseDelayKey] ?: 2f
+            _flangerDepthMs.value = prefsSnapshot[EqFlangerDepthKey] ?: 3f
+            _flangerRateHz.value = prefsSnapshot[EqFlangerRateKey] ?: 0.25f
+            _flangerFeedback.value = prefsSnapshot[EqFlangerFeedbackKey] ?: 0.5f
+            _flangerMix.value = prefsSnapshot[EqFlangerMixKey] ?: 0.5f
             equalizerService.setBalance(_balance.value.toDouble())
             equalizerService.setBassBoost(_bassBoostDb.value.toDouble())
             equalizerService.setStereoWidth(_stereoWidth.value.toDouble())
             equalizerService.setLimiter(_limiterEnabled.value, _limiterCeilingDb.value.toDouble())
             equalizerService.setTempo(_tempoRatio.value.toDouble())
             equalizerService.setPitchSemitones(_pitchSemitones.value.toDouble())
+            equalizerService.setFlanger(
+                _flangerEnabled.value,
+                _flangerBaseDelayMs.value.toDouble(),
+                _flangerDepthMs.value.toDouble(),
+                _flangerRateHz.value.toDouble(),
+                _flangerFeedback.value.toDouble(),
+                _flangerMix.value.toDouble(),
+            )
         }
         // Restore a previously-imported impulse response, off the main
         // thread since it means re-reading and re-parsing a WAV file (IR
@@ -387,6 +431,47 @@ class AxionEqViewModel @Inject constructor(
     fun resetTempoPitch() {
         setTempoRatio(1f)
         setPitchSemitones(0f)
+    }
+
+    /**
+     * Flanger on/off plus its five shaping values, pushed straight through
+     * to [EqualizerService] and persisted so the choice survives a restart.
+     * Kept as one entry point rather than six independent setters because
+     * the UI presents the effect as a single unit (a toggle plus a preset
+     * selector); a preset applies all five values at once.
+     */
+    fun setFlanger(
+        enabled: Boolean,
+        baseDelayMs: Float,
+        depthMs: Float,
+        rateHz: Float,
+        feedback: Float,
+        mix: Float,
+    ) {
+        _flangerEnabled.value = enabled
+        _flangerBaseDelayMs.value = baseDelayMs
+        _flangerDepthMs.value = depthMs
+        _flangerRateHz.value = rateHz
+        _flangerFeedback.value = feedback
+        _flangerMix.value = mix
+        viewModelScope.launch {
+            context.dataStore.edit {
+                it[EqFlangerEnabledKey] = enabled
+                it[EqFlangerBaseDelayKey] = baseDelayMs
+                it[EqFlangerDepthKey] = depthMs
+                it[EqFlangerRateKey] = rateHz
+                it[EqFlangerFeedbackKey] = feedback
+                it[EqFlangerMixKey] = mix
+            }
+        }
+        equalizerService.setFlanger(
+            enabled,
+            baseDelayMs.toDouble(),
+            depthMs.toDouble(),
+            rateHz.toDouble(),
+            feedback.toDouble(),
+            mix.toDouble(),
+        )
     }
 
     /**

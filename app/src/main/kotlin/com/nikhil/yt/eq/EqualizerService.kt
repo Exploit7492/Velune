@@ -154,6 +154,15 @@ class EqualizerService @Inject constructor(
     private var pendingTempoRatio: Double = 1.0
     private var pendingPitchSemitones: Double = 0.0
 
+    // Flanger — same "pending" pattern as everything else above, so the
+    // effect survives a processor being torn down/recreated on track change.
+    private var pendingFlangerEnabled: Boolean = false
+    private var pendingFlangerBaseDelayMs: Double = 2.0
+    private var pendingFlangerDepthMs: Double = 3.0
+    private var pendingFlangerRateHz: Double = 0.25
+    private var pendingFlangerFeedback: Double = 0.5
+    private var pendingFlangerMix: Double = 0.5
+
     companion object {
         private const val TAG = "EqualizerService"
 
@@ -166,6 +175,12 @@ class EqualizerService @Inject constructor(
         private const val KEY_PITCH_SEMITONES = "pitch_semitones"
         private const val KEY_CONVOLUTION_ENABLED = "convolution_enabled"
         private const val KEY_CONVOLUTION_IR_PATH = "convolution_ir_path"
+        private const val KEY_FLANGER_ENABLED = "flanger_enabled"
+        private const val KEY_FLANGER_BASE_DELAY_MS = "flanger_base_delay_ms"
+        private const val KEY_FLANGER_DEPTH_MS = "flanger_depth_ms"
+        private const val KEY_FLANGER_RATE_HZ = "flanger_rate_hz"
+        private const val KEY_FLANGER_FEEDBACK = "flanger_feedback"
+        private const val KEY_FLANGER_MIX = "flanger_mix"
     }
 
     // Self-restore, synchronously, as part of construction — see this
@@ -196,6 +211,14 @@ class EqualizerService @Inject constructor(
         )
         setTempo(enginePrefs.getFloat(KEY_TEMPO, 1f).toDouble())
         setPitchSemitones(enginePrefs.getFloat(KEY_PITCH_SEMITONES, 0f).toDouble())
+        setFlanger(
+            enginePrefs.getBoolean(KEY_FLANGER_ENABLED, false),
+            enginePrefs.getFloat(KEY_FLANGER_BASE_DELAY_MS, 2f).toDouble(),
+            enginePrefs.getFloat(KEY_FLANGER_DEPTH_MS, 3f).toDouble(),
+            enginePrefs.getFloat(KEY_FLANGER_RATE_HZ, 0.25f).toDouble(),
+            enginePrefs.getFloat(KEY_FLANGER_FEEDBACK, 0.5f).toDouble(),
+            enginePrefs.getFloat(KEY_FLANGER_MIX, 0.5f).toDouble(),
+        )
 
         // Only push the active band profile if the master toggle is
         // actually on — matching AxionEqViewModel's own `if
@@ -252,6 +275,14 @@ class EqualizerService @Inject constructor(
         processor.setConvolutionEnabled(pendingConvolutionEnabled)
         processor.setSpectrumAnalyzerEnabled(pendingSpectrumEnabled)
         processor.setPeakMeterEnabled(pendingPeakMeterEnabled)
+        processor.setFlanger(
+            pendingFlangerEnabled,
+            pendingFlangerBaseDelayMs,
+            pendingFlangerDepthMs,
+            pendingFlangerRateHz,
+            pendingFlangerFeedback,
+            pendingFlangerMix,
+        )
     }
 
     
@@ -334,6 +365,48 @@ class EqualizerService @Inject constructor(
             putFloat(KEY_LIMITER_CEILING_DB, pendingLimiterCeilingDb.toFloat())
         }
         audioProcessors.forEach { it.setLimiter(pendingLimiterEnabled, pendingLimiterCeilingDb) }
+    }
+
+    /**
+     * Flanger — a modulated short delay summed with the dry signal, giving
+     * the swept comb-filter whoosh. [enabled] gates it; the other five
+     * values are the effect's own controls and are clamped inside
+     * [com.nikhil.yt.eq.audio.Flanger]. Same "pending + persist + push to
+     * every live processor" pattern as the master-bus setters above.
+     */
+    @OptIn(UnstableApi::class)
+    fun setFlanger(
+        enabled: Boolean,
+        baseDelayMs: Double,
+        depthMs: Double,
+        rateHz: Double,
+        feedback: Double,
+        mix: Double
+    ) {
+        pendingFlangerEnabled = enabled
+        pendingFlangerBaseDelayMs = baseDelayMs
+        pendingFlangerDepthMs = depthMs
+        pendingFlangerRateHz = rateHz
+        pendingFlangerFeedback = feedback
+        pendingFlangerMix = mix
+        enginePrefs.edit {
+            putBoolean(KEY_FLANGER_ENABLED, pendingFlangerEnabled)
+            putFloat(KEY_FLANGER_BASE_DELAY_MS, pendingFlangerBaseDelayMs.toFloat())
+            putFloat(KEY_FLANGER_DEPTH_MS, pendingFlangerDepthMs.toFloat())
+            putFloat(KEY_FLANGER_RATE_HZ, pendingFlangerRateHz.toFloat())
+            putFloat(KEY_FLANGER_FEEDBACK, pendingFlangerFeedback.toFloat())
+            putFloat(KEY_FLANGER_MIX, pendingFlangerMix.toFloat())
+        }
+        audioProcessors.forEach {
+            it.setFlanger(
+                pendingFlangerEnabled,
+                pendingFlangerBaseDelayMs,
+                pendingFlangerDepthMs,
+                pendingFlangerRateHz,
+                pendingFlangerFeedback,
+                pendingFlangerMix,
+            )
+        }
     }
 
     /**

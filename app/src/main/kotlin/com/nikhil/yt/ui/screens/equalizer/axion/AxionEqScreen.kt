@@ -1168,6 +1168,42 @@ private fun SimpleEqMode(
     var showManageDialog by remember { mutableStateOf(false) }
     var showPresetPicker by remember { mutableStateOf(false) }
 
+    // Flanger — the Simple tab's one non-EQ effect. State lives in the
+    // ViewModel (and DataStore) so a chosen preset survives a restart; this
+    // only reads it back for display and forwards changes.
+    val flangerEnabled by viewModel.flangerEnabled.collectAsState()
+    val flangerBaseDelayMs by viewModel.flangerBaseDelayMs.collectAsState()
+    val flangerDepthMs by viewModel.flangerDepthMs.collectAsState()
+    val flangerRateHz by viewModel.flangerRateHz.collectAsState()
+    val flangerFeedback by viewModel.flangerFeedback.collectAsState()
+    val flangerMix by viewModel.flangerMix.collectAsState()
+
+    // Four named presets rather than five raw sliders: the shaping values
+    // interact (more feedback needs less mix to stay musical, a fast rate
+    // reads as vibrato rather than a sweep), so exposing the combinations
+    // that actually sound right is more useful here than a bare parameter
+    // dump. See FlangerPreset.
+    val flangerPresets = listOf(
+        FlangerPreset(R.string.eq_flanger_preset_subtle, 1.5f, 1.5f, 0.15f, 0.2f, 0.35f),
+        FlangerPreset(R.string.eq_flanger_preset_classic, 2.0f, 3.0f, 0.25f, 0.5f, 0.5f),
+        FlangerPreset(R.string.eq_flanger_preset_jet, 1.0f, 4.0f, 0.6f, 0.75f, 0.6f),
+        FlangerPreset(R.string.eq_flanger_preset_deep, 3.0f, 5.0f, 0.1f, 0.85f, 0.5f),
+    )
+    // Match the live values back to a preset name for the selector label.
+    // Tolerance-based, same approach activePresetName uses for EQ bands
+    // above — a preset applied then re-read should still show as selected.
+    val activeFlangerPreset = remember(
+        flangerBaseDelayMs, flangerDepthMs, flangerRateHz, flangerFeedback, flangerMix
+    ) {
+        flangerPresets.firstOrNull { p ->
+            abs(p.baseDelayMs - flangerBaseDelayMs) < 0.01f &&
+                abs(p.depthMs - flangerDepthMs) < 0.01f &&
+                abs(p.rateHz - flangerRateHz) < 0.001f &&
+                abs(p.feedback - flangerFeedback) < 0.01f &&
+                abs(p.mix - flangerMix) < 0.01f
+        }
+    }
+
     if (showManageDialog) {
         ManagePresetsDialog(
             customProfiles = customProfiles,
@@ -1251,6 +1287,30 @@ private fun SimpleEqMode(
             )
         }
 
+        // Flanger — the Simple tab's one effect that isn't EQ. Placed right
+        // after the preset picker and before the tonal controls because it
+        // colours the whole output rather than shaping bands, so it reads as
+        // a separate stage rather than another band control. Off by default;
+        // switching it on applies the currently-shown preset immediately so
+        // the toggle is never a no-op.
+        FlangerSection(
+            enabled = enabled,
+            flangerEnabled = flangerEnabled,
+            activePreset = activeFlangerPreset,
+            presets = flangerPresets,
+            onToggle = { on ->
+                val p = activeFlangerPreset ?: flangerPresets[1]
+                viewModel.setFlanger(
+                    on, p.baseDelayMs, p.depthMs, p.rateHz, p.feedback, p.mix
+                )
+            },
+            onPresetSelected = { p ->
+                viewModel.setFlanger(
+                    true, p.baseDelayMs, p.depthMs, p.rateHz, p.feedback, p.mix
+                )
+            },
+        )
+
         CircularEqControl(
             bass = bass, mid = mid, treble = treble,
             enabled = enabled,
@@ -1304,6 +1364,82 @@ private fun SimpleEqMode(
                 Text(
                     text = stringResource(R.string.eq_save),
                     style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A named flanger preset. Lives at file scope (not inside SimpleEqMode) so
+ * the composable below can take it as a parameter and stay testable/
+ * previewable on its own. Values are the five flanger controls; the name is
+ * a string resource so it localises like every other EQ label.
+ */
+private data class FlangerPreset(
+    val nameRes: Int,
+    val baseDelayMs: Float,
+    val depthMs: Float,
+    val rateHz: Float,
+    val feedback: Float,
+    val mix: Float,
+)
+
+/**
+ * The flanger control block on the Simple tab: an on/off switch and a row of
+ * preset chips. Deliberately presets rather than five sliders — see
+ * [FlangerPreset]'s comment and the Flanger DSP's own doc for why the values
+ * have to move together to stay musical. Selecting a chip also switches the
+ * effect on, so picking one always has an audible result.
+ */
+@Composable
+private fun FlangerSection(
+    enabled: Boolean,
+    flangerEnabled: Boolean,
+    activePreset: FlangerPreset?,
+    presets: List<FlangerPreset>,
+    onToggle: (Boolean) -> Unit,
+    onPresetSelected: (FlangerPreset) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.eq_flanger_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.eq_flanger_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = flangerEnabled,
+                onCheckedChange = onToggle,
+                enabled = enabled,
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            presets.forEach { preset ->
+                FilterChip(
+                    selected = activePreset == preset,
+                    onClick = { onPresetSelected(preset) },
+                    enabled = enabled,
+                    label = { Text(stringResource(preset.nameRes)) },
                 )
             }
         }

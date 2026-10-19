@@ -86,6 +86,14 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     // by simple running-max instead of an FFT — see PeakMeter's own doc.
     val peakMeter = PeakMeter()
 
+    // Flanger — a modulated short delay summed back with the dry signal, so
+    // the comb-filter notches sweep and produce the classic whoosh. Sits
+    // after the EQ/width shaping but before the output gain and limiter, so
+    // the limiter still catches whatever the feedback adds. See Flanger's
+    // own doc for the DSP itself; this class only owns its position in the
+    // chain and its pending-state wiring.
+    private val flanger = Flanger(initialSampleRate = 44100)
+
     companion object {
         private const val TAG = "CustomEqualizerAudioProcessor"
         private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
@@ -177,6 +185,29 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         lookaheadLimiter.setEnabled(enabled)
     }
 
+    /**
+     * Flanger controls. [enabled] gates the whole effect; the four shaping
+     * values are passed straight through to [Flanger], which does its own
+     * clamping. Kept as one call rather than five separate setters because
+     * the UI presents them as a single effect with a preset.
+     */
+    @Synchronized
+    fun setFlanger(
+        enabled: Boolean,
+        baseDelayMs: Double,
+        depthMs: Double,
+        rateHz: Double,
+        feedback: Double,
+        mix: Double
+    ) {
+        flanger.setBaseDelayMs(baseDelayMs)
+        flanger.setDepthMs(depthMs)
+        flanger.setRateHz(rateHz)
+        flanger.setFeedback(feedback)
+        flanger.setMix(mix)
+        flanger.setEnabled(enabled)
+    }
+
     fun setSpectrumAnalyzerEnabled(enabled: Boolean) {
         spectrumAnalyzer.enabled = enabled
     }
@@ -245,6 +276,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         lookaheadLimiter.configure(sampleRate)
         spectrumAnalyzer.configure(sampleRate)
         peakMeter.configure(sampleRate)
+        flanger.configure(sampleRate)
 
         pendingImpulseResponseFile?.let { file ->
             try {
@@ -356,6 +388,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left = widened.first
                 right = widened.second
 
+                val flanged = flanger.process(left, right)
+                left = flanged.first
+                right = flanged.second
+
                 left *= leftGain
                 right *= rightGain
 
@@ -377,6 +413,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 convolver?.let { sample = it.processMono(sample) }
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
+                sample = flanger.processMono(sample)
                 sample *= preampGain
                 sample = lookaheadLimiter.processMono(sample)
                 if (spectrumAnalyzer.enabled) {
@@ -421,6 +458,10 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 left = widened.first
                 right = widened.second
 
+                val flanged = flanger.process(left, right)
+                left = flanged.first
+                right = flanged.second
+
                 left *= leftGain
                 right *= rightGain
 
@@ -442,6 +483,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                 convolver?.let { sample = it.processMono(sample) }
                 filters.forEach { sample = it.processSample(sample) }
                 bassFilter?.let { sample = it.processSample(sample) }
+                sample = flanger.processMono(sample)
                 sample *= preampGain
                 sample = lookaheadLimiter.processMono(sample)
                 if (spectrumAnalyzer.enabled) {
@@ -470,6 +512,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         filters.forEach { it.reset() }
         lookaheadLimiter.reset()
         convolutionEngine?.reset()
+        flanger.reset()
         spectrumAnalyzer.reset()
         peakMeter.reset()
     }

@@ -542,6 +542,14 @@
     <string name="eq_label_bass">Bass</string>
     <string name="eq_label_mid">Mid</string>
     <string name="eq_label_treble">Treble</string>
+    <string name="eq_flanger_title">Flanger</string>
+    <string name="eq_flanger_subtitle">Swept comb-filter whoosh. Off by default; pick a preset to hear it.</string>
+    <string name="eq_flanger_preset_label">Preset</string>
+    <string name="eq_flanger_preset_subtle">Subtle</string>
+    <string name="eq_flanger_preset_classic">Classic</string>
+    <string name="eq_flanger_preset_jet">Jet</string>
+    <string name="eq_flanger_preset_deep">Deep</string>
+    <string name="eq_flanger_reset">Reset</string>
     <string name="eq_preset_flat">Flat</string>
     <string name="eq_preset_acoustic">Acoustic</string>
     <string name="eq_preset_bass_boost">Bass Boost</string>
