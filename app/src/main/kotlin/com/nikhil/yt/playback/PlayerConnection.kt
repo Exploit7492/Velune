@@ -20,6 +20,7 @@ import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.common.Timeline
 import com.nikhil.yt.db.MusicDatabase
+import com.nikhil.yt.extensions.campaignInfo
 import com.nikhil.yt.extensions.currentMetadata
 import com.nikhil.yt.extensions.getCurrentQueueIndex
 import com.nikhil.yt.extensions.getQueueWindows
@@ -57,6 +58,13 @@ class PlayerConnection(
             player.playWhenReady && player.playbackState != STATE_ENDED
         )
     val mediaMetadata = MutableStateFlow(player.currentMetadata)
+    // The campaign the currently-playing item was injected for, if any.
+    // `get_next_campaign_for_queue_slot` (migration 083) returns the whole
+    // campaign row, `CampaignRepository` carries it on the injected
+    // MediaItem's extras, and this surfaces it to the player — so the
+    // campaign's own numbers come from the item that is playing rather
+    // than from a separate lookup keyed on the video id.
+    val currentCampaign = MutableStateFlow(player.currentMediaItem?.campaignInfo)
     val currentSong =
         mediaMetadata.flatMapLatest {
             database.song(it?.id)
@@ -134,6 +142,7 @@ class PlayerConnection(
         playbackParameters.value = player.playbackParameters
         val currentMeta = player.currentMetadata ?: service.currentMediaMetadata.value
         mediaMetadata.value = currentMeta
+        currentCampaign.value = player.currentMediaItem?.campaignInfo
         queueTitle.value = service.queueTitle
         queueWindows.value = player.getQueueWindows()
         currentWindowIndex.value = player.getCurrentQueueIndex()
@@ -245,6 +254,7 @@ class PlayerConnection(
     ) {
         val meta = mediaItem?.metadata ?: service.currentMediaMetadata.value
         mediaMetadata.value = meta
+        currentCampaign.value = mediaItem?.campaignInfo
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()

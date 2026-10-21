@@ -309,23 +309,45 @@ fun BottomSheetPlayer(
     // about the campaign.
     val trackedCampaignForCount by
         com.nikhil.yt.campaign.CampaignPlaybackTracker.current.collectAsState()
+    // The campaign the *playing item itself* was injected for. Unlike the
+    // tracker above — which is only ever set by a tap on a promoted card —
+    // this is present for a campaign spliced into any queue by
+    // `CampaignInjectedQueue`, because `CampaignRepository` carries the
+    // RPC's row on the item's extras. Without it, a campaign injected
+    // mid-queue showed the underlying video's YouTube view count instead
+    // of the campaign's own total: the enriched RPC's fields were fetched
+    // and then dropped before the player could see them.
+    val injectedCampaign by playerConnection.currentCampaign.collectAsState()
     // Held across recompositions: CampaignRepository owns an OkHttpClient,
     // so building one per poll tick would leak a connection pool every 15s.
     val campaignRepository = remember { com.nikhil.yt.campaign.CampaignRepository() }
-    LaunchedEffect(mediaMetadata?.id, isCurrentSongLocal, trackedCampaignForCount?.id) {
+    LaunchedEffect(
+        mediaMetadata?.id,
+        isCurrentSongLocal,
+        trackedCampaignForCount?.id,
+        injectedCampaign?.campaignId,
+    ) {
         viewCountTarget = null
         if (isCurrentSongLocal) return@LaunchedEffect
-        val campaign = trackedCampaignForCount?.takeIf { it.songId == mediaMetadata?.id }
-        if (campaign != null) {
-            // Seed from the card so something is on screen immediately,
-            // then keep the total live: the campaign's total keeps moving
-            // while it plays, and the card is only a snapshot from when
-            // the banner loaded. Polled only while this campaign is the
-            // tracked one — the effect is cancelled the moment it stops
-            // being, so no request outlives the screen showing it.
-            if (campaign.totalStreams > 0L) viewCountTarget = campaign.totalStreams
+        // The injected item's own campaign wins: it is the campaign this
+        // exact slot was filled with, and it is known even when the item
+        // was never tapped from a card. The tracker is the fallback for
+        // the banner-tap path, where the campaign is known before the
+        // item is.
+        val campaignId = injectedCampaign?.campaignId
+            ?: trackedCampaignForCount?.takeIf { it.songId == mediaMetadata?.id }?.id
+        if (campaignId != null) {
+            // Seed from what the server already sent — the injected item's
+            // row, or the card's snapshot — so something is on screen
+            // immediately, then keep the total live: the campaign's total
+            // keeps moving while it plays. Polled only while this campaign
+            // is the one playing — the effect is cancelled the moment it
+            // stops being, so no request outlives the screen showing it.
+            val seeded = injectedCampaign?.totalStreams
+                ?: trackedCampaignForCount?.takeIf { it.id == campaignId }?.totalStreams
+            if (seeded != null && seeded > 0L) viewCountTarget = seeded
             while (true) {
-                val live = campaignRepository.fetchCampaignTotalStreams(campaign.id)
+                val live = campaignRepository.fetchCampaignTotalStreams(campaignId)
                 if (live != null && live > 0L) viewCountTarget = live
                 delay(CAMPAIGN_TOTAL_REFRESH_MS)
             }
@@ -1630,12 +1652,18 @@ private fun MetroPlayerContent(
                 Column(modifier = Modifier.weight(1f)) {
                     val trackedCampaign by com.nikhil.yt.campaign.CampaignPlaybackTracker.current.collectAsState()
                     val campaign = trackedCampaign?.takeIf { it.songId == mediaMetadata.id }
-                    if (campaign != null) {
+                    val injected by playerConnection.currentCampaign.collectAsState()
+                    // A promoted item is either one tapped from a card (the
+                    // tracker) or one spliced into the queue by injection
+                    // (the item's own extras). Both deserve the label, and
+                    // only the injected case can show the campaign's genre,
+                    // because that is the field the widened RPC added.
+                    if (campaign != null || injected != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(bottom = 4.dp),
                         ) {
-                            if (campaign.certified) {
+                            if (campaign?.certified == true) {
                                 Image(
                                     painter = painterResource(
                                         if (isSystemInDarkTheme()) R.drawable.campaign_badge_dark else R.drawable.campaign_badge_light
@@ -1651,6 +1679,16 @@ private fun MetroPlayerContent(
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                 color = Color(0xFFD4AF37),
                             )
+                            val genre = injected?.genres?.firstOrNull()
+                            if (!genre.isNullOrBlank()) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "· $genre",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                     Text(

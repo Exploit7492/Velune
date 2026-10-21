@@ -9,6 +9,7 @@ package com.nikhil.yt.campaign
 import androidx.media3.common.MediaItem
 import com.nikhil.yt.BuildConfig
 import com.nikhil.yt.extensions.toMediaItem
+import com.nikhil.yt.extensions.withCampaign
 import com.nikhil.yt.innertube.YouTube
 import com.nikhil.yt.models.toMediaMetadata
 import kotlinx.coroutines.Dispatchers
@@ -410,6 +411,112 @@ class CampaignRepository {
      *   if resolution failed for any reason.
      */
     suspend fun fetchNextCampaignForQueueSlot(genre: String? = null): MediaItem? = withContext(Dispatchers.IO) {
+        val slot = fetchNextCampaignForQueueSlotRich(genre) ?: return@withContext null
+        val sourceUrl = slot.sourceUrl
+        val resolvedSongId = slot.resolvedSongId
+        // Same resolution order CampaignUrlResolver already
+        // establishes for the trending-list path: a stored
+        // resolved id wins if present, falls back to extracting
+        // one from the raw source URL otherwise, and only then
+        // to resolving a Spotify link at runtime (B4b). Rows
+        // reaching here with a non-null resolved_song_id were
+        // already the only ones the RPC's own eligibility filter
+        // admitted, so the Spotify branch is a second chance for
+        // a row the RPC let through on its YouTube-URL shape.
+        val videoId = resolvedSongId
+            ?: CampaignUrlResolver.extractVideoId(sourceUrl)
+            ?: SpotifyLink.parse(sourceUrl)?.let { CampaignSpotifyResolver.resolve(it)?.id }
+        if (videoId == null) {
+            Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract a video id")
+            return@withContext null
+        }
+
+        try {
+            val result = YouTube.queue(listOf(videoId)).getOrNull()
+            val metadata = result?.firstOrNull()?.toMediaMetadata()
+            // The RPC returned the campaign's own row alongside the id it
+            // chose — carry those fields on the item so the player and the
+            // notification render the campaign from the item itself rather
+            // than looking the video id back up and guessing.
+            metadata?.toMediaItem()?.withCampaign(
+                campaignId = slot.campaignId,
+                totalStreams = slot.totalStreams,
+                genres = slot.genres,
+                stage = slot.currentStage,
+                coverUrl = slot.coverUrl,
+            )
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed for genre=$genre")
+            null
+        }
+    }
+
+    /**
+     * The campaign a queue slot was filled with, with everything the RPC
+     * selected for it — not just the three fields needed to start
+     * playback.
+     *
+     * Migration 083 widened `get_next_campaign_for_queue_slot`'s
+     * `RETURNS TABLE` from `(id, source_url, resolved_song_id)` to the
+     * whole row. Before that, a caller handed a campaign had to fetch it
+     * again, or resolve it from YouTube, to learn its title, artwork,
+     * stage or genre — and the genre was not recoverable at all, even
+     * though the RPC's own eligibility filter reads it. These fields are
+     * what the server now sends in the same response that picked the
+     * campaign.
+     *
+     * [genres] is never empty for a servable campaign: migration 083's
+     * `ensure_campaign_genre` trigger places any published campaign that
+     * arrived without a resolvable genre, so the slot can always be
+     * labelled.
+     */
+    data class QueueSlotCampaign(
+        val campaignId: String,
+        val sourceUrl: String,
+        val resolvedSongId: String?,
+        val trackTitle: String,
+        val artistName: String,
+        val coverUrl: String?,
+        val currentStage: String,
+        val genres: List<String>,
+        val totalStreams: Long,
+        val saveCount: Long,
+        val playlistAddCount: Long,
+        val shareCount: Long,
+        val commentCount: Long,
+        val geographicTier: String,
+        val targetCountries: List<String>,
+    )
+
+    /**
+     * Fetch the next campaign for a queue slot, with its full row.
+     *
+     * ## Calling this is a write
+     * The RPC marks the chosen campaign's `last_served_at` in the same
+     * transaction that selects it (`FOR UPDATE SKIP LOCKED`). That is what
+     * makes the rotation fair — every eligible campaign is served before
+     * any repeat, globally across every listener. So this must be called
+     * **once per slot**, never pre-fetched in a batch and rotated
+     * locally: a batch would mark campaigns served before they reached a
+     * real slot and unfairly deprioritise them for everyone else. This is
+     * why [fetchNextCampaignForQueueSlot] delegates here rather than
+     * making its own second call.
+     *
+     * ## Genre is a filter, and it fails closed
+     * `null` means "no genre context" (search, album, playlist, artist
+     * radio, autoplay) and matches any eligible campaign — injection is a
+     * monetization slot, not a genre feature. A concrete term confines the
+     * pick to that genre and its adjacent genres, and an *unresolvable*
+     * term serves nothing rather than widening to the whole catalogue;
+     * that widening is how an R&B tile once got served Hip-Hop. The
+     * caller resolves a tile to a term via [GenreTileMappingCache].
+     *
+     * @return the selected campaign, or `null` when no eligible campaign
+     *   exists right now (a normal, expected outcome — nothing active, or
+     *   every eligible campaign was served very recently) or when the
+     *   request failed for any reason.
+     */
+    suspend fun fetchNextCampaignForQueueSlotRich(genre: String? = null): QueueSlotCampaign? = withContext(Dispatchers.IO) {
         val (url, anonKey) = config() ?: return@withContext null
         try {
             val payload = JSONObject().apply {
@@ -425,14 +532,14 @@ class CampaignRepository {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: HTTP ${response.code}")
+                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlotRich: HTTP ${response.code}")
                     return@use null
                 }
                 val body = response.body?.string().orEmpty()
                 val array = try {
                     JSONArray(body)
                 } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot: malformed response")
+                    Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlotRich: malformed response")
                     return@use null
                 }
                 // Empty array = no eligible campaign for this genre right
@@ -441,31 +548,46 @@ class CampaignRepository {
                 if (array.length() == 0) return@use null
                 val row = array.optJSONObject(0) ?: return@use null
 
-                val sourceUrl = row.optString("source_url", "")
-                val resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() }
-                // Same resolution order CampaignUrlResolver already
-                // establishes for the trending-list path: a stored
-                // resolved id wins if present, falls back to extracting
-                // one from the raw source URL otherwise, and only then
-                // to resolving a Spotify link at runtime (B4b). Rows
-                // reaching here with a non-null resolved_song_id were
-                // already the only ones the RPC's own eligibility filter
-                // admitted, so the Spotify branch is a second chance for
-                // a row the RPC let through on its YouTube-URL shape.
-                val videoId = resolvedSongId
-                    ?: CampaignUrlResolver.extractVideoId(sourceUrl)
-                    ?: SpotifyLink.parse(sourceUrl)?.let { CampaignSpotifyResolver.resolve(it)?.id }
-                if (videoId == null) {
-                    Timber.tag(TAG).w("fetchNextCampaignForQueueSlot: could not extract a video id")
-                    return@use null
-                }
+                // `campaign_id` is the widened name; `id` is the original
+                // column, still returned (same value) so a database that
+                // has not yet run 083 stays readable.
+                val campaignId = row.optString("campaign_id", "")
+                    .takeIf { it.isNotBlank() }
+                    ?: row.optString("id", "")
+                if (campaignId.isBlank()) return@use null
 
-                val result = YouTube.queue(listOf(videoId)).getOrNull()
-                val metadata = result?.firstOrNull()?.toMediaMetadata()
-                metadata?.toMediaItem()
+                val genres = row.optJSONArray("genres")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        arr.optString(i, "").takeIf { it.isNotBlank() }
+                    }
+                }.orEmpty()
+
+                val countries = row.optJSONArray("target_countries")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        arr.optString(i, "").takeIf { it.isNotBlank() }
+                    }
+                }.orEmpty()
+
+                QueueSlotCampaign(
+                    campaignId = campaignId,
+                    sourceUrl = row.optString("source_url", ""),
+                    resolvedSongId = row.optString("resolved_song_id", "").takeIf { it.isNotBlank() },
+                    trackTitle = row.optString("track_title", "").takeIf { it.isNotBlank() } ?: "Untitled",
+                    artistName = row.optString("artist_name", "").takeIf { it.isNotBlank() } ?: "Unknown Artist",
+                    coverUrl = row.optString("cover_url", "").takeIf { it.isNotBlank() },
+                    currentStage = row.optString("current_stage", "planting").takeIf { it.isNotBlank() } ?: "planting",
+                    genres = genres,
+                    totalStreams = row.optLong("total_streams", 0L),
+                    saveCount = row.optLong("save_count", 0L),
+                    playlistAddCount = row.optLong("playlist_add_count", 0L),
+                    shareCount = row.optLong("share_count", 0L),
+                    commentCount = row.optLong("comment_count", 0L),
+                    geographicTier = row.optString("geographic_tier", "local").takeIf { it.isNotBlank() } ?: "local",
+                    targetCountries = countries,
+                )
             }
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlot failed for genre=$genre")
+            Timber.tag(TAG).e(e, "fetchNextCampaignForQueueSlotRich failed for genre=$genre")
             null
         }
     }
