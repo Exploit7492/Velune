@@ -1738,8 +1738,21 @@ class MusicService :
             val radioQueue = YouTubeQueue(
                 endpoint = WatchEndpoint(videoId = currentMediaId)
             )
+            // Wrap like playQueue does: this path builds a queue directly and
+            // never calls playQueue, so without a wrapper here the radio
+            // continuation would be the one queue in the app with no campaign
+            // slots. Seamless radio has no genre context, so the provider asks
+            // for any eligible campaign (null genre) — injection is a
+            // monetization slot, not a genre feature (§33).
+            val injectedRadioQueue: Queue =
+                com.nikhil.yt.playback.queues.CampaignInjectedQueue(
+                    baseQueue = radioQueue,
+                    campaignSlotProvider = {
+                        com.nikhil.yt.campaign.CampaignRepository().fetchNextCampaignForQueueSlot(null)
+                    },
+                )
             val initialStatus = withContext(Dispatchers.IO) {
-                radioQueue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
+                injectedRadioQueue.getInitialStatus().filterExplicit(dataStore.get(HideExplicitKey, false)).filterVideo(dataStore.get(HideVideoKey, false) || dataStore.get(DataSaverEnabledKey, false))
             }
 
             if (initialStatus.title != null) {
@@ -1760,7 +1773,7 @@ class MusicService :
                 player.addMediaItems(currentIndex + 1, radioItems)
             }
 
-            currentQueue = radioQueue
+            currentQueue = injectedRadioQueue
         }
     }
 

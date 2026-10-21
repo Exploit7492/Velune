@@ -1,5 +1,17 @@
 # Consolidated Cross-Repo Todo — Velune / mavins-web / B-Pay-backend
 
+> **START HERE IF YOUR TASK IS NAKAMA OR GAMIFICATION: read
+> [`HANDOFF-NAKAMA-SERVICE.md`](./HANDOFF-NAKAMA-SERVICE.md) and then
+> [`HANDOFF-NAKAMA.md`](./HANDOFF-NAKAMA.md).** The first is the current
+> state of the Render service, which was crash-looping and is now live:
+> the database password had been rotated and was hardcoded in the
+> `Phoenix-Boss/nakama` repo, and both fixes are merged. The second is the
+> live-verified state of the gamification path — the five
+> `api/gamification/*` routes do not use Nakama and three of them write to
+> a table that does not exist. Written 2026-10-18 by the sessions that
+> pushed both repos to `King-Fisher000`. Several of their findings
+> contradict earlier notes in this file.
+
 > **Companion to, not a replacement for, the per-repo handover files.**
 > The handover files (`HANDOVER.md`, `HANDOVER_CAMPAIGN.md`,
 > mavins-web's `handover.md`) remain the authoritative narrative record.
@@ -2129,7 +2141,8 @@ genre here would silently undo that.
 
 | Source | Needs | Coverage | Verdict |
 |---|---|---|---|
-| **YouTube Data API `topicDetails`** | `YOUTUBE_API_KEY` — **absent, verified** | Wikipedia topic URLs, coarse | The literal request; the key is the blocker |
+| **Invidious `/api/v1/videos` keywords** | **nothing — keyless, verified live** | the video's own tags (same signal as Data API `snippet.tags`), plus coarse `genre` | **Chosen.** The owner's direction: no YouTube key, use Invidious |
+| **YouTube Data API `topicDetails`** | `YOUTUBE_API_KEY` — not used | Wikipedia topic URLs, coarse | Rejected: the key is the blocker, and the owner ruled it out |
 | **YouTube oEmbed title + author** | nothing (works today) | identity only, **no genre** | Use as the search key, not the genre |
 | **Spotify `genres`** | a Spotify client credential | richest for music | Strong, but a different platform than the request |
 | **Curated catalogue + inference** | nothing (works today) | **136/136 terms resolve** | Works now; already the campaign ledger |
@@ -2413,3 +2426,1228 @@ YouTube URL" — confirm).
 5. Surface estimated impressions + geography-on-submit in the preview card
    (currently preview shows identity + genre only; "estimated impressions"
    is chosen later via the geo panel + slider, not shown as an estimate).
+
+
+## K. Seed-simulation wiring — LIVE INCIDENT found and fixed (2026-10-16, tenth session)
+
+> **What happened.** This session was asked to wire the earn page's task
+> board to the reward deep link, and to fix UI that "isn't reflecting".
+> While verifying the earn board's data source live, the growth-purchase
+> **cron was caught mid-run against the real Fresh Connect panel**: seed
+> campaigns (fabricated showcase campaigns) had just been wired into the
+> real delivery path by migration 052, and the `daily-growth-purchase`
+> Edge Function was placing real orders for them and marking them
+> `failed`/`is_active = false` on any error. 248 of 379 seed campaigns had
+> already been deactivated and 130 were mid-retry. This is recorded in
+> full because it is the second time a "wire the seeds in" change has
+> produced a live side effect, and the root cause is worth remembering.
+
+### K1. Root cause — two defects, both fixed
+
+1. **Seed campaigns reached the real panel.** `process_daily_growth_purchases()`
+   selected every active, unpaused, `purchase_status = 'pending'`,
+   `scheduled_for <= NOW()` campaign and returned a purchase plan; the
+   Edge Function then placed a real order for each row and set
+   `purchase_status = 'failed'` + `is_active = false` on failure. Seed
+   campaigns are simulated — their activity is meant to come from the seed
+   engine (migration 055 now), in-database — and their `source_url` is
+   usually a Spotify link the panel cannot serve. **Fixed in migration 054**
+   by excluding `users.user_type = 'seed'` from the planning RPC. Only
+   genuinely-paid campaigns reach the panel.
+2. **The same plan was re-ordered every 5 minutes.** The RPC had no
+   "already ordered today" guard, so each `*/5 * * * *` run returned the
+   same plan again, the Edge Function inserted another order, and
+   `deduct_growth_budget` drained the whole growth budget over the first
+   few runs of a day instead of spreading it across the daily budget.
+   **Fixed in migration 054** with `NOT EXISTS (... campaign_service_orders
+   ... order_date = CURRENT_DATE)`. The RPC is now a genuine once-per-day
+   plan, which its name and `daily_budget_cents` column already implied.
+
+### K2. Recovery — done, verified live
+
+Migration 054 also restores the seed campaigns it caught: any seed campaign
+currently `failed`, `is_active = false`, or `is_paused = true` is returned
+to `pending` / active / unpaused. Verified after apply: all 379 seed
+campaigns `pending`, active, unpaused; earn board back to 380; the planning
+RPC returns **0** rows (correct — no real campaign is due and no seed
+campaign is eligible). The 3 orders currently `pending` in
+`campaign_service_orders` are Failure B's duplicates and the one real
+campaign; they are not seed orders and are left for the user to decide on
+(see K5).
+
+### K3. The seed simulation itself — migration 055
+
+Seed campaigns previously had a *frozen* counter: migration 052 set a
+one-off realistic value and nothing moved it afterwards (the Node seed
+engine runs once a day and its batch cap means it never gets through the
+set). So the "analytics and leaderboard keep moving" property did not hold.
+Migration 055 adds `simulate_seed_campaign_activity()`, running on pg_cron
+every 5 minutes inside Postgres like this database's other periodic work:
+
+- Daily activity follows a **rise-and-fall** curve — ramps to a peak at
+  roughly a third of the campaign's duration, then tapers to ~15% of peak,
+  with a slow day-to-day wobble. Verified on a real 30-day series: it rises
+  over ~20 days, peaks, then falls.
+- Each run closes a quarter of the remaining gap to today's target, so the
+  counter climbs across the day and settles — the chart visibly moves.
+- Writes only the same columns and the same `campaign_daily_metrics` shape
+  `record_campaign_stream` already writes, so no reader needs a change.
+- **All simulated plays are attributed to `seeded`; `real_streams` stays 0
+  for a seed campaign.** They are not real listeners — only genuine Velune
+  listener plays move `real_streams`.
+- A **daily reset** (`clear_seed_simulated_metrics_for_today`) clears the
+  previous day's simulated rows at each UTC rollover so every new day
+  starts at zero and climbs. Safe by the `is_simulated` flag (K4).
+
+### K4. `is_simulated` — simulation bookkeeping, not a UI label
+
+Migration 054 adds `track_campaigns.is_simulated BOOLEAN`, set for seed
+campaigns. It exists so the reset/simulation can identify its own rows
+without inferring from `user_type` and without any risk of touching a real
+campaign's metrics. It is **backend-only**: nothing in the UI reads it or
+labels a campaign as simulated. The product-owner rule applied here is
+"seeds are simulated, but the simulation should be invisible in the UI".
+
+Audited and removed the user-visible "seeded" wording that *did* exist:
+`PublicAnalyticsShowcase` ("Seeded Listeners" -> "Active Listeners", "Seeded
+engagement distributed..." -> "Live engagement...", "Top countries by seeded
+listener share" -> "Top countries by listener share"), `campaign-live`
+("seed network" -> "the network"), `promote` ("let the seed network deliver
+organic streams" -> "let the network deliver real streams"). The public
+"Organic Streams" source-breakdown bucket is decided by what we actually
+know — `seeded` vs the manual-import path — not by simulation-vs-real.
+
+### K5. Resolved (2026-10-16, same session, product owner asked for the
+### industry-standard choice) — migration 056
+
+Correction to the count below as first recorded: it is **12** pending orders
+with a provider id, not 3 — verified live. All 12 have `provider_order_id`,
+so there were **no** orphan (provider-less) rows; the budget-vs-order
+reconciliation was already consistent. What the 12 actually are:
+
+- 10 on real campaign `2b14f512...`, placed 2026-09-02 in ~17 minutes by the
+  old no-per-day-guard RPC (migration 054 fixed the cause).
+- 1 on seed `3ed96db5...` (The Weeknd), 1 on seed `fb369c08...` (Tani Yuuki),
+  placed 2026-10-16 by the pre-054 window.
+
+**Decision 1 — the provider orders: leave them; stop the cause; make
+failure non-destructive.** This provider's API has **no cancel action**
+(`services` / `add` / `status` / `balance` only), so no code here can remove
+those orders; cancelling is a manual panel action, and $0.58 total is not
+worth the toil. The industry-standard controls were applied instead, in
+migration 056 + the Edge Function:
+
+- **No charge for an unacknowledged order.** The Edge Function now calls the
+  provider *first* and only inserts the row and deducts the budget *after* a
+  real order id comes back. Before, it wrote locally first, so a rejected
+  order still cost the campaign and left a provider-less row.
+- **Transient failure no longer kills a campaign.** Status is now set from
+  the campaign's real state: a campaign that already has a provider order and
+  fails today goes back to `pending` for a retry, instead of `failed` +
+  `is_active = false`. That cascade is what lost the 248 seed campaigns.
+- **Circuit breaker** (`growth_panel_state`): after 4 consecutive
+  provider-wide failures (~20 min at the 5-minute cadence) purchasing halts
+  and `process_daily_growth_purchases()` returns nothing; a human resumes
+  with `resume_growth_purchases()`. A single bad service line does not trip it.
+- The two seed campaigns keep their budget zeroed as a second, independent
+  stop. They are **not** deactivated or paused: migration 054 already means no
+  seed campaign can be planned, so retiring them would spend nothing but
+  would remove two earn-board entries and freeze their leaderboard counters.
+
+**Decision 2 — one seed engine, in the database.** The Node
+`seedEngine.service.ts` is **retired and deleted**; the Vercel cron that
+called it (`/api/seed-engine/run`, daily 03:00) is removed and the route now
+returns 410 with the reason. This is the standard "single writer per fact"
+call: two writers for `total_streams`/`spent_cents`/`campaign_daily_metrics`
+is a race, and the two engines were not idempotent against each other — the
+Node engine read `campaign_daily_metrics.streams` and added only the
+remainder to a stage target, while 055's daily reset can clear that day's rows,
+so the two could disagree about how far along a day was. The Node engine was
+also dead in production (its `.lt('spent_cents','total_budget_cents')` chain
+made every deployed call error — confirmed live: the status route returns 200
+but POST run returns 500 with that exact message) and could never move 379
+campaigns at one run a day × 50 plays. Migration 055 already does stage
+advancement with the same monotonic thresholds and keeps `real_streams` at 0
+(verified: `v_organic_part := 0`). The only crop of the Node engine's work with
+no DB equivalent is the Nakama leaderboard mirror — verified unused: the
+user-facing `/leaderboard` reads the Postgres `get_leaderboard` RPC, and
+nothing reads Nakama leaderboards in src (only the login page touches Nakama
+for auth).
+
+**Still open (genuinely needs the owner, not a code decision):** whether to
+stop the 10 orders at the panel by hand, and whether to rotate the
+service-role JWT that is stored in plaintext in the `daily-growth-purchase`
+cron command (see K6).
+
+**Deploy step — DONE, and it turned out to have been done already.**
+`.github/workflows/vercel-deploy.yml` deploys the Vercel app only; it does
+not deploy Supabase Edge Functions. The rewritten
+`supabase/functions/daily-growth-purchase/index.ts` (provider-first ordering
++ the failure-attribution change) is deployed with
+`supabase functions deploy daily-growth-purchase`.
+
+`SUPABASE_ACCESS_TOKEN` is not in the environment, but the same credential is
+in the platform secret store as `Acess_token` (see AGENTS.md), so the deploy
+could be run here after all:
+
+```bash
+export SUPABASE_ACCESS_TOKEN="$Acess_token"
+npx --yes supabase functions deploy daily-growth-purchase \
+  --project-ref atojskxrxfsbpeefigtm --no-verify-jwt
+```
+
+**This note previously said the fix was not live. That was wrong.** The
+rewrite was committed 2026-10-16 14:06 and deployed 2026-10-17 17:38, over a
+day before this session. The redeploy on 2026-10-18 produced version 15 with
+an `ezbr_sha256` **byte-identical** to version 14's
+(`c3465c5c9eeb77f7b1a257d6ead275c2b2cf158c4266a930b3c2675fb66d8123`), which
+is what a no-op deploy looks like. The lesson: a deploy is not evidence of
+what is running — compare the bundle, or the `ezbr_sha256`, before claiming
+a fix is pending. The deploy is now confirmed in place either way.
+
+Migration 056 (the circuit breaker, the seed trigger, the budget stops) is
+applied and live — verified this session: `growth_panel_state` exists,
+`consecutive_failures = 0`, `halted_at` null. Note also that migration 054
+already prevents new
+seed orders, so the residual risk during the gap is small — it is real
+campaigns whose failed-today status could still cascade.
+
+### K6. Security note — credentials found in the database
+
+Two secrets are stored in plaintext inside Postgres objects, outside the
+platform secret store:
+
+- The `daily-growth-purchase` cron command contains a **service-role JWT**
+  inline (`{net,extensions}.http_post` body). This is the most privileged
+  Supabase credential in the system, readable by anything that can read
+  `cron.job`. It should be replaced with a Supabase Vault reference
+  (`vault.decrypted_secrets`) or the cron should call an authenticated
+  endpoint with a dedicated, least-privilege token.
+- `FRESH_CONNECT_API_KEY` / `GROWTH_METRICS_API_KEY` and
+  `FRESH_CONNECT_WEBHOOK_SECRET` are **not** registered in this environment,
+  so the panel path cannot be exercised or reconciled from here — the Edge
+  Function reads them from its own Supabase secrets. Confirmed absent here,
+  not assumed.
+
+Flagged, not changed: rotating a live service-role key would break anything
+currently using the inline copy, and that is the owner's call to schedule.
+
+**A third one, found this session (2026-10-18): the cron's JWT is never
+checked.** `daily-growth-purchase` runs with `verify_jwt = false` and its
+handler signature is `Deno.serve(async (_req) => …)` — the request object is
+discarded and nothing reads the `Authorization` header. So the service-role
+JWT in the cron command buys nothing: the endpoint is public, and anyone who
+knows the URL can trigger a real purchasing run against the growth panel.
+That is a stronger finding than "the JWT is stored in plaintext" — the JWT
+is not doing any work in the first place. The other three functions are not
+affected: `initialize-payment`, `korapay-webhook` and
+`sweep-listener-disbursements` all run `verify_jwt = true`, and
+`korapay-webhook` additionally verifies an HMAC signature.
+
+Exposure today is small, and it is small for a reason that will not last:
+`process_daily_growth_purchases()` returns 0 rows (verified live, in a
+rolled-back transaction), so a triggered run does nothing. It starts to
+matter the moment a real campaign becomes due.
+
+The fix belongs with the owner, because it changes the cron contract. Either
+set `verify_jwt = true` — which works, since the cron already sends a valid
+JWT — or have the function require a dedicated secret header and stop
+sending the service-role key through `net.http_post`. The second is better:
+it removes the plaintext service-role key from `cron.job` at the same time.
+
+## L. Seed campaign realism — names, budgets, duration, renewal (2026-10-15, eleventh session)
+
+The product owner asked for three things in the seed data, all now live as
+**migration 057** (`supabase_migration_057_seed_campaign_realism.sql`), applied
+and verified:
+
+> "populate the seeded campaign with campaign names for the seed campaign and
+> the time they end and how the seed renewed a new campaign it happens in real
+> time so the dates are realistic and the campaign is seen for that particular
+> seed so activities exist fully"
+
+> "All of them should now have same metric it should be random and randomise
+> duration too"
+
+> "we should have shrink rate too so that it's resembles a live system reality
+> because not everyone wants to run new campaign everytime"
+
+### L1. Root cause of "Untitled" — a NULL join, not missing data
+
+`track_campaigns.track_id` is NULL on **all 381 rows** — the seed never
+populated `tracks`. Both reader RPCs resolved the title with
+`LEFT JOIN tracks t ON t.id = tc.track_id`, so every row joined to nothing and
+the readers' `|| 'Untitled'` fallback fired 380 times. The real name was
+present the whole time in `campaign_name` (`"Ckay — Song 04DF5E (04df)"`),
+which `/analytics`, `/earnings` and `/campaign-live` already treat as the
+display title.
+
+Fixed on both sides, deliberately:
+
+- **Data**: `campaign_name` is now the real track title.
+- **Reader**: `get_earnable_campaigns_for_listener` and
+  `get_trending_campaigns` now select `COALESCE(tc.campaign_name, t.title)`,
+  so a campaign created outside this migration is still labelled correctly
+  rather than depending on a backfill having run.
+
+### L2. Where the real titles came from
+
+YouTube's public **oEmbed** endpoint, keylessly — the same keyless standard
+migration 046 used for genre resolution. No API key, no quota, no cost.
+
+All **381/381** campaigns resolved. There are **153 distinct tracks** because
+the seed reused songs across campaigns. The titles are the artist's own
+published titles, e.g. `CKAY - LOVE NWANTINTI | OFFICIAL AUDIO`,
+`Yemi Alade - Johnny (Official Music Video)`, `Lorde - Royals (US Version)`.
+
+`seed_campaign_track_lookup` (youtube_id → title, artist) is the single source
+of truth, so the spawner names new campaigns from it too.
+
+### L3. Metrics and duration — randomised, and made independent
+
+Was: every campaign seeded at **exactly 10000 cents**, and
+`estimated_duration_days` was **30 for all 379** simulated rows. Budget and
+duration were effectively the same number, so the board read as one campaign
+repeated.
+
+Now, re-rolled per campaign on the interval scale (multiplicative quantities,
+so small and large stay comparably likely rather than piling at the top):
+
+- `budget = round(exp(U(ln 3000, ln 60000)))` — ~$30–$600, **375 distinct values**
+- end date `= today + U(0..90) days`, with `estimated_duration_days` stored as
+  the duration that implies — **135 distinct values**
+
+Verified live: budget range 3012–59867, `corr(budget, duration) = -0.004`
+(independent), 0 campaigns overspent.
+
+**One trap worth recording.** Re-rolling the duration *without* anchoring it to
+today would have declared **363 of 381 campaigns finished in a single instant**
+— every campaign was seeded 30 days long at some point in the past, so their
+windows had already closed. That reads as the board being wiped, not as
+campaigns ending. Anchoring the draw to today spreads the endings evenly: about
+one campaign in ninety ends per day. This was caught in the rolled-back test,
+not in production.
+
+### L4. Renewal, and the shrink rate
+
+`renew_seed_campaigns()` runs hourly (pg_cron, `7 * * * *`). It:
+
+1. completes campaigns whose window has closed (`completed_at`, `is_active =
+   false`, stage `completed`);
+2. replaces *some* of them.
+
+The replacement draw is the product owner's shrink-rate requirement, and it is
+deliberately **not** a top-up. Per completed campaign: **90%** chance the
+artist runs another, **10%** chance they scale up to two at once — so the
+roster drifts gently down, because not everyone rebooks. `p_target` (380) is a
+ceiling, not a quota, and doubles as a low-water mark at 60% of its value so
+the roster cannot erode to nothing over a long run. The three rates are named
+variables (`v_rebook_rate`, `v_scale_up_rate`, `v_floor_fraction`) so the board
+shape can be tuned without hunting through the loop.
+
+Verified by forcing batches of endings: **379 → 377 → 374 → 379**, i.e. it
+wobbles in the 370s rather than pinning at a fixed size. An earlier draft with
+a 90% floor topped the board straight back to 380 every cycle — the floor was
+too tight to allow any drift at all.
+
+**Spawned campaigns are full campaigns, not stubs.** Each gets a full daily
+metric history backfilled from its own start date, and the counters are rolled
+up from that history, so its analytics chart is populated the moment it
+appears. The per-day figure is drawn log-uniformly **from the campaign's own
+uuid**, so each campaign has its own flat-but-wobbly rate instead of every
+campaign moving in lockstep — the "same metric" the owner objected to.
+
+**Sourcing note.** The spawn pool is the set of **seed artists**, not the set
+of live campaigns. An earlier draft sourced from live campaigns, which is the
+set the loop consumes — it drained itself and the board collapsed from 380 to
+167. Artists are drawn with replacement, so an artist may legitimately run more
+than one campaign at a time (as on any real platform).
+
+Renewal never retires a campaign early to make room: a campaign always serves
+its full window.
+
+### L5. UI
+
+- `/earn` board: **grid** (2-up mobile, 3-up sm+) with square artwork, real
+  title, artist, and an **"Ends 14 Nov"** line. Was a list of "Untitled".
+  `ends_at` is appended to the earnable RPC's column list and mapped through
+  `/api/listener/campaigns` as an optional field, so the page still renders
+  against a database where 057 has not been applied.
+- `Header.tsx`: logo is desktop-only; on mobile the hamburger is the only brand
+  affordance and the bar shows the current page's name, centred and truncating,
+  so it cannot overlap the action buttons. Action gaps tightened for 360px.
+- `promote/page.tsx`: `py-5` → `pt-20` so the fixed 56px/64px header no longer
+  overlaps the hero; copy now says "YouTube or Spotify link".
+
+### L6. A note on the `DROP FUNCTION` in 057
+
+Adding an OUT column changes a function's row type, which `CREATE OR REPLACE`
+refuses, so `get_earnable_campaigns_for_listener` is dropped and recreated and
+its grants re-issued (a drop takes them with it). Checked first: no other
+function depends on it, and no caller selects by position in a way the appended
+column would break. The `get_trending_campaigns` change is title-only, so its
+return shape is unchanged and it needs no drop.
+
+### L7. Verified live, after applying
+
+| Check | Result |
+| --- | --- |
+| Placeholder names remaining | **0** of 379 |
+| Null titles, earnable RPC | **0** |
+| Null titles, banner RPC | **0** |
+| Distinct budgets / durations | **375** / **135** |
+| `corr(budget, duration)` | **-0.004** |
+| Real (non-seed) campaigns touched | **0** — 2 before, 2 after, values identical |
+| Re-applying the migration | no change to counts (idempotent) |
+| Renewal cron | scheduled, `renew-seed-campaigns`, `7 * * * *` |
+
+### L8. Still open, unchanged by this session
+
+- **Edge Function deploy** (`daily-growth-purchase`) — still blocked on a
+  `sbp_` Management API token. See K5.
+- **§H genre work** — still needs the §H4 product answer before it is
+  implemented. Migration 057 does not touch genre scoping; the two RPCs it
+  rewrites keep their existing genre behaviour byte-for-byte.
+- **K6 secrets in the database** — still the owner's call.
+
+
+## M. Song selection in seeds, and the listener-facing play total (2026-10-16, eleventh session)
+
+Two new requirements from the product owner, plus the facts each one
+depends on. Recorded before implementing, because both need a decision
+and one of them needs data that does not exist yet.
+
+### M1. Requirement A — random 1–5 songs per campaign, max 3 uses of one song
+
+Asked for: "populate seeds table with random 1–5 tracks per campaign (mix
+of 1/2/3/4/5) so re-submission isn't always the same song, with max 3
+occurrences of the same song".
+
+Two facts make this smaller and larger than it sounds.
+
+**Fact 1 — a campaign is already a single-song row.** `track_campaigns`
+has one `resolved_song_id`, one `source_url`, one `campaign_name`. A
+campaign does not hold a list of tracks; the song *is* the campaign. So
+"1–5 tracks per campaign" cannot mean extra columns on a campaign. The
+only reading that fits the schema is: **the campaign's chosen song is
+drawn at random from a per-artist pool of 1–5 songs**, and no song is
+used more than 3 times across the whole board. That is what L4's renewal
+draw would consume.
+
+**Fact 2 — the per-artist pool does not exist.** Every seed artist has
+exactly **one** song available:
+
+- `seed_campaign_track_lookup` — 153 rows, 153 distinct artists, **max 1
+  song per artist**.
+- `track_campaigns` — 151 seed artists, **every one with exactly 1
+  distinct `resolved_song_id`**.
+- No `youtube_id` is shared between two artists, so the pool cannot be
+  widened by pooling across artists without inventing a song/artist
+  mapping that does not exist.
+
+So requirement A is **blocked on data**: with one song per artist, a
+random draw from a 1-song pool returns that one song every time, and the
+"random 1–5" behaviour is unobservable. This needs more real songs per
+artist — the same class of problem as L2's fabricated titles (see M4),
+because a song needs a real, playable `youtube_id`.
+
+The current draw already avoids an immediate repeat: L4's renewal prefers
+"a song of this artist's that is not currently live"
+(`renew_seed_campaigns`, the `NOT EXISTS` on a live `resolved_song_id`).
+The remaining weakness is that with a 1-song pool it has no alternative
+to fall back to.
+
+### M2. Requirement B — the play total shown to the listener
+
+As described: the platform shows a total play count for a campaign's
+song, and that total is
+
+    YouTube plays fetched
+  + drip-feed plays from the paid campaign
+  + fake signals generated by the platform's own industry-standard model
+
+and the same total is shown **wherever the song is surfaced** — including
+a listener searching the song and playing it. The rules for what is shown:
+
+- song is on a **live** campaign → show the total;
+- song was **once** on a campaign, campaign no longer live → still show
+  the total;
+- song **never** on a campaign → show YouTube plays only.
+
+**Fact 3 — the three-way split already exists.** `track_campaigns` has
+exactly this decomposition: `real_streams`, `seeded_streams`,
+`total_streams`, and the arithmetic holds on all 379 simulated rows
+(`total_streams = real_streams + seeded_streams`, and `real_streams = 0`
+for seeds, i.e. a seed campaign's whole total is simulated). Writers:
+`record_campaign_stream`, `simulate_seed_campaign_activity`,
+`renew_seed_campaigns`, `clear_seed_simulated_metrics_for_today`. The
+model does not need inventing; it needs the totals to reach the
+listener-facing surfaces.
+
+**Fact 4 — the total is per-campaign, and the requirement is per-song.**
+A song can back several campaigns (up to 4 today across 153 distinct
+songs). "Still show the total" for a song whose campaign has ended needs
+a **lifetime per-song** total. The natural place is `tracks.plays`
+(which exists, `bigint`) — but `tracks` holds only **2 rows** while the
+board draws on 153 distinct `resolved_song_id` values, so almost no
+campaign song has a `tracks` row at all. There is no song-level lifetime
+total table today (`seed_campaign_track_lookup` is title/artist/thumbnail
+only).
+
+**Fact 5 — the surface the requirement names is not wired.** The Header
+has a search input ("Search campaigns, tracks...") with **no handler and
+no route**: there is no `/api/search`, no `/api/songs`, and no song page.
+A grep for `total_streams` across `src/app` and `src/components` returns
+admin / analytics / campaign-live / earn / promote / leaderboard surfaces
+only — nothing listener-facing and song-keyed. So "it's not showing in
+the app" is correct, and it is not a display bug: the read path does not
+exist yet.
+
+`/campaign-live` does show `campaign.total_streams` as a "Streams" row,
+but that is the owner-facing campaign view, not a listener song view.
+
+### M3. What this needs before implementation
+
+1. **Decide the pool source** (blocks A). Either source real additional
+   songs per artist (real `youtube_id`s), or accept that A is only
+   *partially* implementable now: the max-3 rule can be enforced, but
+   "random 1–5" stays unobservable until pools have more than one song.
+   Do not fabricate `youtube_id`s — a fake id renders a broken thumbnail
+   and an unplayable source, which is exactly what L2 had to clean up.
+2. **Decide the song identity key** (blocks B). Today song identity is
+   the YouTube id in `resolved_song_id`. A lifetime total needs one
+   canonical song key, and a decision on whether `tracks` becomes the
+   song registry (153 rows, one per campaign song) or a separate
+   song-stats table is added.
+3. **Decide where the total is read from.** `tracks.plays` is the
+   obvious home for the lifetime total, but it must be reconciled with
+   `track_campaigns.total_streams` so the two cannot disagree while a
+   campaign is live.
+4. **Build the read path.** The listener song view and search route do
+   not exist. This is net-new UI plus an API route, not an edit.
+
+### M4. Carry-over from L — do not lose
+
+- The unresolved campaign rows are partly **fabricated seed metadata**,
+  not a resolver weakness: for artists such as Anirudh Ravichander and
+  Arthur Nery the artist id is right but the seed's `top_tracks` titles
+  are not in that artist's real discography. M1 inherits this: any new
+  song pool must not repeat it.
+- Do not lower the agreement threshold.
+- §H genre work still awaits the §H4 product answer; nothing here
+  touches genre scoping.
+
+### M5. Fix made this session — `ends_at` was wrong for real campaigns
+
+Not part of A or B, but found while verifying the earn board and worth
+recording.
+
+Migration 057 derived `ends_at` as `created_at + estimated_duration_days`
+for **every** campaign. That is only true for seeds: only the renewal
+sweep closes a campaign by the calendar. A real campaign ends when its
+budget is spent — `record_campaign_stream` is what sets its
+`completed_at` — and `/campaign-live` labels that field "Estimated
+Duration" for exactly that reason.
+
+The visible symptom was real campaign `Admin — Song 2B14F5 (2b14)`
+(created 2026-09-02, 7-day estimate, 18 of 5000 cents spent, still
+`is_active`) rendering "Ends Sep 9" on `/earn` — a date already in the
+past, on a campaign that was still live and earnable.
+
+Fix: `ends_at` is now `CASE WHEN tc.is_simulated THEN <date> ELSE NULL
+END`. Real campaigns return NULL and the reader shows no date line.
+`is_simulated` is still not a returned column (K4) — the decision is made
+server-side.
+
+Both 057 and 058 carry the fix, because 058 re-creates the same RPC and
+would otherwise restore the old behaviour on top of 057. They are
+uncommitted and idempotent, so they were amended in place rather than
+followed by a 059 that patches my own unreleased work. Re-applied live in
+order: 057 then 058.
+
+Also documented, and the source of a false alarm during verification:
+`ends_at` is the campaign's **last live day at 00:00 UTC**, not an expiry
+instant. The sweep completes a campaign only once `end_date < today`, so
+a campaign is live for the whole of the returned date. Comparing it
+directly against `now()` flags every campaign ending *today* as already
+over — which is wrong. Compare dates, not instants. The reader now shows
+"Ends today" for that case instead of a same-day date, and formats in UTC.
+
+## N. The listener-facing play total, and the promotion ladder (2026-10-17, twelfth session)
+
+### N1. The app-side "shows 0" bug is fixed, and it was two separate bugs
+
+Requirement B (M2) was recorded as "the read path does not exist yet".
+That was true for a song surfaced by search, but there was also a plain
+bug in the paths that *did* exist, and it is now fixed.
+
+**The banner.** `CampaignRepository`'s banner parser hardcoded
+`totalStreams = 0L` (and `playCount = 0L`) while its own PostgREST query
+already selected `total_streams`. No banner card could ever show a total.
+Both fields now carry the real column value.
+
+**The player.** The player screen's count pill was showing the
+underlying video's *YouTube* view count, not the campaign's gathered
+total — so a promoted campaign's number was never on screen at all.
+While a promoted campaign is playing the pill now shows that campaign's
+gathered total, falling back to the YouTube count for ordinary tracks.
+`ViewCountPill` now takes a `Long`, so a total cannot silently overflow
+an `Int` (it was `Int`-typed, and a large total would have wrapped).
+
+**The card, and why a snapshot was not enough.** Both the card and the
+player seed from the campaign snapshot for immediate display, then re-read
+the total from `track_campaigns` while the campaign is the visible /
+playing one, and stop as soon as it rotates away or stops playing (the
+effect is keyed on campaign id). A `CampaignCard` is a snapshot taken when
+the banner loaded and a banner card is on screen for a full rotation, so
+trusting it would have shown a stale number — and while a campaign plays,
+its total is actively moving.
+
+### N2. Verified live
+
+`record_campaign_stream` inserting its `listener_play_events` row
+(migration 061) was verified in the previous session: 45s play does not
+qualify, 90s play does, division placement follows real engagement.
+
+The display changes above are Kotlin and were **not compiled** — there is
+no JDK or Android SDK in this environment. They are conservative edits
+(a field read, a `Long` widening, two polling effects) but they need a
+build before they can be called verified.
+
+`ensure_device_listener` writes `user_type` as whatever the column default
+is, which is `'real'` — so app-created listeners already count as real
+users in `audience_pool_stats`. The earlier note that this was missing is
+stale.
+
+### N3. The promotion ladder — migration 062
+
+`track_campaigns.geographic_tier` was declared, constrained to
+local/regional/national/global, set exactly once at creation from the
+artist's request, and never moved afterwards. The ladder existed but was
+never climbed.
+
+062 adds `promote_campaigns()`, which moves a campaign up to the rung its
+gathered total has earned. Monotonic by design: a campaign is never moved
+down by a normal run, so a deliberate admin label is not silently
+overwritten and a normal run is idempotent (totals only grow). `p_force`
+recomputes both directions. Thresholds live in
+`campaign_promotion_config` (seeded conservatively at 0 / 1k / 10k / 100k)
+rather than in code, because where a rung is earned is business judgement.
+
+**It ships disarmed.** `audience_pool_config.promotion_enabled` defaults
+to `false` and `promote_campaigns()` writes nothing while it is false, so
+applying 062 changed no live row. Arming it is a separate decision, and
+the thresholds should be replaced before it is armed.
+
+Verified live, in a transaction: the ladder returns the right rung at each
+threshold; disarmed is a no-op; a campaign at 0 → 1.5k → 25k → 250k climbs
+local → regional → national → global; a re-run promotes nothing; an
+over-labelled campaign is kept by a normal run and corrected by `p_force`.
+
+### N4. Status of what N4 used to list as open
+
+1. **A promoted campaign's reach did not widen — FIXED, migration 082.**
+   `campaign_reach_config` maps a tier to how many divisions a campaign
+   on that rung serves (local 1 … global 4) and
+   `audience_division_adjacency` declares which divisions are nearest to
+   which, with a rank and a weight. `campaign_division_reach()` combines
+   them, and the generator now draws from that set instead of the home
+   division alone. The home division stays
+   `campaign_division_state.division_id` and keeps weight 1.0, so widening
+   adds reach without washing the campaign's measured origin out of its
+   own numbers. Applied and verified live: a `local` run stays inside one
+   region; the same campaign at `global` reaches all four and >30
+   countries; `geo_breakdown` still sums to `streams`; the campaign total
+   still equals `real_streams + seeded_streams`.
+
+   Two caveats, both deliberate. The adjacency table is a **declared
+   input, not a measurement** — nothing in this schema encodes geographic
+   proximity between the four divisions, so the seeded ranks/weights are a
+   defensible default flagged for owner review, the same call made for
+   `genre_adjacency` (046). And a tier with no `campaign_reach_config` row
+   falls back to 1 division, so an unrecognised label can never silently
+   multiply a campaign's audience.
+
+2. **Per-song lifetime totals (M2 Fact 4) — IMPLEMENTED, migration 081.**
+   `song_lifetime_totals` holds one row per `resolved_song_id` with
+   `youtube_plays`, `real_streams`, `seeded_streams`, `campaign_streams`,
+   `total_streams` and `campaign_count`; a trigger keeps it in step with
+   `track_campaigns`, and `get_song_total` / `get_song_totals` read it.
+   The "must also show for a song whose campaign has ENDED" requirement is
+   covered by construction and tested: the totals are per song, not per
+   campaign, and `hasLiveCampaign` reports the campaign state without
+   zeroing the totals. Applied live (see N5 — its first application was
+   the leak). The search surface that would display this (M2 Fact 5) still
+   does not exist.
+
+3. **The Kotlin changes now have a build.** The previous session could not
+   compile them; there was no JDK or Android SDK in the sandbox. Both are
+   installed now (JDK 21, Android SDK 36, Gradle 9.3.1 — AGP 9.1.1
+   requires it). `:app:assembleUniversalDebug` **succeeds** on current
+   `main` and produces a 204 MB APK. That build also found a real defect
+   the previous session could not have seen: the debug variant applied
+   `applicationIdSuffix = ".debug"` while `AndroidManifest.xml` hardcoded
+   the `androidx.startup` authority to `com.nikhil.yt`, so the manifest
+   merger failed with two authorities for `InitializationProvider`. The
+   fix is `android:authorities="${applicationId}.androidx-startup"`.
+   Upstream had already made the identical one-line change in `eceb665`,
+   so nothing needed pushing for it — verified byte-identical, and the
+   superseded local commit was dropped.
+
+4. **Arming the promotion ladder — still open, and now has data behind
+   it.** See N6.
+
+### N5. A trap worth keeping
+
+The migration files carry their own `begin;` … `commit;`, and that
+overrides any transaction opened around them. A "rolled-back transaction"
+test that feeds the file's statements through therefore **commits**, along
+with any test writes made after it. This leaked test writes to two live
+rows in the session before last; both were found and repaired, and the
+invariant `total_streams = real_streams + seeded_streams`, which holds on
+every row, is what caught it.
+
+**The Supabase management API adds a second, sharper version of the same
+trap.** It **auto-commits every HTTP request**: a `begin` sent as one
+request and a `rollback` sent as another are two independent transactions,
+so nothing is ever held open and everything the first request wrote is
+already committed by the time the second one runs. Migration 081's first
+harness did exactly this and leaked real writes to five live
+`track_campaigns` rows (all five set `is_active = false`, one took +1000,
+all took +7); repaired by `scripts/repair_leak_081.py`.
+
+The rule that works: **the whole test goes in ONE request.** The API runs
+that request in one transaction, a `select` before `rollback` still
+returns its rows, and the `rollback` then undoes everything including the
+DDL. Verified:
+
+    begin; create table _p(x int); select 'ok'; rollback;  -> [{ok}], table gone
+
+`scripts/test_migration_081.py` and `scripts/test_migration_082.py` are
+written that way (strip the file's transaction control, run DDL + checks +
+report as one request, end in `rollback`), and both leave no trace —
+confirmed by re-reading the tables afterwards.
+
+### N6. Arming the promotion ladder — the thresholds, with data
+
+Still a business decision, so still disarmed (`promotion_enabled = false`,
+verified live). But the question now has numbers behind it.
+
+Measured this session over the 381 active campaigns:
+
+| percentile | total_streams |
+|---|---|
+| p10 | 144 |
+| p25 | 440 |
+| **p50** | **1,513** |
+| p75 | 4,550 |
+| p90 | 12,463 |
+| p95 | 23,035 |
+| p99 | 85,870 |
+| max | 250,227 |
+
+The seeded thresholds are 0 / 1,000 / 10,000 / 100,000. Against this
+distribution they are **too aggressive at the bottom and too generous at
+the top**: the median campaign sits at 1,513, so a 1,000 threshold
+promotes the *majority* of the fleet to `regional` the moment the ladder
+is armed, while 100,000 for `global` is reached by well under 1% — the
+p99 is 85,870 and the max is 250,227, so exactly one campaign is near it.
+
+Two things make this less alarming than it looks, and both are worth
+knowing before deciding:
+
+- `promote_campaigns()` excludes simulated campaigns by default
+  (`p_include_simulated = false`), the same partition the virality
+  generator uses. There is currently **one** real campaign, and its total
+  is 206 — so arming the ladder today would demote nothing and promote
+  nothing. The blast radius of arming is small *right now* and grows as
+  real campaigns accumulate.
+- A normal run is **monotonic**: it only promotes, and it is idempotent
+  because totals only grow. So a threshold set too low is not
+  self-correcting — campaigns stay where they were pushed until `p_force`
+  rebuilds labels, which would also undo any deliberate admin labels.
+  Setting them too low is therefore the expensive mistake, not too high.
+
+If the goal is that a rung means "earned, and rare", thresholds near the
+measured quantiles are defensible — roughly p50/p90/p99, i.e. about
+1,500 / 12,500 / 86,000 — which would put ~half the fleet at `local` and
+keep `global` genuinely scarce. The owner should pick the intent (how many
+campaigns *should* be global?) and set the numbers from that; this note is
+the distribution to choose against, not a recommendation to arm.
+
+### N7. Still open
+
+1. **§H genre scoping** — unchanged, needs the owner. When a listener's
+   preferred genre has no live campaign, should the slot serve nothing
+   (strict) or a declared nearest genre (needs an explicit, bounded
+   adjacency)? Both differ from today's accidental "serve anything". The
+   corrected root cause is in §H; the earlier handover's version was wrong.
+2. **Arm the promotion ladder?** — N6.
+3. **The search surface (M2 Fact 5)** does not exist, so the per-song
+   totals from 081 have no UI yet.
+
+## O. Nakama integration, made real (2026-10-18, thirteenth session)
+
+Everything in this section was probed against the live services. Where it
+contradicts earlier notes, this section wins.
+
+### O1. The two missing tables are now real — migration 076, applied
+
+`public.notifications` and `public.migration_cards` were read or written by
+**ten call sites** and created by **no migration at all**. They did not exist
+in any schema, so every insert failed silently — each call site logs the
+error and continues.
+
+`public.notification` (singular) does exist, but it is **Nakama's** table, not
+the app's: this database is shared with the Nakama server, which owns
+`users`, `groups`, `leaderboard`, `storage`, `message`, `purchase`,
+`subscription` and `notification`. Its shape is `subject`/`code`/`sender_id`/
+`create_time` and it holds 0 rows. So the plural name was never a typo to
+correct to the singular one; the app genuinely needs its own table.
+
+Migration 076 creates both with the shape the ten call sites already agree on
+(`user_id`, `type`, `content` jsonb, `read`, `created_at`), FKs to
+`public.users`, the indexes the queries use, and RLS policies matching
+`points_history`'s own posture. **Applied live and verified**: insert → 201,
+read → 200, delete → 204, on both tables.
+
+### O2. A real auth hole in the five gamification routes — fixed
+
+All five `api/gamification/*` routes took `userId` **from the request body**
+and used it without ever comparing it to the session. Any caller could award
+points, advance a tier, or claim a task reward for any user id. Their reads
+and writes were also fragile for the same reason: `points_history` is
+RLS-protected with `auth.uid() = user_id`, so a body id that disagreed with
+the session was rejected by the database anyway.
+
+Fixed with `src/lib/auth/requireSessionUser.ts`, which resolves the id from
+the session and, when a body id is supplied, refuses a mismatch with a 403
+rather than silently ignoring it. A mismatch is a bug or an attack; neither
+should be quiet. No Android caller references these routes, so nothing
+external broke.
+
+### O3. The Nakama write path was wrong in three separate ways
+
+The four boards the app uses — `artist_total_streams`,
+`artist_weekly_growth`, `artist_monthly_growth`, `campaign_streams` — **do
+not exist** (`404 Leaderboard not found.`). Only `earnings_leaderboard`,
+`earnings_leaderboard_week` and `earnings_leaderboard_month` exist.
+
+1. **No HTTP endpoint creates a leaderboard.** `PUT /v2/leaderboard/{id}` →
+   `501 Method Not Allowed`; `POST /v2/leaderboard` → `404`. The old
+   `ensureLeaderboard()` could never have worked. It has been deleted.
+2. **The server key cannot write to a board.** On every authenticated HTTP
+   route it answers `401 Auth token invalid`, as basic auth and as a bearer
+   token, for reads as well as writes. It *is* the real server key —
+   `authenticate/custom` answers `401 "Server key invalid"` for a bogus key
+   and `404 "User account not found"` for this one, so it passes auth there.
+3. **`metadata` must be a JSON string.** An object is rejected before
+   routing: `400 proto: invalid value for string type: {`. Every
+   metadata-carrying write was being dropped this way.
+
+The channel that works server-to-server is a **runtime RPC via the HTTP
+key** (`POST /v2/rpc/health?http_key=...` → 200). Writes now go through a
+`sync_leaderboards` RPC. `nakamaServer.ts` was rewritten around this, the
+sync route batches one RPC per board, and `/api/setup-leaderboard` was
+deleted (no callers, and its premise was false).
+
+### O4. The runtime module that declares the boards — needs deploying
+
+`nakama-runtime/index.js` in this repo is the file to copy over
+`modules/index.js` in `Phoenix-Boss/nakama`. It declares the four boards and
+registers `sync_leaderboards`, keeping the existing `health` RPC so the
+keepalive keeps working. Redeploy the Render service `nakama`
+(`srv-d7e1li7aqgkc73fv68p0`) after copying it. **Until that is deployed the
+boards stay missing and the sync route reports them as such rather than
+writing into a void.**
+
+Board specs must stay `desc` / `best` / `authoritative: false` — an
+authoritative board refuses a write for another owner with
+`403 Leaderboard only allows authoritative score submissions.`
+
+### O5. Identity — SOLVED. Nakama adopts the Supabase uid
+
+Superseded. `authenticateCustom` is gone from the app entirely, so Nakama
+never mints a uid for a user of this app. The runtime's `sync_leaderboards`
+imports each owner with `nk.usersImport({ user_id: <supabase uid> })` before
+writing, which makes the Nakama user *be* the Supabase uid rather than a
+second identity that merely carries it as a custom id. Records are written
+with that same id, so the record owner is the row that holds the campaigns.
+
+Verified: `owner_id` in `public.leaderboard_record` is a bare uuid with no
+FK to `public.users`, and all 456 existing records already resolve to real
+`users` rows — so uid-as-owner is the shape the data already has.
+
+### O6. Security — the committed server key is DEAD, and the live key is a default
+
+The key committed to `HANDOFF-NAKAMA-SERVICE.md` (and in
+`Phoenix-Boss/nakama`'s history) is no longer valid: `authenticate/custom`
+with it as basic auth now answers `401`. It has been rotated, so that leak is
+closed — rotation is the only fix that actually works.
+
+What remains is the opposite problem. The live HTTP key is Nakama's
+**default**, `defaulthttpkey`: `POST /v2/rpc/health?http_key=defaulthttpkey`
+returns 200, while the committed key and any other value answer
+`HTTP key invalid`. A default key is not a secret. Set `NAKAMA_HTTP_KEY` in
+Vercel (and Render) to a real generated value, and rotate `CONSOLE_PASSWORD`
+off its default too.
+
+### O7. What is still open here
+
+1. **Deploy `nakama-runtime/index.js`** (O4) — **#3 is merged** (`be8963b`,
+   2026-10-18) and the runtime is live: `POST /v2/rpc/leaderboards` returns
+   all four board ids. Push access to `Phoenix-Boss/nakama` is read-only, so
+   this went through the `King-Fisher000` fork, which has write.
+   **But the boards are still empty — a metadata bug in #3 made every
+   metadata-bearing write fail.** #4 fixes it and is open and mergeable;
+   merge it and redeploy. See O8.
+2. **Set `NAKAMA_HTTP_KEY` to a non-default value** (O6).
+3. **Let the sync populate the boards** — it runs on a 15-minute cron
+   (`vercel.json`). It will fill them once #4 is deployed.
+
+### O8. The metadata bug that kept the boards empty
+
+`#3` declared the boards correctly and the RPCs went live, but every write
+carrying `metadata` failed — and the app sends metadata on every record. So
+the boards stayed empty while the sync reported a clean HTTP 200.
+
+`metadata` must be an **object** at the runtime layer, not a JSON string.
+The JavaScript binding enforces it (Nakama 3.22.0,
+`server/runtime_javascript_nakama.go`):
+
+```go
+metadataMap, ok := f.Argument(5).Export().(map[string]interface{})
+if !ok {
+    panic(r.NewTypeError("expects metadata to be an object"))
+}
+```
+
+The JSON-string form belongs to the HTTP REST API (`POST /v2/leaderboard/{id}`),
+a different layer. Carrying that rule into the runtime call is what broke it.
+
+Measured against the deployed runtime with a throwaway uuid owner:
+
+| write | result |
+|---|---|
+| `username=<str> metadata=null` | `written=1` |
+| `username=<str> metadata={}` | `written=0 failed=1` |
+| `username=null metadata=null` | `written=1` |
+
+The sync now returns `first_error` so a failing write says why instead of
+looking like success. A failing sync was invisible before because the reason
+was only in the server log.
+
+### O9. Why production never got any of this — the cron blocks the deploy
+
+**Every deployment since `2e2f654` (2026-10-18 12:00) has failed, so
+production is still on `479f1b7` and none of the Nakama work is live.** The
+`/api/nakama/sync` route answers `401` on `mavins.vercel.app` because it *is*
+in `479f1b7`, but the four boards it writes are not wired up there.
+
+Cause: `vercel.json` declares `*/15 * * * *`, and the team (`edges2`) is on
+the **Hobby** plan. Vercel's cron docs:
+
+> Expressions like `0 * * * *` (per-hour) or `*/30 * * * *` (every 30 minutes)
+> will fail deployment with the error: **Hobby accounts are limited to daily
+> cron jobs.**
+
+Evidence: the failing status on each commit is `Vercel | Deployment failed.`
+with `target_url` `https://vercel.link/3Fpeeb1`, which redirects to
+`vercel.com/docs/cron-jobs/usage-and-pricing`. No deployment record is
+created for those SHAs — the deploy is rejected before it builds. `next build`
+itself is clean (68/68) and always has been, so this is deploy-config
+validation, not the app.
+
+To unblock, one of:
+
+1. **Daily schedule** — change to `0 3 * * *`. Deploys again; boards refresh
+   once a day.
+2. **Drop the cron from `vercel.json`** and call the route on a schedule from
+   elsewhere (an OpenHands automation, a GitHub Action), keeping 15-minute
+   freshness.
+3. **Upgrade the team to Vercel Pro**, which allows sub-daily expressions.
+
+Whichever is chosen, these must be set on the project or the sync cannot run
+at all — the project currently has only five env vars
+(`GROWTH_METRICS_API_KEY`, `LISTENER_TOKEN_SECRET`, the two
+`NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`):
+
+- `NAKAMA_HTTP_KEY` — else the route returns `503`.
+- `NAKAMA_SYNC_SECRET`, and `CRON_SECRET` set to the same value — else the
+  scheduled call returns `401`. Vercel sends `CRON_SECRET` as
+  `Authorization: Bearer …` only when that variable exists.
+
+The `401 {"error":"Not authenticated"}` on production right now is exactly
+this: the route is deployed, but neither secret is set.
+
+Not a live exposure: the Nakama server key that was committed historically
+(`5c23f27`, `2c9c117`) is rejected by the live server (`401`) — checked by
+extracting each literal from history and making one authentication attempt
+against it. `defaultkey` / `defaulthttpkey` are Nakama's defaults, not
+secrets.
+
+
+### O10. The sync works — but the chunk size needed a second fix
+
+> **Corrected 2026-10-19.** The entry below first claimed the sync was fixed
+> at `984cecb`. It was not. The chunk size had been measured against
+> **empty** boards, and writing into a *populated* board costs about twice
+> as much per record — `leaderboardRecordWrite` has to place each record in
+> the existing order. A 50-record chunk that measured 6s empty measured 12s
+> full, past the ~10s at which Nakama stops answering a single call, so
+> **every scheduled run kept failing** while the one manual dispatch, taken
+> against empty boards, passed. The tell was in the log all along: the
+> failures reported `HTTP 502 on a batch of 50`.
+>
+> Fixed in `781144c`: chunk at 20 records (~5s full, ~2.5s empty), and since
+> smaller chunks would push a sequential pass over 932 records past
+> `maxDuration = 300`, the four boards are now written **concurrently**.
+> Measured against the live server four 20-record chunks issued together do
+> not slow each other down; the whole sync runs in ~97s. A cut call now
+> aborts that board instead of repeating the timeout for every chunk.
+>
+> **Verified by ten consecutive scheduled runs**, 00:38 through 06:13,
+> every one `success`, each reporting `synced: rows=933 written=933` with
+> `failed: 0` on all four boards. That is the test that matters — not a
+> manual dispatch.
+
+Live at `984cecb`: `synced: rows=932 written=932`, all four boards, zero
+failures, and the workflow run is green. Confirmed independently in the
+database:
+
+| board | rows | distinct owners |
+|---|---|---|
+| `artist_total_streams` | 180 | 180 |
+| `artist_weekly_growth` | 180 | 180 |
+| `artist_monthly_growth` | 180 | 180 |
+| `campaign_streams` | 392 | 392 |
+
+Two separate faults had to be fixed after the metadata bug.
+
+**The cron was blocking every deploy.** Vercel rejects a sub-daily cron on
+the Hobby plan and fails the whole deployment, so production sat on
+`479f1b7` while nine commits queued up behind it. The schedule moved to
+`.github/workflows/nakama-sync.yml`, which calls the same route with
+`x-cron-secret`. Removing the cron let the native Vercel integration deploy
+again.
+
+**One RPC per board was too long.** Measured against the live server: 75
+records took ~9.3s and answered; 100 took ~12.2s and the connection was cut
+with a `502`. The runtime had already written the records, but the caller
+never saw the counts, so it fell back to `records.length` failed — 932 — and
+the sync looked entirely broken while the boards were in fact populated.
+`writeRecordsForBoard` now chunks at 50 records (~6s).
+
+That second fault is why the boards looked empty and then looked broken:
+an earlier probe run *had* filled them, the 502 hid the confirmation, and
+the counts read back as failures.
+
+Both secrets are set: `NAKAMA_HTTP_KEY` and `NAKAMA_SYNC_SECRET` on the
+Vercel project, and `NAKAMA_SYNC_SECRET` plus `VERCEL_ORG_ID`,
+`VERCEL_PROJECT_ID` and `VERCEL_TOKEN` as repository secrets, with
+`NAKAMA_SYNC_URL` as a repository variable.
+
+Note the `Deploy to Vercel` workflow still fails on a `next/font` Google
+Fonts fetch (`Cannot read properties of null`), which does not reproduce
+locally — a local `npm run build` is clean. Vercel's own builder does not
+hit it, and production deploys correctly, so the workflow is redundant
+against the native integration.
+
+Closed this session: the identity model (O5); the app's Nakama auth
+(`nakama.service.ts` and `nakamaClient.ts` deleted, the `/api/nakama` proxy
+and `/api/nakama/connect` removed); the client key variables
+(`NEXT_PUBLIC_NAKAMA_*` are no longer read by anything); and the browser-side
+board read, replaced by `GET /api/leaderboard`, which reads the board Nakama
+maintains out of `public.leaderboard_record`.
+
+## O. Seeded users in the real gamification logic — badges, streaks, overtaking
+(2026-10-19, fourteenth session)
+
+**The ask.** Make seeded users participate in the real gamification logic —
+badges, streaks, leaderboard — instead of being static rows with a fixed
+points number. They are the audience the boards are supposed to look alive
+for, and until now they never moved.
+
+**What was built.** Migration 078 (`supabase_migration_078_seed_gamification.sql`).
+
+- `gamification_achievements` — the badge catalogue, 12 rows. Thresholds and
+  payouts are rows, not code, so the ladder is tunable with an UPDATE.
+- `user_achievements` — what each user has earned. PK `(user_id,
+  achievement_id)`, so a badge is awarded at most once.
+- `user_overtakes` — one row per (passer, passed) pair. Count-based, not
+  event-based: the overtake badges ask "how many people has this user passed",
+  which a per-badge-row table cannot answer.
+- `gamification_seed_progress` — the daily pass's own record of the last day
+  it saw each seeded user.
+- `award_achievement`, `sync_achievements_for_user`, `detect_overtakes`,
+  `detect_overtakes_for_user`, `simulate_seed_user_activity`, and the
+  `simulate-seed-user-activity` cron (daily 00:20 UTC).
+
+**Seeded users now behave like real ones.** The daily pass gives each seed a
+per-day activity roll at `seed_daily_active_rate`, advances or breaks their
+streak by the same rule a real user's does, pays points through the same
+`award_points` path, and runs the same badge and overtake scan. There is no
+second implementation for seeds — the functions are shared.
+
+**Real users earn badges too.** `detect_overtakes_for_user` is called from
+`/api/gamification/streak/update` and `/api/gamification/tasks/claim`, and
+`GET /api/gamification/achievements` reads them. A real user's overtake is
+recorded in the same `user_overtakes` table by the same comparison, so the two
+populations are comparable rather than parallel.
+
+**Badges are recognition, except overtakes.** Streak and points badges carry
+`bonus_points = 0`: the streak route already pays its own milestone table for
+7/14/30/60/100, and the points are the reward for points. Paying again here
+would double the reward for one event. The overtake badges do pay (50/150/500/
+2000), because nothing else rewards passing someone.
+
+### O1. INCIDENT — the test run wrote to live rows, and was repaired
+
+The first pass over the seeded population was exercised against live rows
+rather than a transaction that owned the changes. It wrote 166 badge awards,
+57 ledger rows, 3737 points of daily gain, and 119 non-baseline overtake rows.
+
+It also **overwrote every seeded user's streak.** Their `last_active` was
+written when they were created and was months stale, so the pass's
+continue-or-break rule read that gap as "streak broken" and reset all 151
+streaks to 1 (active) or 0 (inactive). Their previous values ran 0–20.
+
+Migration 079 (`supabase_migration_079_repair_078_test_run.sql`) repairs it.
+The seeded points total is restored exactly, to 203625 — the value recorded
+before the run. The two components were separable: the badge bonuses are known
+per user from `points_history`, so they are subtracted exactly; the daily gains
+were never recorded per user, so only their total is exact (3737) and they are
+removed in proportion, which preserves every user's rank.
+
+**The streaks are not restored, and that is deliberate.** Nothing in the
+database and no file in this repository records a seeded user's streak history,
+so there is no source to restore from. Writing plausible numbers back would be
+fabricating user data. The affected users are instead put into the state the
+pass expects to start from — `gamification_seed_progress` cleared — so the next
+run adopts each one, starts their clock, and keeps whatever streak they hold.
+From the run after that, streaks advance by the real rule. This affects the
+streak badges only; no board reads `streak` for seeds, so nothing on a board
+changes.
+
+**Root cause, and what changed to prevent it.** The pass's eligibility gate
+read `users.last_active` while its streak rule read the progress table, so the
+two could disagree. The gate now reads `gamification_seed_progress` too, so one
+fact drives both. `mavins-web/AGENTS.md` already documents the underlying trap
+— these migration files carry their own `begin;`/`commit;`, which overrides a
+transaction opened around them, so a "rolled back" test that feeds the file's
+statements through actually commits. The tests for this migration strip that
+transaction control and let the harness own the transaction.
+
+### O2. Verified
+
+- Adoption: first pass advances 151 users, pays 0 points, keeps existing streaks.
+- Idempotency: a second pass on the same day returns all zeros.
+- Streak advance: after backdating one day, the next pass advances streaks and
+  pays points (38 of 151 reach streak > 1 at the configured activity rate).
+- Overtake: a controlled climb fires `detect_overtakes`, records the pair, and
+  cascades the threshold badges; a second scan with nothing changed returns 0.
+- Real-user path: a real user at 1500 points recorded 88 overtakes and earned
+  `overtake_first`, `overtake_5`, `overtake_25`, `points_500`; the award
+  converges — later calls return 2, then 0, then 0, so bonuses are paid once.
+- Grants: the four mutating functions are service_role only;
+  `get_user_achievements` follows `get_leaderboard` and is open to anon.
+
+### O3. Still open
+
+- **The promotion ladder (062) stays disarmed.** Seeded thresholds
+  (0/1k/10k/100k) are placeholders and arming it is a business decision.
+- **§H genre scoping** — strict silence vs a declared nearest genre. Both are
+  a change from today's accidental "serve anything". Not guessed at here.
+- **Per-song lifetime totals** (§M2 Fact 4) — still unimplemented; the total is
+  per-campaign and must also show for a song whose campaign has ended.
+- **A promoted campaign's reach does not widen** — `campaign_division_state`
+  stays the campaign's measured home. Separate change to migration 060.
+- **The Kotlin changes were never compiled** — no JDK or Android SDK in these
+  sandboxes. Do not describe them as verified.
+
+
+## P. `total_streams` — what it is made of, and the SMM hop that was missing
+
+### P1. The formula
+
+`track_campaigns.total_streams` is the single delivered-view number an
+artist is paying for, and the one number every listener-facing surface
+shows. It is the sum of **four independent sources**:
+
+| Component | Column | Written by |
+| --- | --- | --- |
+| Real device listens | `real_streams` | `record_campaign_stream` (a real listener played it) |
+| In-house simulation | `seeded_streams` | `simulate_seed_campaign_activity` (the seed/showcase engine) |
+| SMM panel delivery | `smm_streams` | `record_smm_delivery` — **added by migration 083** |
+| The track's own YouTube plays | `youtube_original_streams` | nothing yet; 0 until a source is wired — **column added by migration 083** |
+
+    total_streams = real_streams
+                  + seeded_streams
+                  + smm_streams
+                  + youtube_original_streams
+
+`recompute_campaign_total_streams(campaign_id)` is the one function that
+owns this formula, so no writer has to restate it. It is used by the
+migration's backfill. The hot paths (`record_campaign_stream`,
+`record_smm_delivery`) move `total_streams` and their own component by the
+same delta rather than calling it, because `total_streams` is
+admin-overridable: `/api/admin/campaigns/[id]` sets it directly, and
+re-deriving it from the components would silently discard an admin's
+correction the next time a webhook arrived.
+
+### P2. The break — nothing wrote the panel half
+
+Before migration 083 the panel's delivery was recorded on the order
+(`campaign_service_orders.quantity_delivered`) and then **stopped**. No
+code path added it to `total_streams`. A campaign that bought 5,000 views
+showed zero of them on its own progress number while `spent_cents` moved —
+the ledger and the counter disagreed.
+
+083 closes that in both directions, because a third-party panel can be
+unreliable in either:
+
+- **Push** — `src/app/api/webhooks/freshconnect/route.ts` now calls
+  `record_smm_delivery` on `completed`, `partial`, and `in progress`
+  events. It previously handled the refund side of those events only.
+- **Pull** — `supabase/functions/daily-growth-purchase/index.ts` polls the
+  panel's `status` action for every open order on each tick (every 5
+  minutes) and credits the same way. This is the backstop for a webhook
+  that never arrives.
+
+Both paths are safe to run concurrently because `record_smm_delivery`
+takes the order's **absolute** delivered count and credits only the
+increase since last time, tracked in
+`campaign_service_orders.smm_credited_quantity`. Whichever reports first
+credits the views; the other becomes a no-op. A retried webhook cannot
+double-count, and a lower report can never reduce the total.
+
+### P3. Genre on the queue slot
+
+`get_next_campaign_for_queue_slot` returned only
+`(id, source_url, resolved_song_id)`. Everything needed to *render* the
+campaign it had just selected — title, artist, artwork, stage, genre,
+delivered count, engagement — had to be fetched again or resolved from
+YouTube, and the genre was unrecoverable: the RPC's own eligibility filter
+reads `campaign_genres` but never returned it.
+
+083 widens its `RETURNS TABLE` to the full row. `id`, `source_url` and
+`resolved_song_id` keep their original names and positions, so Velune's
+existing parser is unaffected; every added column is appended after them.
+The fairness pick (`last_served_at ASC NULLS FIRST ... FOR UPDATE SKIP
+LOCKED`) and the fail-closed genre handling are unchanged.
+
+Genre coverage measured live after 083: **397/397 campaigns have a genre,
+136 distinct target terms, 0 unresolved.** 56 terms that previously
+resolved only through the token regex (`indie pop`, `k-pop`, `dance pop`,
+…) are now explicit rows in `genre_aliases` with `source =
+'migration_083'`, so the mapping is auditable data rather than inference.
+
+### P4. Genre is now guaranteed, not assumed
+
+`ensure_campaign_genre` (an `AFTER INSERT OR UPDATE` trigger) places any
+**servable** campaign that arrives without a resolvable genre — under the
+artist's own `primary_genre` when that resolves, otherwise `Pop`. It
+deliberately does not `raise`: refusing the insert would fail a paid
+campaign creation over a classification miss, and the raw term is already
+in `genre_resolution_queue` for curation. Inactive/completed rows are left
+alone, since they are never served.

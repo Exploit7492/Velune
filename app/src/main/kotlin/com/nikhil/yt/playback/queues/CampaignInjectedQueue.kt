@@ -72,7 +72,7 @@ import com.nikhil.yt.models.MediaMetadata
  *   disabled for this queue entirely — see class doc above).
  */
 class CampaignInjectedQueue(
-    private val baseQueue: Queue,
+    val baseQueue: Queue,
     private val campaignSlotProvider: suspend () -> MediaItem? = { null },
 ) : Queue {
 
@@ -186,3 +186,19 @@ class CampaignInjectedQueue(
         return InjectionResult(items = result, adjustedTargetIndex = adjustedTargetIndex)
     }
 }
+
+/**
+ * The queue [CampaignInjectedQueue] wraps, or the queue itself when it is not
+ * a decorator.
+ *
+ * The decorator is transparent to everything except the injection it adds, but
+ * several call sites compare `currentQueue` against the concrete queue they
+ * created — `is YouTubeQueue`, `is CampaignInjectedQueue`, `=== queue`, the
+ * persistence `when` in `QueueExt`. Those checks must see through the wrapper,
+ * or injection silently disables each of them: a persisted queue reverts to a
+ * plain list (losing radio continuation), and the "don't drop the first page
+ * item" special case stops firing. Unwrapping here keeps every such check
+ * correct without it having to know campaigns exist.
+ */
+val Queue.unwrapped: Queue
+    get() = (this as? CampaignInjectedQueue)?.baseQueue ?: this

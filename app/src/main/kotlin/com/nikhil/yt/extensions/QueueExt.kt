@@ -21,7 +21,14 @@ fun Queue.toPersistQueue(
     mediaItemIndex: Int,
     position: Long
 ): PersistQueue {
-    return when (this) {
+    // Campaign injection wraps every queue in a CampaignInjectedQueue, and this
+    // `when` matches on the concrete type. Without unwrapping, a wrapped
+    // YouTubeQueue/YouTubeAlbumRadio/LocalAlbumRadio falls through to the
+    // `else` branch and is persisted as a plain LIST — the restored queue then
+    // stops paging real radio and plays only the snapshot. Unwrap so each real
+    // queue keeps its own QueueType; only the campaigns are dropped, which is
+    // correct (the next page re-injects them).
+    return when (val queue = unwrapped) {
         is ListQueue -> PersistQueue(
             title = title,
             items = items,
