@@ -36,7 +36,7 @@ Probe it before relying on it:
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H "Authorization: Bearer $GH_AUTH_TOKEN" \
-  https://api.github.com/repos/Zapier-codes/Velune/git/blobs \
+  https://api.github.com/repos/King-Fisher000/Velune/git/blobs \
   -d '{"content":"probe","encoding":"utf-8"}'
 # 201 → writable, proceed.  403 → stop and ask the user to re-register it.
 ```
@@ -47,7 +47,7 @@ Then, per repo:
 cd /workspace/Velune
 git config user.name openhands && git config user.email openhands@all-hands.dev
 GIT_REMOTE=$(git remote get-url origin)          # intentionally tokenless
-git remote set-url origin "https://x-access-token:${GH_AUTH_TOKEN}@github.com/Zapier-codes/Velune.git"
+git remote set-url origin "https://x-access-token:${GH_AUTH_TOKEN}@github.com/King-Fisher000/Velune.git"
 GIT_TERMINAL_PROMPT=0 git push origin main
 git remote set-url origin "$GIT_REMOTE"          # restore the tokenless remote
 ```

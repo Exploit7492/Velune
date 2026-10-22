@@ -6,7 +6,7 @@
 > entirely to an unrelated EQ/DSP subsystem in the same Android app.
 
 You're picking up work on **Velune**, an Android music app (fork, package
-`com.nikhil.yt`), repo: `github.com/Zapier-codes/Velune`. This document is
+`com.nikhil.yt`), repo: `github.com/King-Fisher000/Velune`. This document is
 written by the previous Claude session so you don't have to reconstruct
 context from scratch. Read it fully before touching anything.
 
@@ -92,7 +92,7 @@ file and the code it describes stay in sync.
 ```bash
 cd ~
 rm -rf Velune
-git clone https://github.com/Zapier-codes/Velune.git
+git clone https://github.com/King-Fisher000/Velune.git
 cd Velune
 git log --oneline -6
 cat HANDOVER.md   # this file, if it's landed on main by the time you read this
@@ -2422,7 +2422,7 @@ file for how fast that happens in this repo).
      the "`<text>` on Velune" RPC small-text suffix).
 
    **Deliberately left alone — not app-name usages, despite matching the
-   grep**: GitHub repo URLs (`Zapier-codes/Velune` links, functional, not
+   grep**: GitHub repo URLs (`King-Fisher000/Velune` links, functional, not
    display text); the `VeluneBackup` XML serialization tag and
    `VeluneAdminToken` DataStore key in `BackupRestoreViewModel.kt`/
    `MusicService.kt` (internal identifiers — renaming would break

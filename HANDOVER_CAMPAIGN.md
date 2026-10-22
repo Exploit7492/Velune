@@ -27,7 +27,7 @@
 > "resolved to a YouTube video", which is exactly what `SpotifyMapper`
 > already does for playlist import.
 >
-> **`Zapier-codes/SpotiFLAC-Mobile` was cloned and read: do not port
+> **`King-Fisher000/SpotiFLAC-Mobile` was cloned and read: do not port
 > it.** It is Flutter/Dart plus a Go backend, so none of it is directly
 > reusable in Kotlin — but more importantly its actual resolution
 > mechanism no longer works. It resolves Spotify → YouTube through
@@ -368,7 +368,7 @@
 >   goes stale fast — don't trust a hand-copied pointer here over that
 >   repo's own live file)
 > - **B-Pay-backend** — next: **none currently unblocked** (Korapay-
->   only focus active; `Zapier-codes/B-Pay-backend`, fork of
+>   only focus active; `King-Fisher000/B-Pay-backend`, fork of
 >   `Phoenix-Boss/B-PAY-backend`) — not independently re-verified this
 >   session, carried forward from the previous note
 >
@@ -419,7 +419,7 @@ different/shorter format.
 2. `cd` targets use each repo's **real local folder name/casing**,
    which is NOT always the slug or the GitHub name:
    - Mavins-web → `cd ~/mavins-web` (lowercase — GitHub repo is
-     capitalized `Zapier-codes/Mavins-web`, the local clone is not)
+     capitalized `King-Fisher000/Mavins-web`, the local clone is not)
    - B-Pay-backend → `cd ~/B-PAY-backend` (matches GitHub casing)
    - Velune → `cd ~/Velune` (matches GitHub casing) — this repo pushes
      directly to `main`, no fork/PR step, confirmed by a successful
