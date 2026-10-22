@@ -26,6 +26,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default packages list still names the long-removed `tools`
+          # package, which makes sdkmanager exit 1 and kills the job here.
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       # ─── Cache apt packages ──────────────────────────────────────────────
       - name: Cache apt packages
