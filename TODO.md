@@ -20,10 +20,10 @@
 > handover prose first.
 >
 > Repos in scope:
-> - `github.com/King-Fisher000/Velune` — Android app, package `com.nikhil.yt`
-> - `github.com/King-Fisher000/mavins-web` — Next.js web app (fork of
+> - `github.com/Exploit7492/Velune` — Android app, package `com.nikhil.yt`
+> - `github.com/jamesphilip7492/mavins-web` — Next.js web app (fork of
 >   `Phoenix-Boss/mavins-web`; do not modify the upstream)
-> - `github.com/King-Fisher000/SpotiFLAC-Mobile` — **reference only, do not
+> - `github.com/Exploit7492/SpotiFLAC-Mobile` — **reference only, do not
 >   modify.** Cloned 2026-10-15 as the proposed source of Spotify-link
 >   resolution. Flutter/Dart + Go; nothing portable to Kotlin, and its
 >   own resolution hop (`songlink.go` → `api.song.link`) is now dead
@@ -545,7 +545,7 @@ They are listed there, not here, so this list stays a work queue.
 
 **Everything below is verified against the live database, not assumed.**
 
-**Pushed and live:** `King-Fisher000/Velune` and `King-Fisher000/mavins-web`.
+**Pushed and live:** `Exploit7492/Velune` and `jamesphilip7492/mavins-web`.
 `TODO.md` is byte-identical in both; edit one, copy to the other, push
 both.
 
@@ -661,7 +661,7 @@ This corrects the earlier "the value looks swapped" guess. The facts:
   returned 200 and made the token look healthy.
 * `GET /user/installations` → **`total_count: 0`**;
   `GET /installation/repositories` → **403**.
-* `King-Fisher000/Velune` is **public** (`private: false`).
+* `Exploit7492/Velune` is **public** (`private: false`).
 * `PUT /repos/…/contents/…` → **403 Resource not accessible by
   integration**; `git push` → **403**. Writes have no path.
 
@@ -1521,7 +1521,7 @@ already does for playlists.
    broken Spotify value even though a real `youtube_url` exists on the
    same user row.
 
-### B3. Assessment of `King-Fisher000/SpotiFLAC-Mobile` as the source
+### B3. Assessment of `Exploit7492/SpotiFLAC-Mobile` as the source
 Cloned and read. It is a **Flutter/Dart** app with a **Go** backend —
 none of it is directly reusable in a Kotlin app. More importantly, its
 actual resolution mechanism does **not** transfer:
