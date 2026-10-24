@@ -190,7 +190,7 @@ fun DiscordExperimental(
                     val (button2CustomUrl, onButton2CustomUrlChange) =
                         rememberPreference(
                             key = DiscordActivityButton2CustomUrlKey,
-                            defaultValue = "https://github.com/King-Fisher000/Velune"
+                            defaultValue = "https://github.com/Exploit7492/Velune"
                         )
 
                     PreferenceEntry(
