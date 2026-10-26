@@ -9,7 +9,7 @@
 > live-verified state of the gamification path — the five
 > `api/gamification/*` routes do not use Nakama and three of them write to
 > a table that does not exist. Written 2026-10-18 by the sessions that
-> pushed both repos to `King-Fisher000`. Several of their findings
+> pushed both repos to `Exploit7492`. Several of their findings
 > contradict earlier notes in this file.
 
 > **Companion to, not a replacement for, the per-repo handover files.**
@@ -3232,7 +3232,7 @@ off its default too.
 1. **Deploy `nakama-runtime/index.js`** (O4) — **#3 is merged** (`be8963b`,
    2026-10-18) and the runtime is live: `POST /v2/rpc/leaderboards` returns
    all four board ids. Push access to `Phoenix-Boss/nakama` is read-only, so
-   this went through the `King-Fisher000` fork, which has write.
+   this went through the `Exploit7492` fork, which has write.
    **But the boards are still empty — a metadata bug in #3 made every
    metadata-bearing write fail.** #4 fixes it and is open and mergeable;
    merge it and redeploy. See O8.
