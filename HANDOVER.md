@@ -2165,16 +2165,10 @@ handed-off `.patch` file, not applied) — if you see a reference to a
 patch that added logging without the multi-client fallback, that patch
 is obsolete; this version replaces it entirely, don't try to apply both.
 
-**Also checked, for a related but separate question**: whether Velune
-and Mavins' Pawns SDK integrations use the *same* API key/account,
-since the user said they're supposed to. Neither repo commits the
-literal key value to source anymore (Velune's was moved to
-`BuildConfig`/`local.properties` in an earlier fix; Mavins was already
-sourcing it from `EXPO_PUBLIC_PAWNS_API_KEY`, never hardcoded). That
-means this can't be verified by reading source in either repo — it can
-only be confirmed by comparing the actual values in each project's own
-`local.properties`/env config, which is something only the user can do
-directly. Said so plainly rather than guessing a "yes" or "no".
+**Superseded**: an earlier note here asked whether Velune and Mavins'
+Pawns SDK integrations shared one API key. The question is moot — Velune's
+Pawns integration was removed from the app (commit `d088b65`), so only
+Mavins still carries one.
 
 **Not verified on-device** — same caveat as everything else in this
 file. The reasoning here is stronger than the earlier logging-only pass

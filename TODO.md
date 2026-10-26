@@ -520,11 +520,10 @@ unresolved worklist and the reviewed tile titles.
 >
 > | Phase | State | What is actually left |
 > |---|---|---|
-> | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 5 (tasks 39 and 41). |
+> | **1 — Unblock the database** | ✅ **COMPLETE** | Nothing blocking. All DB artifacts applied and verified (025/026/034/045/046). Task 7 (A5) and task 4 (A3b) are reproducibility/hygiene follow-ups, not unblockers — both moved to Phase 4 (tasks 33 and 35). |
 > | **2 — Finish the Spotify campaign work** | ✅ **COMPLETE** | B5a ✅, B4c ✅ (via 046), H-genre ✅ (via 046), B5b ✅ B5c ✅ B5g ✅ (seventh), B5d ✅ B5e ✅ B5f ✅ (2026-10-16 eighth; 381/381 rows playable, 0 open artists), **B4b ✅ B4b-2 ✅ B4e ✅ (2026-10-16 ninth; runtime Spotify resolution — see the session box)**. Product decision recorded: **B4b is the "explicit, bounded" secondary path, not the primary one** — resolved-ahead-of-time data stays authoritative, and runtime resolution is a bounded fallback for a Spotify link the repair never saw. |
 > | **3 — mavins-web wiring** | ⚠️ Open | C1a/C1b/C1c/C3a are pure web work. **C1d and C1e are now unblocked** — they depended on Phase 1, which is closed. |
-> | **4 — Pawns SDK** | ⚠️ Open | D1a/D1b need the product owner. D2a–D2d are agent-doable. |
-> | **5 — Inherited handover work** | ⚠️ Open | Tasks 31–41, plus the two relocated Phase 1 follow-ups. |
+> | **4 — Inherited handover work** | ⚠️ Open | Tasks 25–40, plus the two relocated Phase 1 follow-ups. |
 
 **Next: Phase 3 — mavins-web wiring (C1a/C1b/C1c/C3a).** Phase 2 is now
 fully closed — B4b/B4b-2 landed 2026-10-16 (ninth session) under the
@@ -962,44 +961,29 @@ priority after the data work.
 23. **C1d** — Fix `/earn` 500. **Depends on Phase 1.**
 24. **C1e** — Fix `/api/listener/balance` 500. **Depends on Phase 1.**
 
-### Phase 4 — Pawns SDK
+### Phase 4 — Inherited handover work
 
-25. **D1a** — Rotate the Pawns key exposed in this public repo's git
-    history. *Needs the product owner; cannot be verified from here.*
-26. **D1b** — Decide git-history rewrite vs accept-and-move-on. Rotating
-    is load-bearing; rewriting is optional hardening.
-27. **D2a** — Surface `getStatus()` / `getLastError()` in the UI; today a
-    user cannot tell whether sharing is running.
-28. **D2b** — Wire `PawnsManager.clearAllData()` to account deletion. The
-    consent copy implies the user can clear their data; nothing calls it.
-29. **D2c** — Confirm the AAR versions are current and that the AARs are
-    legitimately redistributable in a public repo.
-30. **D2d** — Confirm a tenant built with an empty `PAWNS_API_KEY`
-    degrades gracefully rather than silently attempting to start.
-
-### Phase 5 — Inherited handover work
-
-31. **mavins 46e** — Audit trail + safety rails across all admin work.
-32. **mavins 46f** — Admin roles/permissions + user-management mutating
+25. **mavins 46e** — Audit trail + safety rails across all admin work.
+26. **mavins 46f** — Admin roles/permissions + user-management mutating
     actions + starting-capital grant.
-33. **mavins 48d** — Finish the gamification wiring (Part 1 done).
-34. **mavins Task 70** — Fork B-Pay into `fatheruche1`, reconfigure onto
+27. **mavins 48d** — Finish the gamification wiring (Part 1 done).
+28. **mavins Task 70** — Fork B-Pay into `fatheruche1`, reconfigure onto
     mavins-web's own Supabase project as a dedicated disbursement app.
-35. **mavins Task 16** — Resolve the `role DEFAULT 'artist'` contradiction
+29. **mavins Task 16** — Resolve the `role DEFAULT 'artist'` contradiction
     against Task 48's finding of zero `'artist'` rows in live data. Check
     the live column default directly.
-36. **Velune** — Build the flanger effect for Simple. Confirmed zero
+30. **Velune** — Build the flanger effect for Simple. Confirmed zero
     flanger implementation exists anywhere; genuine from-scratch DSP.
-37. **Velune** — Resolve the hide-vs-grey discrepancy on the local-track
+31. **Velune** — Resolve the hide-vs-grey discrepancy on the local-track
     video toggle. Confirm intended treatment before changing anything.
-38. **Velune** — On-device EQ/DSP verification pass. The largest standing
+32. **Velune** — On-device EQ/DSP verification pass. The largest standing
     gap: nothing EQ/DSP-related has ever run on a real phone.
-39. **A5** — Reproducibility: give every out-of-band live function a
+33. **A5** — Reproducibility: give every out-of-band live function a
     committed migration, and resolve the 027/029 numbering gaps.
-40. **A6** — After 025/026/034 land: re-verify the whole listener payout
+34. **A6** — After 025/026/034 land: re-verify the whole listener payout
     chain end-to-end (stream → earnings → request → disburse → B-Pay
     ledger), since it has never been confirmed working as a whole.
-41. **C4a — ✅ FIXED (2026-10-15, fifth session).** The Dockerfile is
+35. **C4a — ✅ FIXED (2026-10-15, fifth session).** The Dockerfile is
     **used** — `docker-compose.yml:8` builds it — so deleting it was not
     an option, and the Compose path was broken three times over, not
     once. All three fixed together:
@@ -1026,7 +1010,7 @@ priority after the data work.
     `CRON_SECRET`, …) are deliberately **not** build args — they stay in
     `environment` so they never land in an image layer.
 
-42. **G1a** — **PLAN ONLY, not implemented.** Automatic, link-derived
+36. **G1a** — **PLAN ONLY, not implemented.** Automatic, link-derived
     genre detection, replacing the promote page's manual chip. Design in
     §I: one shared `resolveGenreFromLink(sourceUrl)` called from *both*
     submission paths (`/api/campaigns/create` and the guest direct-pay
@@ -1034,22 +1018,22 @@ priority after the data work.
     `target_genres` terms the existing 046 resolver already understands.
     **Blocked on G1b** — do not pick the resolver's source before the
     owner answers.
-43. **G1b** — **Product decision, gating G1a.** Where does a submitted
+37. **G1b** — **Product decision, gating G1a.** Where does a submitted
     song's genre come from? YouTube's own label needs a
     `YOUTUBE_API_KEY`, which is **absent today, verified** (an unkeyed
     Data API call returns 403). Our curated catalogue resolves 100% of
     the live vocabulary today with no credential. Recommendation and the
     full comparison are in §I.4 — confirm before implementing.
-44. **G1c** — Taxonomy: decide the canonical dimension's size. Live data
+38. **G1c** — Taxonomy: decide the canonical dimension's size. Live data
     has **136** distinct compound terms collapsing to ~20–30 head
     genres, not the 100 the request assumes. Extend `public.genres` to
     the head genres the catalogue actually uses (adding regional
     granularity as first-class rows only where the browse UI needs a
     tile); the mapping layer absorbs the rest. Do not pad to 100 blindly.
-45. **G1d** — Once G1a lands, remove the now-unused manual surface:
+39. **G1d** — Once G1a lands, remove the now-unused manual surface:
     `GenreChips` and `body.genre` on the create route, rather than leave
     two paths that can disagree.
-46. **G1e** — Adversarial tests for the resolver: a link with no
+40. **G1e** — Adversarial tests for the resolver: a link with no
     parseable id, a title matching nothing (must record the raw term,
     never guess a genre), a term present in both `genre_aliases` and the
     slug/token fallback, and a Spotify/other link reaching the
@@ -1698,54 +1682,7 @@ the earlier read was an artifact of inspecting pre-hydration HTML.
 
 ---
 
-## D. Pawns SDK — findings and follow-up
-
-**Correction to an earlier note: the Pawns SDK lives in Velune, not
-mavins-web.** 76 references across the app.
-
-Present in Velune:
-- `app/libs/pawns-ndk-1.8.1.aar`, `app/libs/internet-sharing-1.8.1.aar`
-- `app/src/main/java/com/nikhil/yt/PawnsManager.kt` (singleton;
-  `initialize` / `optIn` / `optOut` / `start` / `stop` / `getStatus` /
-  `clearAllData`)
-- `ConsentModal.kt` (consent copy, links to Pawns privacy + acceptable-use
-  policies, 18+/account-holder attestation)
-- `PawnsBootReceiver` (declared in `AndroidManifest.xml`)
-- `MusicService.kt` (starts the SDK on service start)
-- `app/build.gradle.kts` — `PAWNS_API_KEY` build field
-- `scripts/brand.sh`, `configs/sample.json`, and
-  `.github/workflows/build-tenant.yml`
-
-### D1. Security item — rotate the exposed Pawns key
-`app/build.gradle.kts` carries an explicit comment that the Pawns key
-was previously hardcoded in source as `MASTER_API_KEY` and **committed
-to this public repo's git history**. Moving it to a build-time secret
-does **not** un-expose the already-pushed value.
-
-- **D1a** — Rotate the key in the Pawns dashboard. Confirm with the
-  product owner that this has happened; it cannot be verified from here.
-- **D1b** — Decide whether to rewrite git history (e.g. `filter-repo`)
-  or accept the exposure now that the key is rotated. Rotating is the
-  load-bearing step; history rewriting is optional hardening.
-
-### D2. Open Pawns work
-- **D2a** — `getStatus()` / `getLastError()` are never surfaced in any
-  UI. There is no way for a user to tell whether sharing is actually
-  running. Add a status surface.
-- **D2b** — `PawnsManager.clearAllData()` exists but no call site was
-  found; wire it to account deletion / "clear my data", which the
-  consent copy implies the user can do.
-- **D2c** — Confirm `internet-sharing-1.8.1.aar` (and
-  `pawns-ndk-1.8.1.aar`) are still the intended versions and that the
-  AARs are legitimately redistributable in a public repo.
-- **D2d** — `brand.sh` falls back to an empty `PAWNS_API_KEY` when none
-  is supplied. Confirm a tenant built with no key degrades gracefully
-  (consent screen should not appear / SDK should not init) rather than
-  silently attempting to start.
-
----
-
-## E. Still-open work inherited from the handover files
+## D. Still-open work inherited from the handover files
 
 Not re-derived this session — carried forward verbatim from each repo's
 own open checkboxes, listed so they are not lost.
@@ -1781,7 +1718,7 @@ own open checkboxes, listed so they are not lost.
 
 ---
 
-## F. Open questions — need a product answer before the work can be scoped
+## E. Open questions — need a product answer before the work can be scoped
 
 1. **Spotify campaigns: what should a "Spotify link" actually mean?**
    The stored data is **artist** links (379 of 380 rows). An artist has
@@ -1795,7 +1732,7 @@ own open checkboxes, listed so they are not lost.
    link it resolves to the artist's **headline (top) track** — the first
    entry of the embed page's `trackList`, which is Spotify's own ordering.
    It does *not* offer advertiser track selection at runtime; that stays a
-   form-side concern (§F3). If the owner prefers strictly track links, the
+   form-side concern (§E3). If the owner prefers strictly track links, the
    promote form is where that should be enforced, not the resolver.
 2. **Repair or replace the seed data?** Replace the fabricated artist IDs
    with real ones, or change the seed `COALESCE` to prefer the valid
@@ -1804,12 +1741,10 @@ own open checkboxes, listed so they are not lost.
    accepts anything and stores it unvalidated (C1). If Velune can now
    resolve Spotify links, the form should say so and validate
    accordingly; if not, it should reject them at the door.
-4. **Pawns key rotation (D1a)** — has it been done? Only the product
-   owner can confirm.
 
 ---
 
-## G. Explicit limitations of this session
+## F. Explicit limitations of this session
 
 Recorded so nothing here is mistaken for a stronger claim than it is:
 
